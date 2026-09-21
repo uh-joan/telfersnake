@@ -1,0 +1,16 @@
+{
+  "name": "Telfersnake",
+  "short_name": "Telfersnake",
+  "description": "Slither round the school playground, eat everything, and grow the longest snake.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#9fd8f5",
+  "theme_color": "#9fd8f5",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

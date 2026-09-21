@@ -1,0 +1,30 @@
+{
+  "name": "telfersnake",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build && npm run build:server",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "server": "tsx watch server/index.ts",
+    "build:server": "esbuild server/index.ts --bundle --platform=node --format=esm --outfile=dist-server/index.js --banner:js=\"import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);\"",
+    "start": "node dist-server/index.js",
+    "icons": "node scripts/make-icon.mjs && node scripts/bake-icons.mjs"
+  },
+  "dependencies": {
+    "three": "^0.186.0",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/three": "^0.186.0",
+    "@types/ws": "^8.18.1",
+    "esbuild": "^0.28.2",
+    "sharp": "^0.35.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
+  }
+}

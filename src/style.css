@@ -1,0 +1,1241 @@
+:root {
+  --ink: #1d2433;
+  --paper: #ffffff;
+  --sun: #ffd84a;
+  --sun-deep: #c9a21f;
+  --grass: #4cbb4a;
+  --font: ui-rounded, 'SF Pro Rounded', 'Arial Rounded MT Bold', 'Nunito', system-ui, sans-serif;
+  --top: calc(env(safe-area-inset-top) + 8px);
+  --left: calc(env(safe-area-inset-left) + 12px);
+  --right: calc(env(safe-area-inset-right) + 12px);
+  --bottom: calc(env(safe-area-inset-bottom) + 14px);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #9fd8f5;
+  font-family: var(--font);
+  color: var(--ink);
+  overscroll-behavior: none;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#game {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#hud,
+#labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  transition: opacity 0.2s;
+}
+
+/* Behind a menu the HUD would only be noise showing through, and buttons that look live but are not. */
+#app.menu #hud,
+#app.menu #labels {
+  opacity: 0;
+  visibility: hidden;
+}
+
+button {
+  font-family: inherit;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  color: var(--ink);
+}
+
+/* ---------- HUD ---------- */
+
+#xp {
+  position: absolute;
+  top: var(--top);
+  left: var(--left);
+  right: var(--right);
+  height: 16px;
+  border-radius: 99px;
+  background: rgba(29, 36, 51, 0.55);
+  border: 2px solid #fff;
+  overflow: hidden;
+}
+
+#xp i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #4dabf7, #b197fc);
+  transition: width 0.15s;
+}
+
+#xp span {
+  position: absolute;
+  inset: 0;
+  font-size: 11px;
+  line-height: 12px;
+  font-weight: 900;
+  color: #fff;
+  text-align: center;
+}
+
+#stats {
+  position: absolute;
+  top: calc(var(--top) + 24px);
+  left: var(--left);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+#score,
+#tier,
+#chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-weight: 900;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.15);
+}
+
+#score {
+  font-size: 20px;
+}
+
+#score .stars {
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 2px solid #dfe5ee;
+  font-size: 15px;
+}
+
+#tier {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border-radius: 16px;
+  font-size: 13px;
+  padding: 5px 12px 6px;
+}
+
+.tier-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 17px;
+}
+
+.bar {
+  width: 84px;
+  height: 9px;
+  border-radius: 99px;
+  background: #dfe5ee;
+  overflow: hidden;
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 99px;
+  background: var(--grass);
+  transition: width 0.2s;
+}
+
+#chip {
+  font-size: 13px;
+  color: #fff;
+  background: #1f2a44;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+#chip.show {
+  opacity: 1;
+  transform: none;
+}
+
+#corner {
+  position: absolute;
+  top: calc(var(--top) + 24px);
+  right: var(--right);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+#minimap {
+  width: 95px;
+  height: 100px;
+  border-radius: 12px;
+  border: 3px solid #fff;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.15);
+  opacity: 0.92;
+}
+
+#buttons {
+  display: flex;
+  gap: 8px;
+}
+
+#buttons button {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  font-size: 19px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.15);
+  touch-action: none;
+}
+
+/* Who is longest: a coloured bar per snake with its name on it, yours outlined. */
+#board {
+  width: 118px;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(29, 36, 51, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+#board i {
+  display: block;
+  height: 14px;
+  min-width: 14px;
+  padding: 0 5px;
+  border-radius: 99px;
+  color: #fff;
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 14px;
+  text-align: left;
+  white-space: nowrap;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  transition: width 0.4s;
+}
+
+#board i.me {
+  outline: 2px solid #fff;
+}
+
+#dash {
+  position: absolute;
+  right: calc(var(--right) + 10px);
+  bottom: calc(var(--bottom) + 14px);
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  font-size: 34px;
+  background: var(--sun);
+  box-shadow: 0 5px 0 var(--sun-deep);
+  transition: transform 0.06s, box-shadow 0.06s;
+  touch-action: none;
+}
+
+#dash.on {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--sun-deep);
+}
+
+#dash em {
+  position: absolute;
+  left: 50%;
+  bottom: -18px;
+  transform: translateX(-50%);
+  padding: 1px 9px;
+  border-radius: 99px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+/* Too small to dash yet, or Mr Cooper has you on walking feet: visibly switched off, not just dead. */
+#dash.off {
+  background: #cfd6df;
+  box-shadow: 0 5px 0 #9aa5b1;
+  filter: grayscale(1);
+  opacity: 0.75;
+}
+
+/* Until the first dash ever: the button bounces and says what to do. */
+#dash.teach {
+  animation: nudge 0.9s ease-in-out infinite;
+}
+
+@keyframes nudge {
+  50% { transform: scale(1.12); }
+}
+
+#dash-hint {
+  position: absolute;
+  right: calc(var(--right) + 96px);
+  bottom: calc(var(--bottom) + 34px);
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: #fff;
+  border: 2.5px solid var(--ink);
+  font-size: 15px;
+  font-weight: 900;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(10px);
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+#dash-hint.show {
+  opacity: 1;
+  transform: none;
+  animation: point 0.9s ease-in-out infinite;
+}
+
+@keyframes point {
+  50% { transform: translateX(6px); }
+}
+
+#banner {
+  position: absolute;
+  top: 36%;
+  left: 50%;
+  transform: translate(-50%, 0) scale(0.6);
+  font-size: clamp(30px, 9.5vw, 54px);
+  font-weight: 900;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+  -webkit-text-stroke: 2.5px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 5px 0 rgba(0, 0, 0, 0.25);
+  opacity: 0;
+}
+
+/* What the new size can gulp, as big pictures. */
+#banner-sub {
+  margin-top: 2px;
+  font-size: 1.15em;
+  -webkit-text-stroke: 0;
+}
+
+#banner.show {
+  animation: banner 2.2s ease-out forwards;
+}
+
+@keyframes banner {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(0.4); }
+  12% { opacity: 1; transform: translate(-50%, 0) scale(1.15); }
+  20% { transform: translate(-50%, 0) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -20px) scale(1); }
+}
+
+/* Countdown while you are back in the tank. */
+#count {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(70px, 24vw, 130px);
+  font-weight: 900;
+  color: #fff;
+  -webkit-text-stroke: 4px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 6px 0 rgba(0, 0, 0, 0.25);
+}
+
+#tray {
+  position: absolute;
+  left: var(--left);
+  bottom: var(--bottom);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-width: 60vw;
+}
+
+.perk {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15);
+  font-size: 19px;
+  line-height: 34px;
+  text-align: center;
+}
+
+.perk i {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 99px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 15px;
+}
+
+#toast {
+  position: absolute;
+  left: 50%;
+  bottom: 24%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 18px 6px 10px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.95);
+  font-size: 17px;
+  font-weight: 900;
+  white-space: nowrap;
+  opacity: 0;
+}
+
+#toast span {
+  font-size: 34px;
+}
+
+#toast.show {
+  animation: toast 1.4s ease-out forwards;
+}
+
+@keyframes toast {
+  0% { opacity: 0; transform: translate(-50%, 20px) scale(0.4); }
+  18% { opacity: 1; transform: translate(-50%, 0) scale(1.2); }
+  30% { transform: translate(-50%, 0) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -30px) scale(1); }
+}
+
+/* Rival name tags. */
+.tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: rgba(29, 36, 51, 0.6);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.popup,
+#bubble {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+
+.popup {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--sun);
+  -webkit-text-stroke: 1.5px var(--ink);
+  paint-order: stroke fill;
+  white-space: nowrap;
+}
+
+.popup.bad {
+  color: #ff6b6b;
+  font-size: 28px;
+}
+
+.popup.fun {
+  color: #fff;
+  font-size: 30px;
+}
+
+/* Mr Cooper's speech bubble: the one place with sentences. They are flavour, never needed to play. */
+#bubble {
+  max-width: min(240px, 62vw);
+  width: max-content;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--paper);
+  border: 2.5px solid var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+#bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 12px;
+  height: 12px;
+  background: var(--paper);
+  border-right: 2.5px solid var(--ink);
+  border-bottom: 2.5px solid var(--ink);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+#bubble.show {
+  opacity: 1;
+}
+
+#stick {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+#stick.on {
+  opacity: 1;
+}
+
+#stick::before {
+  content: '';
+  position: absolute;
+  width: 124px;
+  height: 124px;
+  margin: -62px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  border: 3px solid rgba(255, 255, 255, 0.7);
+}
+
+/* Tap-then-hold burst: the stick turns lightning yellow so you can see it took. */
+#stick.burst::before {
+  background: rgba(255, 216, 74, 0.3);
+  border-color: var(--sun);
+}
+
+#stick.burst i {
+  background: var(--sun);
+}
+
+#stick i {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.2);
+  transform: translate(-50%, -50%);
+}
+
+/* ---------- full-screen overlays ---------- */
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: calc(var(--top) + 12px) 16px calc(var(--bottom) + 8px);
+  text-align: center;
+  background: rgba(31, 42, 68, 0.62);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  pointer-events: none;
+  /* A hidden screen must be untouchable, buttons included. `pointer-events: none` alone is not
+     enough: buttons set `pointer-events: auto` for themselves, so the invisible Play, Tuck Shop
+     and Again buttons used to sit on top of the game and swallow taps. `visibility: hidden`
+     takes the whole subtree out of hit-testing. It flips after the fade-out, at once on show. */
+  visibility: hidden;
+  transition: opacity 0.25s, visibility 0s 0.25s;
+}
+
+.screen.show {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+  transition: opacity 0.25s;
+}
+
+/* ...and not during the quarter second it takes to fade out, either. */
+.screen:not(.show) button,
+.screen:not(.show) input {
+  pointer-events: none;
+}
+
+.big-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 34px 30px;
+  margin-bottom: 18px;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(30px, 9vw, 46px);
+  font-weight: 900;
+  color: #fff;
+  -webkit-text-stroke: 2.5px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 4px 0 rgba(0, 0, 0, 0.25);
+}
+
+small {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.round {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  font-size: 40px;
+  background: #fff;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.3);
+}
+
+.round.go {
+  background: var(--sun);
+  box-shadow: 0 6px 0 var(--sun-deep);
+}
+
+.round.huge {
+  width: 124px;
+  height: 124px;
+  font-size: 62px;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.round.small {
+  width: 46px;
+  height: 46px;
+  font-size: 20px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.3);
+}
+
+.round:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+  animation: none;
+}
+
+.round em {
+  position: absolute;
+  left: 50%;
+  bottom: -16px;
+  transform: translateX(-50%);
+  padding: 2px 9px;
+  border-radius: 99px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+@keyframes pulse {
+  50% { transform: scale(1.07); }
+}
+
+.big-icon {
+  font-size: 84px;
+  animation: ring 0.5s ease-in-out 3;
+}
+
+@keyframes ring {
+  25% { transform: rotate(-16deg); }
+  75% { transform: rotate(16deg); }
+}
+
+/* ---------- start ---------- */
+
+#start h1 {
+  margin: 0;
+  font-size: clamp(44px, 14vw, 84px);
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -1px;
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 6px 0 rgba(0, 0, 0, 0.25);
+}
+
+#start h1 span {
+  color: #8be36a;
+}
+
+#howto {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+#howto div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 98px;
+  padding: 8px 8px 6px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 28px;
+}
+
+#howto p {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  height: 40px;
+}
+
+#howto i {
+  font-style: normal;
+  font-size: 18px;
+}
+
+#howto .swipe {
+  display: inline-block;
+  animation: swipe 1.8s ease-in-out infinite;
+}
+
+@keyframes swipe {
+  0%, 100% { transform: translateX(-16px) rotate(-12deg); }
+  50% { transform: translateX(16px) rotate(12deg); }
+}
+
+#best,
+#shop-stars {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 16px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+/* ---------- level-up cards ---------- */
+
+#cards h2 {
+  margin: 0;
+  font-size: clamp(44px, 14vw, 72px);
+  font-weight: 900;
+  color: var(--sun);
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 5px 0 rgba(0, 0, 0, 0.25);
+}
+
+#cards-row {
+  display: flex;
+  gap: 10px;
+  width: min(100%, 560px);
+}
+
+.card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 6px 12px;
+  border-radius: 20px;
+  border: 5px solid #9aa5b1;
+  background: #fff;
+  box-shadow: 0 7px 0 rgba(0, 0, 0, 0.25);
+  animation: deal 0.35s backwards;
+}
+
+.card:nth-child(2) { animation-delay: 0.08s; }
+.card:nth-child(3) { animation-delay: 0.16s; }
+
+@keyframes deal {
+  from { opacity: 0; transform: translateY(40px) scale(0.8); }
+}
+
+.card:active {
+  transform: translateY(5px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+}
+
+.card.rare {
+  border-color: #4dabf7;
+  background: #eef7ff;
+}
+
+.card.epic {
+  border-color: #b197fc;
+  background: #f6f0ff;
+}
+
+.card-icon {
+  font-size: clamp(44px, 15vw, 64px);
+  line-height: 1;
+}
+
+.card-name {
+  font-size: clamp(11px, 3.4vw, 15px);
+  font-weight: 900;
+  line-height: 1.1;
+  min-height: 2.2em;
+  display: flex;
+  align-items: center;
+}
+
+.card-hint {
+  padding: 3px 8px;
+  border-radius: 99px;
+  background: rgba(29, 36, 51, 0.08);
+  font-size: clamp(15px, 4.6vw, 20px);
+  white-space: nowrap;
+}
+
+.pips {
+  display: flex;
+  gap: 4px;
+}
+
+.pips i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #d5dbe3;
+}
+
+.pips i.on {
+  background: var(--grass);
+}
+
+.pips i.new {
+  background: var(--sun);
+  box-shadow: 0 0 0 2px var(--sun-deep);
+  animation: pulse 0.8s ease-in-out infinite;
+}
+
+.tap-hint {
+  font-size: 40px;
+  animation: bob 1s ease-in-out infinite;
+}
+
+@keyframes bob {
+  50% { transform: translateY(-10px); }
+}
+
+/* ---------- results ---------- */
+
+#results-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: min(100%, 320px);
+}
+
+#results-grid div {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: center;
+  column-gap: 8px;
+  padding: 8px 10px 6px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 24px;
+  font-weight: 900;
+}
+
+#results-grid small {
+  grid-column: 1 / -1;
+  opacity: 0.7;
+}
+
+#r-stars {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: clamp(44px, 14vw, 68px);
+  font-weight: 900;
+  color: var(--sun);
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 5px 0 rgba(0, 0, 0, 0.25);
+}
+
+/* ---------- Tuck Shop ---------- */
+
+#shop {
+  justify-content: flex-start;
+  gap: 12px;
+  background: rgba(31, 42, 68, 0.9);
+}
+
+#shop-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: min(100%, 520px);
+}
+
+#shop-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+#shop-tabs button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 86px;
+  height: 64px;
+  border-radius: 16px;
+  font-size: 28px;
+  line-height: 1.1;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+#shop-tabs button.on {
+  background: #fff;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.3);
+}
+
+#shop-grid {
+  flex: 1;
+  width: min(100%, 520px);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: min-content;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 12px 12px 10px; /* room for the "wearing" tick that pokes out of a tile's corner */
+  touch-action: pan-y;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 104px;
+  padding: 10px 4px;
+  border-radius: 18px;
+  border: 4px solid transparent;
+  background: #fff;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.3);
+  touch-action: pan-y;
+}
+
+.item.locked {
+  background: #cfd6df;
+}
+
+.item.picked {
+  border-color: var(--sun);
+}
+
+.item.wearing::after {
+  content: '✔';
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--grass);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 26px;
+}
+
+.item.shake {
+  animation: shake 0.3s;
+}
+
+@keyframes shake {
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+.item-icon {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.item-name {
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.price {
+  padding: 2px 9px;
+  border-radius: 99px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+/* A skin shown as a tiny snake: head plus a run of body beads. */
+.mini-snake {
+  display: flex;
+  align-items: center;
+  flex-direction: row-reverse;
+}
+
+.mini-snake i {
+  width: 15px;
+  height: 15px;
+  margin-left: -4px;
+  border-radius: 50%;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+}
+
+.mini-snake i.head {
+  position: relative;
+  width: 22px;
+  height: 20px;
+}
+
+.mini-snake i.head::before,
+.mini-snake i.head::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--ink);
+}
+
+.mini-snake i.head::before { right: 3px; }
+.mini-snake i.head::after { right: 3px; top: 11px; }
+
+#shop-buy {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: min(100%, 320px);
+  height: 64px;
+  border-radius: 99px;
+  font-size: 28px;
+  font-weight: 900;
+  background: var(--sun);
+  box-shadow: 0 6px 0 var(--sun-deep);
+}
+
+#shop-buy.show {
+  display: flex;
+}
+
+#shop-buy.poor {
+  background: #cfd6df;
+  box-shadow: 0 6px 0 #9aa5b1;
+}
+
+#shop-buy:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 var(--sun-deep);
+}
+
+@media (orientation: landscape) {
+  #board,
+  .tap-hint {
+    display: none;
+  }
+
+  #start,
+  #results {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  #start h1 {
+    width: 100%;
+  }
+
+  #shop-grid {
+    grid-template-columns: repeat(6, 1fr);
+    width: min(100%, 860px);
+  }
+}
+
+/* ---------- playing together ---------- */
+
+.pill-button {
+  height: 56px;
+  padding: 0 24px;
+  border-radius: 99px;
+  font-size: 20px;
+  font-weight: 900;
+  background: var(--sun);
+  box-shadow: 0 6px 0 var(--sun-deep);
+}
+
+.pill-button:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 var(--sun-deep);
+}
+
+/* How many players are in the playground with you. Only shown when you are not alone. */
+#room-pill {
+  position: absolute;
+  top: calc(var(--top) + 24px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  padding: 4px 12px;
+  border-radius: 99px;
+  background: rgba(29, 36, 51, 0.6);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+#room-pill.show {
+  display: block;
+}
+
+/* Play has been tapped and we are finding a playground. Nothing else on this screen may be
+   touched meanwhile: the name button sits exactly where a thumb comes down to steer. */
+#start.busy button {
+  pointer-events: none;
+}
+
+#start.busy > *:not(.big-buttons),
+#start.busy .big-buttons > :not(#play) {
+  opacity: 0.25;
+  transition: opacity 0.15s;
+}
+
+#start.busy #play {
+  animation: spin-in 0.7s ease-in-out infinite;
+}
+
+@keyframes spin-in {
+  50% { transform: scale(0.92); opacity: 0.7; }
+}
+
+/* Which build this phone is running: tiny, for grown-ups testing. */
+#build {
+  position: absolute;
+  bottom: calc(var(--bottom) - 8px);
+  right: var(--right);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* ---------- your snake's name: picked from words, never typed ---------- */
+
+.name-pill {
+  padding: 8px 18px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 17px;
+  font-weight: 900;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25);
+}
+
+.name-big {
+  font-size: clamp(26px, 8vw, 40px);
+  font-weight: 900;
+  color: var(--sun);
+  -webkit-text-stroke: 2px var(--ink);
+  paint-order: stroke fill;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  width: min(100%, 560px);
+  max-height: 24vh;
+  overflow-y: auto;
+  padding: 4px;
+  touch-action: pan-y;
+}
+
+.chip {
+  padding: 7px 12px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  font-weight: 800;
+  touch-action: pan-y;
+}
+
+.chip.on {
+  background: var(--sun);
+  box-shadow: 0 3px 0 var(--sun-deep);
+}
+
+#name-input {
+  width: min(88%, 340px);
+  height: 66px;
+  border: 4px solid #fff;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--ink);
+  font: 900 26px/1 var(--font);
+  text-align: center;
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: manipulation;
+}
+
+#name-input::placeholder {
+  color: #c3cad4;
+}

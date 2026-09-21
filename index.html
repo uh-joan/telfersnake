@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#9fd8f5" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Telfersnake</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="favicon-48.png" sizes="48x48" type="image/png" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Telfersnake" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  </head>
+  <body>
+    <!-- The players are young children: every screen is picture-first with short labels (a word or
+         two). No sentences, except Mr Cooper's speech bubbles, which are flavour and never needed to play. -->
+    <div id="app" class="menu">
+      <canvas id="game"></canvas>
+
+      <div id="labels">
+        <div id="bubble"></div>
+      </div>
+
+      <div id="hud">
+        <div id="xp"><i id="xp-fill"></i><span id="xp-level">1</span></div>
+        <div id="stats">
+          <div id="score"><span>🏆</span><b id="score-value">0</b><span class="stars">⭐<b id="stars-value">0</b></span></div>
+          <div id="tier" aria-label="Progress to the next size">
+            <b id="tier-name">Wiggly Worm</b>
+            <div class="tier-row"><div class="bar"><i id="tier-fill"></i></div><span id="tier-next">🐔🦆</span></div>
+          </div>
+          <div id="chip">🚶 Walking feet!</div>
+        </div>
+        <div id="corner">
+          <canvas id="minimap" width="152" height="160"></canvas>
+          <div id="buttons">
+            <button id="pause-btn" aria-label="Pause">⏸️</button>
+            <button id="mute" aria-label="Sound: everything, effects only, or off">🔊</button>
+          </div>
+          <div id="board" aria-label="Who is longest"></div>
+        </div>
+        <div id="room-pill" aria-label="Players here">👫 <b id="room-code"></b></div>
+        <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+        <div id="count"></div>
+        <div id="tray"></div>
+        <div id="toast"></div>
+        <div id="dash-hint">Hold to zoom! 👉</div>
+        <button id="dash" aria-label="Dash: hold to go faster">⚡<em>Dash</em></button>
+      </div>
+
+      <div id="stick"><i></i></div>
+
+      <div id="cards" class="screen">
+        <h2>Level <b id="cards-title">2</b>!</h2>
+        <div id="cards-row"></div>
+        <div class="tap-hint">👆</div>
+      </div>
+
+      <div id="pause" class="screen">
+        <div class="big-buttons">
+          <button id="resume" class="round go">▶️<em>Play</em></button>
+          <button id="finish" class="round">🏠<em>Home time</em></button>
+          <button id="pause-shop" class="round">🛒<em>Tuck Shop</em></button>
+          <button class="round sound" aria-label="Sound: everything, effects only, or off"><span>🔊</span><em>Sound</em></button>
+        </div>
+      </div>
+
+      <div id="results" class="screen">
+        <div class="big-icon">🔔</div>
+        <h2 class="title">Home time!</h2>
+        <div id="results-grid">
+          <div><span>🏆</span><b id="r-score">0</b><small>Score</small></div>
+          <div><span>📏</span><b id="r-length">0</b><small>Longest</small></div>
+          <div><span>😋</span><b id="r-gulps">0</b><small>Gulps</small></div>
+          <div><span>💥</span><b id="r-bonks">0</b><small>Bonks</small></div>
+        </div>
+        <div id="r-stars"><span>⭐</span><b id="r-stars-value">+0</b></div>
+        <div class="big-buttons">
+          <button id="again" class="round go">▶️<em>Again</em></button>
+          <button id="results-shop" class="round">🛒<em>Tuck Shop</em></button>
+        </div>
+      </div>
+
+      <div id="shop" class="screen">
+        <div id="shop-top">
+          <h2 class="title">Tuck Shop</h2>
+          <div id="shop-stars">⭐<b id="shop-stars-value">0</b></div>
+          <button id="shop-close" class="round small" aria-label="Close the Tuck Shop">✖️</button>
+        </div>
+        <div id="shop-tabs">
+          <button data-kind="skin">🐍<small>Skins</small></button>
+          <button data-kind="hat">🎩<small>Hats</small></button>
+          <button data-kind="trail">✨<small>Trails</small></button>
+        </div>
+        <div id="shop-grid"></div>
+        <button id="shop-buy"></button>
+      </div>
+
+      <div id="name" class="screen">
+        <h2 class="title">Your name</h2>
+        <input id="name-input" type="text" inputmode="text" autocomplete="off" autocapitalize="words" spellcheck="false" maxlength="16" aria-label="Your snake's name" />
+        <button id="name-shuffle" class="pill-button">🎲 Shuffle</button>
+        <div class="big-buttons"><button id="name-done" class="round go">✔️<em>Done</em></button></div>
+      </div>
+
+      <div id="start" class="screen show">
+        <h1>Telfer<span>snake</span></h1>
+        <div id="howto">
+          <div><p><span class="swipe">👆</span></p><small>Drag</small></div>
+          <div><p>🍔<i>➜</i>🐍</p><small>Eat &amp; grow</small></div>
+          <div><p>🐍<i>💥</i>🐍</p><small>Don't bump!</small></div>
+          <div><p>⚡<i>➜</i>💨</p><small>Hold ⚡ to dash</small></div>
+        </div>
+        <div class="big-buttons">
+          <button id="play" class="round go huge">▶️<em>Play</em></button>
+          <button id="start-shop" class="round">🛒<em>Tuck Shop <span id="start-stars">⭐0</span></em></button>
+          <button class="round sound" aria-label="Sound: everything, effects only, or off"><span>🔊</span><em>Sound</em></button>
+        </div>
+        <button id="name-button" class="name-pill">🐍 <b id="start-name"></b> ✏️</button>
+        <div id="best"><span>🏆</span><small>Best</small><b id="best-score">0</b></div>
+        <div id="build" aria-label="Build"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,28 @@
+# Telfersnake game server. Joins your shared Caddy's external docker network so Caddy can reach it
+# as `telfersnake:8787`. No ports are published on the host: the only way in is through Caddy, over
+# HTTPS. The network name comes from CADDY_NET (in deploy/deploy.env), so it's never in the repo.
+#
+#   cd <deploy path> && CADDY_NET=<your caddy network> docker compose -f deploy/compose.yml up -d --build
+services:
+  telfersnake:
+    build: ..
+    container_name: telfersnake
+    restart: unless-stopped
+    environment:
+      # Only pages from this origin may open a game socket.
+      ALLOWED_ORIGINS: https://telfersnake.joans.cat
+    networks:
+      - shared-net
+    # It keeps nothing: no volumes, no database, read-only filesystem. Rooms live in memory.
+    read_only: true
+    mem_limit: 256m
+    cpus: 1.0 # never more than one core: other services may share this box
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+networks:
+  shared-net:
+    external: true
+    name: ${CADDY_NET:?set CADDY_NET to your shared Caddy's docker network}

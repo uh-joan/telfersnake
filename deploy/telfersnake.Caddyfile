@@ -1,0 +1,23 @@
+# telfersnake.joans.cat — a vhost block for the shared Caddy on your box. Append it to that
+# Caddyfile (its path is CADDYFILE in deploy/deploy.env), then validate and reload:
+# deploy/enable-site.sh does exactly that, safely.
+#
+# Everything (the game's files and the /play WebSocket) is one reverse proxy to the container;
+# Caddy upgrades WebSockets on its own and issues the Let's Encrypt certificate on first request.
+# Cache-Control comes from the Node server: index.html is revalidated on every open, the
+# content-hashed bundles are immutable.
+telfersnake.joans.cat {
+  encode zstd gzip
+  reverse_proxy telfersnake:8787
+
+  header {
+    X-Frame-Options "DENY"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "no-referrer"
+    # A children's game: it asks the device for nothing.
+    Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+    # Only its own files and its own socket. Inline styles are needed for the HUD's moving labels.
+    Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' wss://telfersnake.joans.cat; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
+    Strict-Transport-Security "max-age=31536000"
+  }
+}
