@@ -1,3 +1,4 @@
+import type { Mode } from '../sim/modes';
 import type { Input } from '../sim/snake';
 import { type ClientMessage, PROTOCOL, type ServerMessage } from './protocol';
 import { Replica } from './replica';
@@ -24,7 +25,7 @@ export class Connection {
   private constructor(private readonly socket: WebSocket, readonly replica: Replica) {}
 
   /** Resolves once seated. Rejects with a short reason a screen can show as a picture. */
-  static join(outfit: Outfit, onLost: () => void): Promise<Connection> {
+  static join(outfit: Outfit, mode: Mode, onLost: () => void): Promise<Connection> {
     return new Promise((resolve, reject) => {
       let socket: WebSocket;
       try {
@@ -47,7 +48,7 @@ export class Connection {
         reject('offline' satisfies Sorry);
       }, CONNECT_TIMEOUT);
 
-      socket.addEventListener('open', () => send({ t: 'hello', v: PROTOCOL, ...outfit }));
+      socket.addEventListener('open', () => send({ t: 'hello', v: PROTOCOL, mode, ...outfit }));
       socket.addEventListener('message', (e) => {
         if (gaveUp) return;
         let m: ServerMessage;

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { type WebSocket, WebSocketServer } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import { type ClientMessage, PROTOCOL, type ServerMessage } from '../src/net/protocol';
+import { asMode, type Mode } from '../src/sim/modes';
 import { STEP } from '../src/sim/world';
 import { Room } from './room';
 
@@ -39,9 +40,9 @@ const whereIs = new Map<WebSocket, Room>();
 let roomsOpened = 0;
 
 /** Rooms are only ever opened because a player needs a seat, so nobody can fill the table with empty ones. */
-function openRoom(): Room | null {
+function openRoom(mode: Mode): Room | null {
   if (rooms.size >= MAX_ROOMS) return null;
-  const room = new Room(`room-${++roomsOpened}`, true);
+  const room = new Room(`room-${++roomsOpened}`, true, mode);
   rooms.set(room.code, room);
   return room;
 }
@@ -52,9 +53,10 @@ function hello(socket: WebSocket, m: Extract<ClientMessage, { t: 'hello' }>): vo
   if (whereIs.has(socket)) return;
   if (m.v !== PROTOCOL) return reply(socket, { t: 'sorry', why: 'old' });
 
-  // There is one way in: any playground with a free seat, or a new one. (Private rooms with
-  // codes were tried and dropped; if they return they need per-address limits on guessing.)
-  const room = [...rooms.values()].find((r) => r.hasSpace) ?? openRoom();
+  // One way in per difficulty: any playground of the wanted mode with a free seat, or a new one.
+  // (Private rooms with codes were tried and dropped; if they return they need per-address limits.)
+  const mode = asMode(m.mode);
+  const room = [...rooms.values()].find((r) => r.mode === mode && r.hasSpace) ?? openRoom(mode);
   if (!room) return reply(socket, { t: 'sorry', why: 'busy' });
   if (!room.join(socket, m)) return reply(socket, { t: 'sorry', why: 'full' });
   whereIs.set(socket, room);

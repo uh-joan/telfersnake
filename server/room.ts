@@ -5,6 +5,7 @@ import {
   animalKindIndex, animalRow, type ClientMessage, cooperRow, eventIsFor, foodRow, hazardRow, pelletRow,
   type Seat, type ServerMessage, SNAPSHOT_EVERY, snakeRow, type Snapshot,
 } from '../src/net/protocol';
+import { type Mode, rulesFor } from '../src/sim/modes';
 import { type GameEvent, World } from '../src/sim/world';
 
 /** What a phone says it is wearing. None of it is trusted: every id is checked against the catalogue. */
@@ -48,8 +49,8 @@ export class Room {
   /** Someone changed clothes: tell the room, at most once a second. */
   private seatsChanged = false;
 
-  constructor(readonly code: string, readonly isPublic: boolean) {
-    this.world = World.room((Math.random() * 0x7fffffff) | 0 || 1);
+  constructor(readonly code: string, readonly isPublic: boolean, readonly mode: Mode = 'normal') {
+    this.world = World.room((Math.random() * 0x7fffffff) | 0 || 1, rulesFor(mode));
     this.hats = this.world.snakes.map(() => 'no-hat');
     this.trails = this.world.snakes.map(() => 'no-trail');
   }

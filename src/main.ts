@@ -18,6 +18,7 @@ import { disposeTree } from './render/paint';
 import { Sparkles } from './render/sparkles';
 import { Stage } from './render/stage';
 import { UpgradeFx } from './render/upgradeFx';
+import { asMode, godUnlocked, type Mode, rulesFor } from './sim/modes';
 import { TIERS } from './sim/snake';
 import { UPGRADES } from './sim/upgrades';
 import type { WorldView } from './sim/view';
@@ -34,8 +35,10 @@ const TRAIL_EVERY = 0.07;
 
 const save = loadSave();
 const stage = new Stage($<HTMLCanvasElement>('game'));
+/** A fresh solo world at the chosen difficulty; also the backdrop behind the start screen. */
+const makeSolo = (): World => new World((Date.now() & 0x7fffffff) || 1, skinLook(save.skin, save.name), rulesFor(save.mode));
 /** The game you play on your own. It is also the backdrop behind the start screen. */
-const solo = new World((Date.now() & 0x7fffffff) || 1, skinLook(save.skin, save.name));
+let solo = makeSolo();
 /** Whatever is on screen: the solo world, or this phone's copy of a shared playground. */
 let world: WorldView = solo;
 let connection: Connection | null = null;
@@ -198,6 +201,8 @@ function show(next: Screen): void {
   (document.activeElement as HTMLElement | null)?.blur?.();
   for (const id of ['start', 'pause', 'results', 'name'] as const) $(id).classList.toggle('show', id === next);
   $('app').classList.toggle('menu', next !== null);
+  // Coming back to the start screen may be the moment God mode's two items were just bought.
+  if (next === 'start') refreshModePicker();
   // A shared playground cannot stop for one player, so their snake stands aside, safe, while they are in a menu.
   if (!run.over) connection?.away(next !== null);
   screen = next;
@@ -511,7 +516,7 @@ $('play').addEventListener('click', async () => {
   $('start').classList.add('busy'); // every button on the start screen is dead until we are in
 
   try {
-    connection = await Connection.join(outfit(), () => {
+    connection = await Connection.join(outfit(), save.mode, () => {
       // The line dropped mid-game: keep what was earned and call it home time.
       connection = null;
       hud.toast('😴', 'Connection lost');
@@ -566,6 +571,42 @@ nameInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); nameInput.blur(); commitName(); }
 });
 nameInput.addEventListener('keyup', (e) => e.stopPropagation());
+
+// ---------------------------------------------------------------- how hard: Easy · Normal · (God)
+
+const modeButtons = [...document.querySelectorAll<HTMLButtonElement>('#mode-pick .mode')];
+
+/** Show the right chips, mark the chosen one, and reveal God the first time it is earned. */
+function refreshModePicker(): void {
+  const godBtn = modeButtons.find((b) => b.dataset.mode === 'god');
+  if (godBtn) {
+    const unlocked = godUnlocked(save.owned);
+    godBtn.hidden = !unlocked;
+    // The first time both items are owned, God appears with a little flourish. Kept secret till then.
+    if (unlocked && !save.godRevealed) {
+      save.godRevealed = true;
+      writeSave(save);
+      godBtn.classList.add('reveal');
+      wakeAudio()?.bell();
+      window.setTimeout(() => godBtn.classList.remove('reveal'), 2200);
+    }
+  }
+  for (const b of modeButtons) b.classList.toggle('on', b.dataset.mode === save.mode);
+}
+
+function setMode(mode: Mode): void {
+  if (mode === save.mode) return;
+  save.mode = mode;
+  writeSave(save);
+  wakeAudio()?.pick();
+  refreshModePicker();
+  // Rebuild the backdrop/offline world so it plays at the chosen difficulty straight away.
+  solo = makeSolo();
+  if (!connection && screen === 'start') mountWorld(solo);
+}
+
+for (const b of modeButtons) b.addEventListener('click', () => setMode(asMode(b.dataset.mode)));
+refreshModePicker();
 
 // ---------------------------------------------------------------- the rest of the buttons
 

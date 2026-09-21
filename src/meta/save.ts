@@ -4,6 +4,7 @@
  * guarded and the game plays fine without it.
  */
 
+import { asMode, godUnlocked, type Mode } from '../sim/modes';
 import { cleanName, randomName } from './names';
 
 export type AudioMode = 'all' | 'sfx' | 'off';
@@ -21,6 +22,10 @@ export interface Save {
   bestLength: number;
   runs: number;
   audio: AudioMode;
+  /** Difficulty. 'god' only sticks once its two items are owned (see readDisk). */
+  mode: Mode;
+  /** God mode's one-time "you've unlocked it" flourish has been shown. */
+  godRevealed: boolean;
   /** Has ever dashed: until then the dash button teaches itself. */
   dashed: boolean;
 }
@@ -38,6 +43,8 @@ const FRESH: Save = {
   bestLength: 0,
   runs: 0,
   audio: 'all',
+  mode: 'normal',
+  godRevealed: false,
   dashed: false,
 };
 
@@ -53,6 +60,9 @@ function readDisk(): Save {
     const owned = [...new Set([...FRESH.owned, ...bought])];
     // You can only wear what you own.
     const worn = (value: unknown, otherwise: string) => (owned.includes(text(value, '')) ? (value as string) : otherwise);
+    // God is a secret mode: a hand-edited save can't force it without owning both its items.
+    const wanted = asMode(data.mode);
+    const mode = wanted === 'god' && !godUnlocked(owned) ? 'normal' : wanted;
     return {
       stars: count(data.stars),
       owned,
@@ -64,6 +74,8 @@ function readDisk(): Save {
       bestLength: count(data.bestLength),
       runs: count(data.runs),
       audio: AUDIO_MODES.includes(data.audio as AudioMode) ? (data.audio as AudioMode) : FRESH.audio,
+      mode,
+      godRevealed: data.godRevealed === true,
       dashed: data.dashed === true,
     };
   } catch {
@@ -95,6 +107,8 @@ export function writeSave(save: Save): void {
       bestScore: Math.max(save.bestScore, disk.bestScore),
       bestLength: Math.max(save.bestLength, disk.bestLength),
       runs: Math.max(save.runs, disk.runs),
+      // Once God mode has revealed itself in any tab, it stays revealed.
+      godRevealed: save.godRevealed || disk.godRevealed,
     };
     localStorage.setItem(KEY, JSON.stringify(merged));
     // Only once it is safely on disk does this tab adopt the merged picture.

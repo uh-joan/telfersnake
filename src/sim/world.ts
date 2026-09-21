@@ -1,5 +1,6 @@
 import { ANIMAL_KINDS, ANIMALS, type Animal, type AnimalKind, makeAnimal, placeAnimal, updateAnimal } from './animals';
-import { Bot, type Personality, RIVALS, SOLO_RIVALS } from './bot';
+import { Bot, type Personality } from './bot';
+import { botCardChoice, type Rules, rulesFor } from './modes';
 import { isFree, makeHit, resolveCircle, wrapAngle } from './collide';
 import { Cooper, COOPER_AURA, COOPER_RADIUS } from './cooper';
 import { type Food, type FoodKind, FOOD_VALUE, GOLDEN_MULTIPLIER, placeFood } from './food';
@@ -12,7 +13,6 @@ import { type CardId, rollCards, type UpgradeId } from './upgrades';
 export const STEP = 1 / 60;
 export const PLAYER = 0;
 
-const FOOD_COUNT = 42; // scarce: every bite is worth steering for, with five snakes sharing it
 const SLOW_FACTOR = 0.6;
 const BUMP_QUIET = 0.4;
 
@@ -114,14 +114,17 @@ export class World {
 
   private readonly bots = new Map<Snake, Bot>();
   private readonly p = { x: 0, z: 0 };
+  /** Which difficulty this world runs at: rival personalities, food count, whether bots get upgrades. */
+  readonly rules: Rules;
 
   /**
-   * Solo: `new World(seed, look)` seats the player at 0 and four rivals after them.
+   * Solo: `new World(seed, look, rules)` seats the player at 0 and four rivals after them.
    * `playerLook` is purely cosmetic (the Tuck Shop skin); it never affects the rules.
-   * A shared room: `World.room(seed)` fills every seat with a bot, and players join() later.
+   * A shared room: `World.room(seed, rules)` fills every seat with a bot, and players join() later.
    */
-  constructor(seed = 1, playerLook: SnakeLook | null = PLAYER_LOOK) {
+  constructor(seed = 1, playerLook: SnakeLook | null = PLAYER_LOOK, rules: Rules = rulesFor('normal')) {
     this.rng = new Rng(seed);
+    this.rules = rules;
     this.hazards = makeHazards(this.rng);
     this.pausesForCards = playerLook !== null;
 
@@ -131,7 +134,7 @@ export class World {
       this.snakes.push(player);
       this.inputs.push({ x: 0, z: 0, active: false, dash: false });
     }
-    for (const who of playerLook ? SOLO_RIVALS : RIVALS) {
+    for (const who of playerLook ? rules.soloRivals : rules.rivals) {
       const s = new Snake(this.snakes.length, who, true);
       this.snakes.push(s);
       this.inputs.push({ x: 0, z: 0, active: false, dash: false });
@@ -143,7 +146,7 @@ export class World {
     // Everyone starts blinking: a long rival dropped in at random may be lying across someone.
     for (const s of this.snakes) s.immune = RESPAWN_GRACE;
 
-    for (let i = 0; i < FOOD_COUNT; i++) {
+    for (let i = 0; i < rules.foodCount; i++) {
       const food: Food = { kind: 'cookie', golden: false, x: 0, z: 0, born: -999 };
       placeFood(food, this.rng, -999, player.x, player.z, 2, this.hazards);
       this.foods.push(food);
@@ -158,8 +161,8 @@ export class World {
     }
   }
 
-  static room(seed: number): World {
-    return new World(seed, null);
+  static room(seed: number, rules: Rules = rulesFor('normal')): World {
+    return new World(seed, null, rules);
   }
 
   /** The local player's snake. */
@@ -200,7 +203,7 @@ export class World {
   leave(id: number): void {
     const s = this.snakes[id];
     if (!s || s.isBot) return;
-    this.seatBot(s, RIVALS[id % RIVALS.length]);
+    this.seatBot(s, this.rules.rivals[id % this.rules.rivals.length]);
     this.respawn(s);
   }
 
@@ -293,12 +296,18 @@ export class World {
         s.highestTier = s.tier;
         this.events.push({ type: 'tier', who: s.id, tier: s.tier });
       }
-      // Upgrades are the players' edge: bots level up but never get cards.
-      if (bot) s.pendingCards = 0;
-      else if (s.pendingCards > 0 && !s.cards) {
+      // Upgrades are normally the players' edge: bots level up but get no cards. In God mode that
+      // edge is gone — a bot grabs the scariest card at once, and never freezes to choose.
+      if (bot && !this.rules.botsGetUpgrades) {
+        s.pendingCards = 0;
+      } else if (s.pendingCards > 0 && !s.cards) {
         s.cards = rollCards(this.rng, s);
-        s.cardsFor = CARD_TIME;
-        this.events.push({ type: 'cards', who: s.id, cards: s.cards });
+        if (bot) {
+          this.choose(botCardChoice(s.cards), s.id);
+        } else {
+          s.cardsFor = CARD_TIME;
+          this.events.push({ type: 'cards', who: s.id, cards: s.cards });
+        }
       }
     }
 
