@@ -893,6 +893,11 @@ small {
   background: #f6f0ff;
 }
 
+.card.legendary {
+  border-color: #f0a500;
+  background: linear-gradient(160deg, #fff8e1, #ffe6a1);
+}
+
 .card-icon {
   font-size: clamp(44px, 15vw, 64px);
   line-height: 1;

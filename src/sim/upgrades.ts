@@ -23,7 +23,7 @@ export type CardId = UpgradeId | 'snack';
 /** The upgrades that always roll; powers roll too only when a snake can pay for one. */
 export const BASE_IDS: readonly UpgradeId[] = UPGRADE_IDS.filter((id) => !(POWER_IDS as readonly string[]).includes(id));
 
-export type Rarity = 'common' | 'rare' | 'epic';
+export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 
 export interface UpgradeDef {
   name: string;
@@ -47,9 +47,9 @@ export const UPGRADES: Record<CardId, UpgradeDef> = {
   tongue: { name: 'Long Tongue', icon: '👅', rarity: 'rare', max: 5, hint: '👅↔️', blurb: () => 'Gulp things from further away' },
   helmet: { name: 'Bike Helmet', icon: '⛑️', rarity: 'rare', max: 3, hint: '💥🚫', blurb: (l) => `Shrugs off one bonk. Recharges in ${HELMET_RECHARGE[l]}s` },
   clover: { name: 'Four-leaf Clover', icon: '🍀', rarity: 'rare', max: 3, hint: '🌟🍔', blurb: () => 'More golden food, and luckier cards' },
-  spikes: { name: 'Hedgehog Spikes', icon: '🦔', rarity: 'epic', max: 3, hint: '🐍🌵', blurb: () => 'Rivals bonk themselves on you from further off' },
-  dragon: { name: 'Dragon Breath', icon: '🐲', rarity: 'epic', max: 5, hint: '🔥🐍💨', blurb: () => 'Scorches rivals smaller (like a rock!), toasts food for double points, dazzles animals' },
-  bees: { name: 'Bee Buddies', icon: '🐝', rarity: 'epic', max: 3, hint: '🐝🍎', blurb: (l) => `${l} busy bee${l > 1 ? 's' : ''} fetching food around you` },
+  spikes: { name: 'Hedgehog Spikes', icon: '🦔', rarity: 'legendary', max: 3, hint: '🐍🌵', blurb: () => 'Rivals bonk themselves on you from further off' },
+  dragon: { name: 'Dragon Breath', icon: '🐲', rarity: 'legendary', max: 5, hint: '🔥🐍💨', blurb: () => 'Scorches rivals smaller (like a rock!), toasts food for double points, dazzles animals' },
+  bees: { name: 'Bee Buddies', icon: '🐝', rarity: 'legendary', max: 3, hint: '🐝🍎', blurb: (l) => `${l} busy bee${l > 1 ? 's' : ''} fetching food around you` },
   laser: { name: 'Laser Eyes', icon: '👁️', rarity: 'epic', max: 5, hint: '👁️➡️🐍', blurb: () => 'Zaps the rival dead ahead smaller' },
   stink: { name: 'Stink Cloud', icon: '💨', rarity: 'epic', max: 3, hint: '💨🐍💨', blurb: () => 'Puffs a stink cloud behind you that shrinks chasers' },
   zap: { name: 'Zap Ring', icon: '⚡', rarity: 'epic', max: 3, hint: '⚡🔄', blurb: () => 'Shocks every rival close to you smaller' },
@@ -58,9 +58,10 @@ export const UPGRADES: Record<CardId, UpgradeDef> = {
 };
 
 const HELMET_RECHARGE = [0, 40, 30, 20];
-const RARITY_WEIGHT: Record<Rarity, number> = { common: 6, rare: 3, epic: 1 };
+// A gentle four-tier curve (each roughly half the last), so no one tier is a crush of choices.
+const RARITY_WEIGHT: Record<Rarity, number> = { common: 6, rare: 3, epic: 1.5, legendary: 0.75 };
 /** Each clover level makes rare and epic cards this much likelier. */
-const LUCK_BONUS: Record<Rarity, number> = { common: 0, rare: 1, epic: 0.7 };
+const LUCK_BONUS: Record<Rarity, number> = { common: 0, rare: 1, epic: 0.7, legendary: 0.5 };
 
 /**
  * XP needed to go from `level` to the next. Steep on purpose: the first card comes after about
