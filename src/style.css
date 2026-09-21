@@ -915,6 +915,18 @@ small {
   white-space: nowrap;
 }
 
+/* A power card costs a blue gem to pick. */
+.card-cost {
+  margin-top: 2px;
+  padding: 2px 12px;
+  border-radius: 99px;
+  background: #1c4fa3;
+  color: #fff;
+  font-size: clamp(13px, 4vw, 17px);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 .pips {
   display: flex;
   gap: 4px;

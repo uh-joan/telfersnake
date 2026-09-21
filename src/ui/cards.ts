@@ -1,5 +1,5 @@
 import type { Snake } from '../sim/snake';
-import { type CardId, UPGRADES } from '../sim/upgrades';
+import { type CardId, POWER_IDS, UPGRADES } from '../sim/upgrades';
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
 
@@ -43,9 +43,12 @@ export class CardPicker {
         const def = UPGRADES[id];
         const owned = id === 'snack' ? 0 : snake.levelOf(id);
 
-        const card = el('button', `card ${def.rarity}`);
+        const isPower = (POWER_IDS as readonly string[]).includes(id);
+        const card = el('button', `card ${def.rarity}${isPower ? ' power' : ''}`);
         card.setAttribute('aria-label', `${def.name}: ${def.blurb(owned + 1)}`);
         card.append(el('div', 'card-icon', def.icon), el('div', 'card-name', def.name), el('div', 'card-hint', def.hint));
+        // Powers cost a blue gem to pick; the rest are free.
+        if (isPower) card.append(el('div', 'card-cost', '💎 1'));
 
         // One pip per level: green for owned, a glowing yellow one for the level on offer.
         if (Number.isFinite(def.max)) {

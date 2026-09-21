@@ -20,7 +20,7 @@ import { Stage } from './render/stage';
 import { UpgradeFx } from './render/upgradeFx';
 import { asMode, godUnlocked, type Mode, rulesFor } from './sim/modes';
 import { TIERS } from './sim/snake';
-import { type PowerId, UPGRADES } from './sim/upgrades';
+import { POWER_GEM_COST, POWER_IDS, UPGRADES } from './sim/upgrades';
 import type { WorldView } from './sim/view';
 import { STEP, World } from './sim/world';
 import { CardPicker } from './ui/cards';
@@ -38,7 +38,7 @@ const stage = new Stage($<HTMLCanvasElement>('game'));
 /** A fresh solo world at the chosen difficulty; also the backdrop behind the start screen. */
 const makeSolo = (): World => {
   const w = new World((Date.now() & 0x7fffffff) || 1, skinLook(save.skin, save.name), rulesFor(save.mode));
-  w.snake.powers = new Set(save.powers as PowerId[]);
+  w.snake.canBuyPowers = save.gems > 0;
   return w;
 };
 /** The game you play on your own. It is also the backdrop behind the start screen. */
@@ -119,6 +119,7 @@ const BUBBLES = [0xdff3ff, 0xa5d8ff, 0xffffff];
 const LASER = [0xff3b3b, 0xff8f8f, 0xffffff];
 const STINK = [0x8bd450, 0x5a9e2f, 0xcfe8a0];
 const ZAP = [0xffe066, 0x4dabf7, 0xffffff];
+const ICE = [0xa5d8ff, 0xe7f5ff, 0xffffff];
 const SPARK = [0xffd84a, 0xff6b6b, 0xffffff];
 
 const outfit = (): Outfit => ({ skin: save.skin, hat: save.hat, trail: save.trail, name: save.name });
@@ -140,6 +141,16 @@ const MODE_STARS: Record<Mode, number> = { easy: 0.5, normal: 1, god: 1 };
 function earnGem(): void {
   save.gems++;
   run.gems++;
+  updateCanBuy();
+}
+
+/** Keep the sim's "may this player draw a power card?" in step with the gem balance. */
+let lastCanBuy = save.gems > 0;
+function updateCanBuy(): void {
+  const can = save.gems > 0;
+  solo.snake.canBuyPowers = can;
+  if (connection && can !== lastCanBuy) connection.setCanBuy(can);
+  lastCanBuy = can;
 }
 
 function earned(): number {
@@ -235,8 +246,6 @@ let shopFrom: Screen = 'start';
 const shop = new Shop(save, () => sfx, () => {
   if (shop.changed) wearOutfit();
   shop.changed = false;
-  // A power just bought in the shop must reach the offline/backdrop world's card pool.
-  solo.snake.powers = new Set(save.powers as PowerId[]);
   show(shopFrom);
 });
 
@@ -257,6 +266,16 @@ let pickedAt = -Infinity;
 
 const cards = new CardPicker((index) => {
   const card = world.cards?.[index];
+  // A power card costs a gem (it is only ever offered when you have one). Pay before taking it.
+  if (card && (POWER_IDS as readonly string[]).includes(card)) {
+    if (save.gems < POWER_GEM_COST) {
+      sfx?.nope();
+      return;
+    }
+    save.gems -= POWER_GEM_COST;
+    updateCanBuy();
+    writeSave(save);
+  }
   if (connection) {
     connection.pick(index);
     pickedAt = performance.now();
@@ -410,18 +429,18 @@ function handleEvents(): void {
         if (e.by === world.me) earnGem();
         break;
       case 'power': {
-        // Someone cast a power: draw the beam / cloud / ring at the caster.
-        const palette = e.kind === 'laser' ? LASER : e.kind === 'stink' ? STINK : ZAP;
+        // Someone cast a power: draw the beam / cloud / ring / frost at the caster (or the target).
+        const palette = e.kind === 'laser' ? LASER : e.kind === 'stink' ? STINK : e.kind === 'freeze' ? ICE : ZAP;
         if (e.kind === 'laser') sparkles.puff(e.x, e.z, e.heading, e.range, palette, 20);
         else sparkles.burst(e.x, e.z, palette, 24, 1.2);
         if (mine) sfx?.whoosh();
         break;
       }
       case 'hit':
-        // A rival shrunk by a power: puff at the victim; the caster banks a gem.
-        sparkles.burst(e.x, e.z, SPARK, 12, 0.9);
+        // A rival shrunk or frozen by a power: puff at the victim; the caster banks a gem.
+        sparkles.burst(e.x, e.z, e.kind === 'freeze' ? ICE : SPARK, e.kind === 'freeze' ? 16 : 12, 1);
         if (e.who === world.me) {
-          hud.popup('💥 OUCH!', e.x, e.z, 'bad');
+          hud.popup(e.kind === 'freeze' ? '❄️ FROZEN!' : '💥 OUCH!', e.x, e.z, 'bad');
           sfx?.ouch();
         }
         if (e.by === world.me) {
@@ -571,7 +590,7 @@ $('play').addEventListener('click', async () => {
   $('start').classList.add('busy'); // every button on the start screen is dead until we are in
 
   try {
-    connection = await Connection.join(outfit(), save.mode, save.powers as PowerId[], () => {
+    connection = await Connection.join(outfit(), save.mode, save.gems > 0, () => {
       // The line dropped mid-game: keep what was earned and call it home time.
       connection = null;
       hud.toast('😴', 'Connection lost');

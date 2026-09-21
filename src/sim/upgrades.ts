@@ -6,22 +6,22 @@ import type { Snake } from './snake';
  * the sim (as plain numbers on the Snake), so a server can run them for multiplayer.
  */
 
-/** Offensive powers: unlocked with blue gems in the Tuck Shop, then they join your card pool. */
-export const POWER_IDS = ['laser', 'stink', 'zap'] as const;
+/** Offensive powers: they cost a blue gem to pick, and only appear as cards when you can afford one. */
+export const POWER_IDS = ['laser', 'stink', 'zap', 'freeze'] as const;
 export type PowerId = (typeof POWER_IDS)[number];
+/** What one power card costs in blue gems. */
+export const POWER_GEM_COST = 1;
 
 export const UPGRADE_IDS = [
   'skates', 'belly', 'homework', 'magnet', 'tongue', 'helmet', 'wrap', 'spikes', 'dragon', 'bees', 'clover',
-  'laser', 'stink', 'zap',
+  'laser', 'stink', 'zap', 'freeze',
 ] as const;
 export type UpgradeId = (typeof UPGRADE_IDS)[number];
 /** What a card can be: a real upgrade, or the filler offered once everything else is maxed. */
 export type CardId = UpgradeId | 'snack';
 
-/** The upgrades that always roll; powers are added to a snake's pool only once unlocked. */
+/** The upgrades that always roll; powers roll too only when a snake can pay for one. */
 export const BASE_IDS: readonly UpgradeId[] = UPGRADE_IDS.filter((id) => !(POWER_IDS as readonly string[]).includes(id));
-/** What each power costs in blue gems. */
-export const POWER_PRICES: Record<PowerId, number> = { laser: 40, stink: 30, zap: 50 };
 
 export type Rarity = 'common' | 'rare' | 'epic';
 
@@ -53,6 +53,7 @@ export const UPGRADES: Record<CardId, UpgradeDef> = {
   laser: { name: 'Laser Eyes', icon: '👁️', rarity: 'epic', max: 5, hint: '👁️➡️🐍', blurb: () => 'Zaps the rival dead ahead smaller' },
   stink: { name: 'Stink Cloud', icon: '💨', rarity: 'epic', max: 3, hint: '💨🐍💨', blurb: () => 'Puffs a stink cloud behind you that shrinks chasers' },
   zap: { name: 'Zap Ring', icon: '⚡', rarity: 'epic', max: 3, hint: '⚡🔄', blurb: () => 'Shocks every rival close to you smaller' },
+  freeze: { name: 'Freeze Puff', icon: '❄️', rarity: 'epic', max: 3, hint: '❄️🐍🧊', blurb: () => 'Freezes a nearby rival on the spot for a moment' },
   snack: { name: 'Snack Pack', icon: '🥪', rarity: 'common', max: Infinity, hint: '🐍➕➕', blurb: () => 'A big lunchbox. Grow a lot, right now' },
 };
 
@@ -71,8 +72,9 @@ export function xpForLevel(level: number): number {
 
 /** Three different cards the snake can still use; Snack Packs fill any gaps. */
 export function rollCards(rng: Rng, snake: Snake): CardId[] {
-  // Base upgrades always; powers only once unlocked (a per-snake set).
-  const pool = [...BASE_IDS, ...snake.powers].filter((id) => snake.levelOf(id) < UPGRADES[id].max);
+  // Base upgrades always; powers too, but only when this snake can pay a gem for one.
+  const available = snake.canBuyPowers ? UPGRADE_IDS : BASE_IDS;
+  const pool = available.filter((id) => snake.levelOf(id) < UPGRADES[id].max);
   const cards: CardId[] = [];
   while (cards.length < 3 && pool.length > 0) {
     const weights = pool.map((id) => RARITY_WEIGHT[UPGRADES[id].rarity] + snake.luck * LUCK_BONUS[UPGRADES[id].rarity]);

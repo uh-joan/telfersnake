@@ -1,6 +1,6 @@
 import { makeHit, resolveCircle, turnToward, wrapAngle } from './collide';
 import type { Circle } from './layout';
-import { type CardId, type PowerId, refreshStats, SNACK_MASS, type UpgradeId, xpForLevel } from './upgrades';
+import { type CardId, refreshStats, SNACK_MASS, type UpgradeId, xpForLevel } from './upgrades';
 
 export interface Input {
   /** Desired travel direction in world space (x east, z south). Ignored when `active` is false. */
@@ -102,12 +102,15 @@ export class Snake {
   bees = 0;
   breathLevel = 0;
   breathIn = 0;
-  /** Offensive powers unlocked (with gems). Persists across respawns; it is not an in-run upgrade. */
-  powers = new Set<PowerId>();
+  /** Whether power cards may be offered to this snake (the player has a gem to spend, or it's a God bot). */
+  canBuyPowers = false;
   /** Seconds until each power may fire again. */
   laserIn = 0;
   stinkIn = 0;
   zapIn = 0;
+  freezeIn = 0;
+  /** Seconds this snake is frozen solid (a rival's Freeze Puff): it cannot steer or move. */
+  frozenFor = 0;
   /** Seconds a spent helmet takes to come back. 0 = no helmet owned. */
   helmetRecharge = 0;
   helmetReady = false;
@@ -146,7 +149,8 @@ export class Snake {
     this.upgrades.clear();
     this.helmetReady = false;
     this.helmetRecharge = 0;
-    this.laserIn = this.stinkIn = this.zapIn = 0;
+    this.laserIn = this.stinkIn = this.zapIn = this.freezeIn = 0;
+    this.frozenFor = 0;
     refreshStats(this);
   }
 
