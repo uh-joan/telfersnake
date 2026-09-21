@@ -15,10 +15,12 @@ const MODELS: Record<FoodKind, () => THREE.BufferGeometry[]> = {
     paint(new THREE.CylinderGeometry(0.46, 0.46, 0.05, 12), 0x5dbb46, (g) => g.translate(0, 0.37, 0)),
     paint(new THREE.SphereGeometry(0.41, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), BUN, (g) => g.scale(1, 0.7, 1).translate(0, 0.4, 0)),
   ],
+  // A hot-dog, so it never reads as a brick: pale bun, browner sausage, a squiggle of mustard.
   sausage: () => [
-    paint(new THREE.CapsuleGeometry(0.15, 0.55, 4, 10), 0xb5533a, (g) => g.rotateZ(Math.PI / 2).translate(0, 0.28, 0)),
-    paint(new THREE.SphereGeometry(0.06, 6, 5), 0x8a3a28, (g) => g.translate(0.44, 0.28, 0)),
-    paint(new THREE.SphereGeometry(0.06, 6, 5), 0x8a3a28, (g) => g.translate(-0.44, 0.28, 0)),
+    paint(new THREE.CapsuleGeometry(0.13, 0.5, 4, 8), 0xecc487, (g) => g.rotateZ(Math.PI / 2).translate(0, 0.24, 0.12)),
+    paint(new THREE.CapsuleGeometry(0.13, 0.5, 4, 8), 0xecc487, (g) => g.rotateZ(Math.PI / 2).translate(0, 0.24, -0.12)),
+    paint(new THREE.CapsuleGeometry(0.12, 0.52, 4, 10), 0x9c4a2e, (g) => g.rotateZ(Math.PI / 2).translate(0, 0.36, 0)),
+    paint(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 5), 0xffcf33, (g) => g.rotateZ(Math.PI / 2).translate(0, 0.45, 0)),
   ],
   cookie: () => [
     paint(new THREE.CylinderGeometry(0.38, 0.38, 0.1, 14), 0xd9a066, (g) => g.rotateX(Math.PI / 2).translate(0, 0.42, 0)),
