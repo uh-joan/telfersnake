@@ -8,10 +8,10 @@ import type { Rng } from './rng';
  * bumps a piece breaks and a fresh one appears somewhere else, so the map never feels static.
  */
 
-export const HAZARD_KINDS = ['rock', 'stones', 'sticks', 'bricks'] as const;
+export const HAZARD_KINDS = ['rock', 'stones', 'sticks'] as const;
 export type HazardKind = (typeof HAZARD_KINDS)[number];
 
-const RADIUS: Record<HazardKind, number> = { rock: 0.7, stones: 0.5, sticks: 0.55, bricks: 0.5 };
+const RADIUS: Record<HazardKind, number> = { rock: 0.7, stones: 0.5, sticks: 0.55 };
 
 export interface Hazard extends Circle {
   kind: HazardKind;

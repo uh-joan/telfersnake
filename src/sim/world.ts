@@ -334,7 +334,7 @@ export class World {
     s.deflect(nx, nz, dt);
   }
 
-  /** Rocks, sticks, stones and bricks: the snake has already bounced off; now it shrinks. */
+  /** Rocks, sticks and stones: the snake has already bounced off; now it shrinks. */
   private bonkRock(s: Snake): boolean {
     if (!s.touchingWall || s.immune > 0) return false;
     for (const h of this.hazards) {

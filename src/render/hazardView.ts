@@ -10,32 +10,17 @@ const lump = (r: number, color: number, x: number, y: number, z: number, sy = 0.
   paint(new THREE.IcosahedronGeometry(r, 0), color, (g) => g.scale(1, sy, 1).rotateY(x * 7 + z * 3).translate(x, y, z));
 const stick = (len: number, turn: number, y: number, color: number): Geo =>
   paint(new THREE.CylinderGeometry(0.045, 0.06, len, 5), color, (g) => g.rotateZ(Math.PI / 2).rotateY(turn).translate(0, y, 0));
-// A tidy little stack of red bricks with cream mortar — clearly masonry, never a hot-dog.
-const BRICK_RED = 0xb0392c;
-const MORTAR = 0xe7ddc9;
-const brick = (x: number, y: number, z: number, turn: number): Geo =>
-  paint(new THREE.BoxGeometry(0.46, 0.17, 0.22), BRICK_RED, (g) => g.rotateY(turn).translate(x, y, z));
-const mortar = (x: number, y: number, z: number, turn: number, w: number, d: number): Geo =>
-  paint(new THREE.BoxGeometry(w, 0.05, d), MORTAR, (g) => g.rotateY(turn).translate(x, y, z));
-
 const MODELS: Record<HazardKind, () => Geo[]> = {
   rock: () => [lump(0.62, 0x8d9096, 0, 0.36, 0), lump(0.32, 0x7a7d83, 0.46, 0.17, 0.22), lump(0.22, 0x9a9da3, -0.4, 0.12, -0.3)],
   stones: () => [lump(0.26, 0x9a9da3, -0.16, 0.16, 0.1), lump(0.2, 0x85888e, 0.2, 0.12, -0.05), lump(0.16, 0xa6a9af, 0.02, 0.1, 0.3), lump(0.13, 0x7a7d83, -0.05, 0.08, -0.3)],
   sticks: () => [stick(1.15, 0.4, 0.06, 0x7a5230), stick(0.95, -0.8, 0.15, 0x8a6038), stick(0.5, 1.7, 0.2, 0x6b4526)],
-  bricks: () => [
-    mortar(0.06, 0.03, 0.04, 0.12, 0.92, 0.5),
-    brick(-0.06, 0.12, 0.0, 0.12),
-    brick(0.24, 0.12, 0.1, 0.12),
-    mortar(0.09, 0.2, 0.05, 0.12, 0.72, 0.42),
-    brick(0.09, 0.28, 0.04, 0.12),
-  ],
 };
 
 const PELLET_CAP = 160;
 const PELLET_COLOR = new THREE.Color(0x8be36a);
 const POP = 0.35; // seconds a fresh piece takes to grow in
 
-/** Rocks, sticks, stones and bricks (which break and reappear elsewhere), plus dropped snack pellets. */
+/** Rocks, sticks and stones (which break and reappear elsewhere), plus dropped snack pellets. */
 export class HazardView {
   readonly group = new THREE.Group();
   private readonly pellets: THREE.InstancedMesh;
