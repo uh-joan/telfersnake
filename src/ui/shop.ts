@@ -58,6 +58,7 @@ export class Shop {
 
   open(): void {
     this.picked = null;
+    this.pickedPower = null;
     this.render();
     this.root.classList.add('show');
   }

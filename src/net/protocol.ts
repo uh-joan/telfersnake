@@ -98,7 +98,7 @@ export const HELMET_READY = 8;
 export const CHOOSING = 16;
 export const AWAY = 32;
 
-/** Every upgrade level (0..5) as one base-6 number: 6^11 fits comfortably in a double. */
+/** Every upgrade level (0..5) as one base-6 number: 6^14 fits comfortably in a double. */
 export function packUpgrades(s: Snake): number {
   let n = 0;
   for (let i = UPGRADE_IDS.length - 1; i >= 0; i--) n = n * 6 + s.levelOf(UPGRADE_IDS[i]);

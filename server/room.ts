@@ -88,7 +88,7 @@ export class Room {
   }
 
   join(socket: WebSocket, outfit: Outfit, powers: unknown): boolean {
-    const valid = Array.isArray(powers) ? (powers.filter((p) => (POWER_IDS as readonly string[]).includes(p)) as PowerId[]) : [];
+    const valid = Array.isArray(powers) ? (powers.filter((p) => (POWER_IDS as readonly string[]).includes(p)).slice(0, POWER_IDS.length) as PowerId[]) : [];
     const snake = this.world.join(skinLook('telfer', randomName()), valid);
     if (!snake) return false;
     this.dress(snake.id, outfit);
