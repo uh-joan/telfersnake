@@ -51,7 +51,7 @@ const BEE_SPIN = 2.2; // rad/s
 const BREATH_HALF_ANGLE = 0.5;
 const BREATH_RECHECK = 0.25;
 const DAZE = 1.8;
-const SNEEZE_SHARE = 0.1;
+const BREATH_SHARE = 0.14; // fire breath scorches a rival smaller, like bonking a rock
 
 const PLAYER_LOOK: SnakeLook = { name: 'You', body: 0x4cbb4a, stripe: 0xf2d94a, head: 0x57c955 };
 
@@ -512,8 +512,9 @@ export class World {
     for (const o of this.snakes) {
       if (o === s || !o.alive || o.immune > 0 || !this.inBreath(s, o.x, o.z, range)) continue;
       o.immune = OUCH_GRACE;
-      const lost = Math.max(1, o.mass * SNEEZE_SHARE);
-      if (o.mass >= 1) this.shed(o, lost, PELLET_RETURN, 3);
+      // Scorch it smaller, capped like a rock bonk so it stays fair on the biggest rivals.
+      const lost = o.mass < 1 ? 0 : Math.min(OUCH_MAX, Math.max(2, o.mass * BREATH_SHARE));
+      if (lost > 0) this.shed(o, lost, PELLET_RETURN, 4);
       this.events.push({ type: 'sneeze', who: o.id, x: o.x, z: o.z });
     }
   }

@@ -38,7 +38,7 @@ export const UPGRADES: Record<CardId, UpgradeDef> = {
   helmet: { name: 'Bike Helmet', icon: '⛑️', rarity: 'rare', max: 3, hint: '💥🚫', blurb: (l) => `Shrugs off one bonk. Recharges in ${HELMET_RECHARGE[l]}s` },
   clover: { name: 'Four-leaf Clover', icon: '🍀', rarity: 'rare', max: 3, hint: '🌟🍔', blurb: () => 'More golden food, and luckier cards' },
   spikes: { name: 'Hedgehog Spikes', icon: '🦔', rarity: 'epic', max: 3, hint: '🐍🌵', blurb: () => 'Rivals bonk themselves on you from further off' },
-  dragon: { name: 'Dragon Breath', icon: '🐲', rarity: 'epic', max: 5, hint: '🔥🍗', blurb: () => 'Toasts food for double points, dazzles animals, makes rivals sneeze' },
+  dragon: { name: 'Dragon Breath', icon: '🐲', rarity: 'epic', max: 5, hint: '🔥🐍💨', blurb: () => 'Scorches rivals smaller (like a rock!), toasts food for double points, dazzles animals' },
   bees: { name: 'Bee Buddies', icon: '🐝', rarity: 'epic', max: 3, hint: '🐝🍎', blurb: (l) => `${l} busy bee${l > 1 ? 's' : ''} fetching food around you` },
   snack: { name: 'Snack Pack', icon: '🥪', rarity: 'common', max: Infinity, hint: '🐍➕➕', blurb: () => 'A big lunchbox. Grow a lot, right now' },
 };

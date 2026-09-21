@@ -381,8 +381,12 @@ function handleEvents(): void {
         if (mine) sfx?.whoosh();
         break;
       case 'sneeze':
-        sparkles.burst(e.x, e.z, DUST, 8, 0.6);
-        if (mine) hud.popup('ACHOO!', e.x, e.z, 'bad');
+        // Scorched by fire breath: shrinks you like a rock bonk, so it should read that way.
+        sparkles.burst(e.x, e.z, EMBERS, 14, 0.9);
+        if (mine) {
+          hud.popup('🔥 OUCH!', e.x, e.z, 'bad');
+          sfx?.ouch();
+        }
         break;
       case 'bump':
         if (mine) sfx?.bump();
