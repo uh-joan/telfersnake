@@ -4,7 +4,7 @@ import { FOOD_KINDS, type Food } from '../sim/food';
 import { HAZARD_KINDS, type Hazard, type Pellet } from '../sim/hazards';
 import type { Mode } from '../sim/modes';
 import type { Snake, SnakeLook } from '../sim/snake';
-import { type CardId, UPGRADE_IDS, type UpgradeId } from '../sim/upgrades';
+import { type CardId, type PowerId, UPGRADE_IDS, type UpgradeId } from '../sim/upgrades';
 import type { GameEvent } from '../sim/world';
 
 /**
@@ -22,7 +22,7 @@ export const SNAPSHOT_EVERY = 4;
 
 export type ClientMessage =
   /** "Seat me anywhere": there is one way in, the shared playgrounds. `mode` picks which pool. */
-  | { t: 'hello'; v: number; mode?: Mode; skin: string; hat: string; trail: string; name: string }
+  | { t: 'hello'; v: number; mode?: Mode; powers?: PowerId[]; skin: string; hat: string; trail: string; name: string }
   /** Changed clothes (or name) in the Tuck Shop, mid-game. */
   | { t: 'look'; skin: string; hat: string; trail: string; name: string }
   /** Opened a menu (1) or came back (0): the snake stands aside meanwhile. */

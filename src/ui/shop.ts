@@ -1,5 +1,6 @@
 import { CATALOGUE, type Item, type ItemKind, type Skin } from '../meta/catalogue';
 import { type Save, writeSave } from '../meta/save';
+import { POWER_IDS, POWER_PRICES, type PowerId, UPGRADES } from '../sim/upgrades';
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
 const hex = (color: number) => `#${color.toString(16).padStart(6, '0')}`;
@@ -28,10 +29,12 @@ export class Shop {
   private readonly root = $('shop');
   private readonly grid = $('shop-grid');
   private readonly stars = $('shop-stars-value');
+  private readonly cur = $('shop-cur');
   private readonly buy = $('shop-buy');
   private readonly tabs = [...document.querySelectorAll<HTMLElement>('#shop-tabs button')];
-  private kind: ItemKind = 'skin';
+  private kind: ItemKind | 'power' = 'skin';
   private picked: Item | null = null;
+  private pickedPower: PowerId | null = null;
   /** True once anything worn has changed, so the caller knows to rebuild the snake. */
   changed = false;
 
@@ -39,8 +42,9 @@ export class Shop {
     this.root.addEventListener('pointerdown', (e) => e.stopPropagation());
     for (const tab of this.tabs) {
       tab.addEventListener('click', () => {
-        this.kind = tab.dataset.kind as ItemKind;
+        this.kind = tab.dataset.kind as ItemKind | 'power';
         this.picked = null;
+        this.pickedPower = null;
         this.sounds()?.pick();
         this.render();
       });
@@ -67,8 +71,13 @@ export class Shop {
   }
 
   private render(): void {
-    this.stars.textContent = String(this.save.stars);
     for (const tab of this.tabs) tab.classList.toggle('on', tab.dataset.kind === this.kind);
+    if (this.kind === 'power') {
+      this.renderPowers();
+      return;
+    }
+    this.cur.textContent = '⭐';
+    this.stars.textContent = String(this.save.stars);
 
     this.grid.replaceChildren(
       ...[...CATALOGUE[this.kind]].sort((a, b) => a.price - b.price).map((item) => {
@@ -95,6 +104,57 @@ export class Shop {
     this.buy.textContent = this.owns(item) ? '✔ Wear it' : short > 0 ? `⭐ ${short} more` : `Buy  ⭐ ${item.price}`;
   }
 
+  /** The Powers tab: gem-bought offensive abilities that then join your level-up cards. */
+  private renderPowers(): void {
+    this.cur.textContent = '💎';
+    this.stars.textContent = String(this.save.gems);
+
+    this.grid.replaceChildren(
+      ...POWER_IDS.map((id) => {
+        const def = UPGRADES[id];
+        const owned = this.save.powers.includes(id);
+        const tile = el('button', `item${owned ? ' wearing' : ' locked'}${this.pickedPower === id ? ' picked' : ''}`);
+        tile.append(el('div', 'item-icon', def.icon));
+        tile.append(el('div', 'item-name', def.name));
+        tile.append(el('div', 'item-hint', def.hint));
+        tile.append(el('div', 'price', owned ? '✓ Yours' : `💎 ${POWER_PRICES[id]}`));
+        tile.addEventListener('click', () => {
+          this.pickedPower = id;
+          this.sounds()?.pick();
+          this.render();
+        });
+        return tile;
+      }),
+    );
+
+    const id = this.pickedPower;
+    const already = !!id && this.save.powers.includes(id);
+    this.buy.classList.toggle('show', !!id && !already);
+    if (!id || already) return;
+    const short = POWER_PRICES[id] - this.save.gems;
+    this.buy.classList.toggle('poor', short > 0);
+    this.buy.textContent = short > 0 ? `💎 ${short} more` : `Unlock  💎 ${POWER_PRICES[id]}`;
+  }
+
+  private actPower(): void {
+    const id = this.pickedPower;
+    if (!id || this.save.powers.includes(id)) return;
+    if (this.save.gems < POWER_PRICES[id]) {
+      this.sounds()?.nope();
+      const tile = this.grid.querySelector('.picked');
+      tile?.classList.remove('shake');
+      void (tile as HTMLElement | null)?.offsetWidth;
+      tile?.classList.add('shake');
+      return;
+    }
+    this.save.gems -= POWER_PRICES[id];
+    this.save.powers.push(id);
+    this.changed = true; // so the solo world picks up the new power
+    this.sounds()?.chaChing();
+    writeSave(this.save);
+    this.render();
+  }
+
   /** A skin drawn as a tiny snake: a head and a run of body beads in its colours. */
   private miniSnake(skin: Skin): HTMLElement {
     const snake = el('div', 'mini-snake');
@@ -110,6 +170,10 @@ export class Shop {
   }
 
   private act(): void {
+    if (this.kind === 'power') {
+      this.actPower();
+      return;
+    }
     const item = this.picked;
     if (!item) return;
     if (!this.owns(item)) {

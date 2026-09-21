@@ -973,6 +973,14 @@ small {
   opacity: 0.7;
 }
 
+#r-earned {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
 #r-stars {
   display: flex;
   align-items: center;
@@ -983,6 +991,29 @@ small {
   -webkit-text-stroke: 3px var(--ink);
   paint-order: stroke fill;
   text-shadow: 0 5px 0 rgba(0, 0, 0, 0.25);
+}
+
+#r-gems {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: clamp(32px, 10vw, 50px);
+  font-weight: 900;
+  color: #74c0fc;
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 5px 0 rgba(0, 0, 0, 0.25);
+}
+
+#r-gems.hide {
+  display: none;
+}
+
+.item-hint {
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.75;
+  margin-top: 1px;
 }
 
 /* ---------- Tuck Shop ---------- */

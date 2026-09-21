@@ -8,7 +8,7 @@ import { type Hazard, type HazardKind, makeHazards, type Pellet, PELLET_LIFE_TIC
 import { BOUNDS, inBox, SAIL, SNAKE_SPAWN } from './layout';
 import { Rng } from './rng';
 import { type Input, Snake, type SnakeLook } from './snake';
-import { type CardId, rollCards, type UpgradeId } from './upgrades';
+import { type CardId, POWER_IDS, type PowerId, rollCards, type UpgradeId } from './upgrades';
 
 export const STEP = 1 / 60;
 export const PLAYER = 0;
@@ -52,6 +52,7 @@ const BREATH_HALF_ANGLE = 0.5;
 const BREATH_RECHECK = 0.25;
 const DAZE = 1.8;
 const BREATH_SHARE = 0.14; // fire breath scorches a rival smaller, like bonking a rock
+const LASER_HALF_ANGLE = 0.2; // radians either side of dead-ahead the laser can catch a rival
 
 const PLAYER_LOOK: SnakeLook = { name: 'You', body: 0x4cbb4a, stripe: 0xf2d94a, head: 0x57c955 };
 
@@ -76,7 +77,11 @@ export type GameEvent =
   | { type: 'helmet'; who: number; x: number; z: number }
   | { type: 'respawn'; who: number; x: number; z: number }
   | { type: 'breath'; who: number; x: number; z: number; heading: number; range: number }
-  | { type: 'sneeze'; who: number; x: number; z: number }
+  | { type: 'sneeze'; who: number; by: number; x: number; z: number }
+  /** A power was cast: FX at the caster. */
+  | { type: 'power'; who: number; kind: PowerId; x: number; z: number; heading: number; range: number }
+  /** A rival was shrunk by a power (or bonk): puff at the victim; `by` earns the gem. */
+  | { type: 'hit'; who: number; by: number; kind: 'shrink'; x: number; z: number }
   | { type: 'say'; text: string }
   | { type: 'bump'; who: number; what: 'wall' | 'cooper' };
 
@@ -183,17 +188,20 @@ export class World {
     s.baseSpeedMul = s.speedMul = who.speedMul;
     s.baseGrowthMul = s.growthMul = who.growthMul;
     s.massCap = who.massCap;
+    // In God mode the bots take upgrades, so give them the full arsenal of powers too.
+    s.powers = new Set(this.rules.botsGetUpgrades ? POWER_IDS : []);
     this.bots.set(s, new Bot(who));
   }
 
   /** A player takes over a bot's seat, starting small like anyone else. Null if the room is full of players. */
-  join(look: SnakeLook): Snake | null {
+  join(look: SnakeLook, powers: PowerId[] = []): Snake | null {
     const s = this.snakes.find((o) => o.isBot);
     if (!s) return null;
     this.bots.delete(s);
     s.reset();
     s.look = look;
     s.isBot = false;
+    s.powers = new Set(powers);
     Object.assign(this.inputs[s.id], { x: 0, z: 0, active: false, dash: false });
     this.respawn(s);
     return s;
@@ -291,6 +299,7 @@ export class World {
       this.eat(s);
       this.bees(s);
       this.breathe(s, dt);
+      this.castPowers(s, dt);
 
       if (s.tier > s.highestTier) {
         s.highestTier = s.tier;
@@ -358,6 +367,86 @@ export class World {
   }
 
   /** Take `lost` mass off a snake and leave `share` of it on the ground as `n` pellets along its tail end. */
+  // ---------------------------------------------------------------- powers (gem-unlocked)
+
+  /** Fire whichever offensive powers this snake has unlocked and levelled, each on its own cooldown. */
+  private castPowers(s: Snake, dt: number): void {
+    if (s.levelOf('laser') > 0) this.fireLaser(s, dt);
+    if (s.levelOf('stink') > 0) this.fireStink(s, dt);
+    if (s.levelOf('zap') > 0) this.fireZap(s, dt);
+  }
+
+  /** Shrink a rival like a rock bonk and puff pellets; `by` is credited (for gems). */
+  private scorch(target: Snake, by: Snake, share: number, cap: number): void {
+    target.immune = OUCH_GRACE;
+    const lost = target.mass < 1 ? 0 : Math.min(cap, Math.max(2, target.mass * share));
+    if (lost > 0) this.shed(target, lost, PELLET_RETURN, 3);
+    this.events.push({ type: 'hit', who: target.id, by: by.id, kind: 'shrink', x: target.x, z: target.z });
+  }
+
+  /** Laser Eyes: a narrow beam that zaps the nearest rival roughly dead ahead. */
+  private fireLaser(s: Snake, dt: number): void {
+    s.laserIn -= dt;
+    if (s.laserIn > 0) return;
+    const lv = s.levelOf('laser');
+    const range = 8 + 1.5 * lv;
+    let best: Snake | null = null;
+    let bestD = Infinity;
+    for (const o of this.snakes) {
+      if (o === s || !o.alive || o.immune > 0) continue;
+      const d = Math.hypot(o.x - s.x, o.z - s.z);
+      if (d > range || d >= bestD) continue;
+      if (Math.abs(wrapAngle(Math.atan2(o.z - s.z, o.x - s.x) - s.heading)) > LASER_HALF_ANGLE) continue;
+      bestD = d;
+      best = o;
+    }
+    if (!best) {
+      s.laserIn = 0.3;
+      return;
+    }
+    s.laserIn = Math.max(0.8, 2.4 - 0.25 * lv);
+    this.events.push({ type: 'power', who: s.id, kind: 'laser', x: s.x, z: s.z, heading: s.heading, range });
+    this.scorch(best, s, 0.09, 8);
+  }
+
+  /** Stink Cloud: a puff behind the head that shrinks anyone chasing. */
+  private fireStink(s: Snake, dt: number): void {
+    s.stinkIn -= dt;
+    if (s.stinkIn > 0) return;
+    const lv = s.levelOf('stink');
+    const radius = 2.5 + 0.5 * lv;
+    const bx = s.x - Math.cos(s.heading) * radius * 0.6;
+    const bz = s.z - Math.sin(s.heading) * radius * 0.6;
+    let fired = false;
+    for (const o of this.snakes) {
+      if (o === s || !o.alive || o.immune > 0 || Math.hypot(o.x - bx, o.z - bz) > radius) continue;
+      if (!fired) {
+        fired = true;
+        this.events.push({ type: 'power', who: s.id, kind: 'stink', x: bx, z: bz, heading: s.heading, range: radius });
+      }
+      this.scorch(o, s, 0.08, 6);
+    }
+    s.stinkIn = fired ? Math.max(1.5, 3 - 0.4 * lv) : 0.3;
+  }
+
+  /** Zap Ring: a 360° shock that shrinks every rival close by. */
+  private fireZap(s: Snake, dt: number): void {
+    s.zapIn -= dt;
+    if (s.zapIn > 0) return;
+    const lv = s.levelOf('zap');
+    const radius = 2.5 + 0.4 * lv;
+    let fired = false;
+    for (const o of this.snakes) {
+      if (o === s || !o.alive || o.immune > 0 || Math.hypot(o.x - s.x, o.z - s.z) > radius) continue;
+      if (!fired) {
+        fired = true;
+        this.events.push({ type: 'power', who: s.id, kind: 'zap', x: s.x, z: s.z, heading: s.heading, range: radius });
+      }
+      this.scorch(o, s, 0.08, 6);
+    }
+    s.zapIn = fired ? Math.max(1.2, 3.5 - 0.4 * lv) : 0.3;
+  }
+
   private shed(s: Snake, lost: number, share: number, n: number): void {
     const tail = s.length;
     const spread = Math.min(0.7, tail / n);
@@ -515,7 +604,7 @@ export class World {
       // Scorch it smaller, capped like a rock bonk so it stays fair on the biggest rivals.
       const lost = o.mass < 1 ? 0 : Math.min(OUCH_MAX, Math.max(2, o.mass * BREATH_SHARE));
       if (lost > 0) this.shed(o, lost, PELLET_RETURN, 4);
-      this.events.push({ type: 'sneeze', who: o.id, x: o.x, z: o.z });
+      this.events.push({ type: 'sneeze', who: o.id, by: s.id, x: o.x, z: o.z });
     }
   }
 

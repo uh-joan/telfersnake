@@ -20,7 +20,7 @@ import { Stage } from './render/stage';
 import { UpgradeFx } from './render/upgradeFx';
 import { asMode, godUnlocked, type Mode, rulesFor } from './sim/modes';
 import { TIERS } from './sim/snake';
-import { UPGRADES } from './sim/upgrades';
+import { type PowerId, UPGRADES } from './sim/upgrades';
 import type { WorldView } from './sim/view';
 import { STEP, World } from './sim/world';
 import { CardPicker } from './ui/cards';
@@ -36,7 +36,11 @@ const TRAIL_EVERY = 0.07;
 const save = loadSave();
 const stage = new Stage($<HTMLCanvasElement>('game'));
 /** A fresh solo world at the chosen difficulty; also the backdrop behind the start screen. */
-const makeSolo = (): World => new World((Date.now() & 0x7fffffff) || 1, skinLook(save.skin, save.name), rulesFor(save.mode));
+const makeSolo = (): World => {
+  const w = new World((Date.now() & 0x7fffffff) || 1, skinLook(save.skin, save.name), rulesFor(save.mode));
+  w.snake.powers = new Set(save.powers as PowerId[]);
+  return w;
+};
 /** The game you play on your own. It is also the backdrop behind the start screen. */
 let solo = makeSolo();
 /** Whatever is on screen: the solo world, or this phone's copy of a shared playground. */
@@ -112,6 +116,10 @@ const EMBERS = [0xff7b00, 0xffb703, 0x6b6f76];
 const SKATE_DUST = [0xffffff, 0xe9ecef, 0xced4da];
 const LUCKY = [0x69db7c, 0x2f9e44, 0xffd84a];
 const BUBBLES = [0xdff3ff, 0xa5d8ff, 0xffffff];
+const LASER = [0xff3b3b, 0xff8f8f, 0xffffff];
+const STINK = [0x8bd450, 0x5a9e2f, 0xcfe8a0];
+const ZAP = [0xffe066, 0x4dabf7, 0xffffff];
+const SPARK = [0xffd84a, 0xff6b6b, 0xffffff];
 
 const outfit = (): Outfit => ({ skin: save.skin, hat: save.hat, trail: save.trail, name: save.name });
 
@@ -123,10 +131,16 @@ function trailFor(id: number): number[] {
 // ---------------------------------------------------------------- this run
 
 /** What the results screen and the star count are built from. */
-const run = { gulps: 0, rivalBonks: 0, longest: 0, banked: 0, over: false };
+const run = { gulps: 0, rivalBonks: 0, longest: 0, banked: 0, gems: 0, gemsBanked: 0, over: false };
 
 /** Easy is the gentle sandbox, not a star farm: it pays half, so Normal is the road to anything dear. */
 const MODE_STARS: Record<Mode, number> = { easy: 0.5, normal: 1, god: 1 };
+
+/** A blue gem earned by shrinking or bonking a rival. Banked with the stars. */
+function earnGem(): void {
+  save.gems++;
+  run.gems++;
+}
 
 function earned(): number {
   const raw = starsFor(world.snake.score, world.snake.highestTier, run.rivalBonks);
@@ -139,13 +153,14 @@ function bank(): void {
   const score = world.snake.score;
   const longest = Math.round(run.longest);
   // Writing storage blocks the main thread: only do it when there is something new to keep.
-  if (now <= run.banked && score <= save.bestScore && longest <= save.bestLength) return;
+  if (now <= run.banked && score <= save.bestScore && longest <= save.bestLength && run.gems <= run.gemsBanked) return;
   if (now > run.banked) {
     save.stars += now - run.banked;
     run.banked = now;
   }
   save.bestScore = Math.max(save.bestScore, score);
   save.bestLength = Math.max(save.bestLength, longest);
+  run.gemsBanked = run.gems; // gems were added to save.gems as they were earned
   writeSave(save);
   hud.setStars(run.banked);
 }
@@ -220,6 +235,8 @@ let shopFrom: Screen = 'start';
 const shop = new Shop(save, () => sfx, () => {
   if (shop.changed) wearOutfit();
   shop.changed = false;
+  // A power just bought in the shop must reach the offline/backdrop world's card pool.
+  solo.snake.powers = new Set(save.powers as PowerId[]);
   show(shopFrom);
 });
 
@@ -261,6 +278,8 @@ function finishRun(): void {
   $('r-length').textContent = `${Math.round(run.longest)}m`;
   $('r-gulps').textContent = String(run.gulps);
   $('r-bonks').textContent = String(run.rivalBonks);
+  $('r-gems-value').textContent = `+${run.gems}`;
+  $('r-gems').classList.toggle('hide', run.gems === 0);
   // Back on this phone's own world: the results screen and its Tuck Shop must not talk to a closed line.
   connection?.leave();
   connection = null;
@@ -361,6 +380,7 @@ function handleEvents(): void {
           sfx?.bonked();
         } else if (e.by === world.me) {
           run.rivalBonks++;
+          earnGem();
           hud.popup('BONK!', e.x, e.z, 'fun');
           sfx?.bonkedRival();
         }
@@ -386,6 +406,28 @@ function handleEvents(): void {
         if (mine) {
           hud.popup('🔥 OUCH!', e.x, e.z, 'bad');
           sfx?.ouch();
+        }
+        if (e.by === world.me) earnGem();
+        break;
+      case 'power': {
+        // Someone cast a power: draw the beam / cloud / ring at the caster.
+        const palette = e.kind === 'laser' ? LASER : e.kind === 'stink' ? STINK : ZAP;
+        if (e.kind === 'laser') sparkles.puff(e.x, e.z, e.heading, e.range, palette, 20);
+        else sparkles.burst(e.x, e.z, palette, 24, 1.2);
+        if (mine) sfx?.whoosh();
+        break;
+      }
+      case 'hit':
+        // A rival shrunk by a power: puff at the victim; the caster banks a gem.
+        sparkles.burst(e.x, e.z, SPARK, 12, 0.9);
+        if (e.who === world.me) {
+          hud.popup('💥 OUCH!', e.x, e.z, 'bad');
+          sfx?.ouch();
+        }
+        if (e.by === world.me) {
+          earnGem();
+          hud.popup('💎', e.x, e.z, 'fun');
+          sfx?.zip();
         }
         break;
       case 'bump':
@@ -529,7 +571,7 @@ $('play').addEventListener('click', async () => {
   $('start').classList.add('busy'); // every button on the start screen is dead until we are in
 
   try {
-    connection = await Connection.join(outfit(), save.mode, () => {
+    connection = await Connection.join(outfit(), save.mode, save.powers as PowerId[], () => {
       // The line dropped mid-game: keep what was earned and call it home time.
       connection = null;
       hud.toast('😴', 'Connection lost');

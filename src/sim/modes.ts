@@ -73,7 +73,7 @@ export const asMode = (value: unknown): Mode => (MODES.includes(value as Mode) ?
  * A bot doesn't sit and deliberate over its three cards: it grabs the scariest thing on offer,
  * top of this list first. Returns the index into `cards` to take.
  */
-const BOT_PREF: readonly CardId[] = ['dragon', 'spikes', 'skates', 'magnet', 'bees', 'belly', 'tongue', 'clover', 'homework', 'helmet', 'wrap', 'snack'];
+const BOT_PREF: readonly CardId[] = ['dragon', 'laser', 'zap', 'spikes', 'stink', 'skates', 'magnet', 'bees', 'belly', 'tongue', 'clover', 'homework', 'helmet', 'wrap', 'snack'];
 export function botCardChoice(cards: readonly CardId[]): number {
   let best = 0;
   let bestRank = Infinity;
