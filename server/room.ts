@@ -6,7 +6,6 @@ import {
   type Seat, type ServerMessage, SNAPSHOT_EVERY, snakeRow, type Snapshot,
 } from '../src/net/protocol';
 import { type Mode, rulesFor } from '../src/sim/modes';
-import { POWER_IDS, type PowerId } from '../src/sim/upgrades';
 import { type GameEvent, World } from '../src/sim/world';
 
 /** What a phone says it is wearing. None of it is trusted: every id is checked against the catalogue. */
@@ -87,9 +86,8 @@ export class Room {
     this.trails[seat] = TRAILS.some((t) => t.id === outfit.trail) ? outfit.trail : 'no-trail';
   }
 
-  join(socket: WebSocket, outfit: Outfit, powers: unknown): boolean {
-    const valid = Array.isArray(powers) ? (powers.filter((p) => (POWER_IDS as readonly string[]).includes(p)).slice(0, POWER_IDS.length) as PowerId[]) : [];
-    const snake = this.world.join(skinLook('telfer', randomName()), valid);
+  join(socket: WebSocket, outfit: Outfit, canBuy: boolean): boolean {
+    const snake = this.world.join(skinLook('telfer', randomName()), canBuy);
     if (!snake) return false;
     this.dress(snake.id, outfit);
     this.players.set(socket, { socket, seat: snake.id, ack: 0, missedFood: false });
@@ -136,6 +134,9 @@ export class Room {
       if (Number.isFinite(message.i)) this.world.choose(message.i, p.seat);
     } else if (message.t === 'away') {
       this.world.setAway(p.seat, message.on === 1);
+    } else if (message.t === 'gems') {
+      // Whether this player can now afford a power card. Only affects their own card rolls.
+      this.world.snakes[p.seat].canBuyPowers = message.on === 1;
     } else if (message.t === 'look') {
       // The change always happens; it is the telling-everyone that is rationed (see tick).
       this.dress(p.seat, message);

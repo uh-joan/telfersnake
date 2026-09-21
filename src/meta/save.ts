@@ -5,7 +5,6 @@
  */
 
 import { asMode, godUnlocked, type Mode } from '../sim/modes';
-import { POWER_IDS } from '../sim/upgrades';
 import { cleanName, randomName } from './names';
 
 export type AudioMode = 'all' | 'sfx' | 'off';
@@ -22,10 +21,8 @@ export interface Save {
   bestScore: number;
   bestLength: number;
   runs: number;
-  /** Blue gems, earned by shrinking/bonking rivals; spent to unlock powers. */
+  /** Blue gems, earned by shrinking/bonking rivals; spent one at a time to pick power cards. */
   gems: number;
-  /** Ids of the offensive powers unlocked in the Tuck Shop. */
-  powers: string[];
   audio: AudioMode;
   /** Difficulty. 'god' only sticks once it is unlocked (see readDisk). */
   mode: Mode;
@@ -50,7 +47,6 @@ const FRESH: Save = {
   bestLength: 0,
   runs: 0,
   gems: 0,
-  powers: [],
   audio: 'all',
   mode: 'easy', // new players start gently; the choice is remembered once they change it
   mega: false,
@@ -76,7 +72,6 @@ function readDisk(): Save {
     const mega = data.mega === true;
     const wanted = asMode(data.mode ?? FRESH.mode);
     const mode = wanted === 'god' && !godUnlocked(owned, mega) ? 'normal' : wanted;
-    const powers = Array.isArray(data.powers) ? data.powers.filter((p) => (POWER_IDS as readonly string[]).includes(p)) : [];
     return {
       stars: count(data.stars),
       owned,
@@ -88,7 +83,6 @@ function readDisk(): Save {
       bestLength: count(data.bestLength),
       runs: count(data.runs),
       gems: count(data.gems),
-      powers: [...new Set(powers)],
       audio: AUDIO_MODES.includes(data.audio as AudioMode) ? (data.audio as AudioMode) : FRESH.audio,
       mode,
       mega,
@@ -124,7 +118,6 @@ export function writeSave(save: Save): void {
       stars: Math.max(0, disk.stars + (save.stars - syncedStars)),
       gems: Math.max(0, disk.gems + (save.gems - syncedGems)),
       owned: [...new Set([...disk.owned, ...save.owned])],
-      powers: [...new Set([...disk.powers, ...save.powers])],
       bestScore: Math.max(save.bestScore, disk.bestScore),
       bestLength: Math.max(save.bestLength, disk.bestLength),
       runs: Math.max(save.runs, disk.runs),

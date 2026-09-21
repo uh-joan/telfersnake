@@ -4,7 +4,7 @@ import { FOOD_KINDS, type Food } from '../sim/food';
 import { HAZARD_KINDS, type Hazard, type Pellet } from '../sim/hazards';
 import type { Mode } from '../sim/modes';
 import type { Snake, SnakeLook } from '../sim/snake';
-import { type CardId, type PowerId, UPGRADE_IDS, type UpgradeId } from '../sim/upgrades';
+import { type CardId, UPGRADE_IDS, type UpgradeId } from '../sim/upgrades';
 import type { GameEvent } from '../sim/world';
 
 /**
@@ -22,9 +22,11 @@ export const SNAPSHOT_EVERY = 4;
 
 export type ClientMessage =
   /** "Seat me anywhere": there is one way in, the shared playgrounds. `mode` picks which pool. */
-  | { t: 'hello'; v: number; mode?: Mode; powers?: PowerId[]; skin: string; hat: string; trail: string; name: string }
+  | { t: 'hello'; v: number; mode?: Mode; buy?: 0 | 1; skin: string; hat: string; trail: string; name: string }
   /** Changed clothes (or name) in the Tuck Shop, mid-game. */
   | { t: 'look'; skin: string; hat: string; trail: string; name: string }
+  /** Whether I now have a gem to spend, so the server knows whether to offer me power cards. */
+  | { t: 'gems'; on: 0 | 1 }
   /** Opened a menu (1) or came back (0): the snake stands aside meanwhile. */
   | { t: 'away'; on: 0 | 1 }
   /** Thumb state. `q` counts the client's ticks so the server can say which it has caught up to. */
@@ -97,6 +99,7 @@ export const DASHING = 4;
 export const HELMET_READY = 8;
 export const CHOOSING = 16;
 export const AWAY = 32;
+export const FROZEN = 64;
 
 /** Every upgrade level (0..5) as one base-6 number: 6^14 fits comfortably in a double. */
 export function packUpgrades(s: Snake): number {
@@ -116,7 +119,7 @@ export function unpackUpgrades(n: number): Partial<Record<UpgradeId, number>> {
 
 export function snakeRow(s: Snake): SnakeRow {
   const flags =
-    (s.alive ? ALIVE : 0) | (s.slowed ? SLOWED : 0) | (s.dashing ? DASHING : 0) | (s.helmetReady ? HELMET_READY : 0) | (s.cards ? CHOOSING : 0) | (s.awayFor > 0 ? AWAY : 0);
+    (s.alive ? ALIVE : 0) | (s.slowed ? SLOWED : 0) | (s.dashing ? DASHING : 0) | (s.helmetReady ? HELMET_READY : 0) | (s.cards ? CHOOSING : 0) | (s.awayFor > 0 ? AWAY : 0) | (s.frozenFor > 0 ? FROZEN : 0);
   return [r2(s.x), r2(s.z), r3(s.heading), r2(s.mass), s.score, flags, r2(Math.max(0, s.respawnIn)), r2(s.immune), packUpgrades(s)];
 }
 

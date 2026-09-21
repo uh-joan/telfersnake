@@ -58,7 +58,7 @@ function hello(socket: WebSocket, m: Extract<ClientMessage, { t: 'hello' }>): vo
   const mode = asMode(m.mode);
   const room = [...rooms.values()].find((r) => r.mode === mode && r.hasSpace) ?? openRoom(mode);
   if (!room) return reply(socket, { t: 'sorry', why: 'busy' });
-  if (!room.join(socket, m, m.powers)) return reply(socket, { t: 'sorry', why: 'full' });
+  if (!room.join(socket, m, m.buy === 1)) return reply(socket, { t: 'sorry', why: 'full' });
   whereIs.set(socket, room);
 }
 

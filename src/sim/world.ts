@@ -8,7 +8,7 @@ import { type Hazard, type HazardKind, makeHazards, type Pellet, PELLET_LIFE_TIC
 import { BOUNDS, inBox, SAIL, SNAKE_SPAWN } from './layout';
 import { Rng } from './rng';
 import { type Input, Snake, type SnakeLook } from './snake';
-import { type CardId, POWER_IDS, type PowerId, rollCards, type UpgradeId } from './upgrades';
+import { type CardId, type PowerId, rollCards, type UpgradeId } from './upgrades';
 
 export const STEP = 1 / 60;
 export const PLAYER = 0;
@@ -80,8 +80,8 @@ export type GameEvent =
   | { type: 'sneeze'; who: number; by: number; x: number; z: number }
   /** A power was cast: FX at the caster. */
   | { type: 'power'; who: number; kind: PowerId; x: number; z: number; heading: number; range: number }
-  /** A rival was shrunk by a power (or bonk): puff at the victim; `by` earns the gem. */
-  | { type: 'hit'; who: number; by: number; kind: 'shrink'; x: number; z: number }
+  /** A rival was shrunk or frozen by a power (or bonk): puff at the victim; `by` earns the gem. */
+  | { type: 'hit'; who: number; by: number; kind: 'shrink' | 'freeze'; x: number; z: number }
   | { type: 'say'; text: string }
   | { type: 'bump'; who: number; what: 'wall' | 'cooper' };
 
@@ -188,20 +188,20 @@ export class World {
     s.baseSpeedMul = s.speedMul = who.speedMul;
     s.baseGrowthMul = s.growthMul = who.growthMul;
     s.massCap = who.massCap;
-    // In God mode the bots take upgrades, so give them the full arsenal of powers too.
-    s.powers = new Set(this.rules.botsGetUpgrades ? POWER_IDS : []);
+    // In God mode the bots take upgrades, so let them draw powers too (they pay no gems).
+    s.canBuyPowers = this.rules.botsGetUpgrades;
     this.bots.set(s, new Bot(who));
   }
 
   /** A player takes over a bot's seat, starting small like anyone else. Null if the room is full of players. */
-  join(look: SnakeLook, powers: PowerId[] = []): Snake | null {
+  join(look: SnakeLook, canBuyPowers = false): Snake | null {
     const s = this.snakes.find((o) => o.isBot);
     if (!s) return null;
     this.bots.delete(s);
     s.reset();
     s.look = look;
     s.isBot = false;
-    s.powers = new Set(powers);
+    s.canBuyPowers = canBuyPowers;
     Object.assign(this.inputs[s.id], { x: 0, z: 0, active: false, dash: false });
     this.respawn(s);
     return s;
@@ -279,6 +279,11 @@ export class World {
         s.immune = Math.max(s.immune, 0.5);
         s.cardsFor -= dt;
         if (s.cardsFor <= 0) this.choose(0, s.id);
+        continue;
+      }
+      if (s.frozenFor > 0) {
+        // Frozen solid by a rival's Freeze Puff: stands still, cannot steer, until it wears off.
+        s.frozenFor -= dt;
         continue;
       }
       const input = bot ? bot.think(s, this, dt) : this.inputs[s.id];
@@ -374,6 +379,7 @@ export class World {
     if (s.levelOf('laser') > 0) this.fireLaser(s, dt);
     if (s.levelOf('stink') > 0) this.fireStink(s, dt);
     if (s.levelOf('zap') > 0) this.fireZap(s, dt);
+    if (s.levelOf('freeze') > 0) this.fireFreeze(s, dt);
   }
 
   /** Shrink a rival like a rock bonk and puff pellets; `by` is credited (for gems). */
@@ -445,6 +451,33 @@ export class World {
       this.scorch(o, s, 0.08, 6);
     }
     s.zapIn = fired ? Math.max(1.2, 3.5 - 0.4 * lv) : 0.3;
+  }
+
+  /** Freeze Puff: freezes the nearest rival on the spot for a moment (control, no shrink). */
+  private fireFreeze(s: Snake, dt: number): void {
+    s.freezeIn -= dt;
+    if (s.freezeIn > 0) return;
+    const lv = s.levelOf('freeze');
+    const radius = 3 + 0.5 * lv;
+    let best: Snake | null = null;
+    let bestD = Infinity;
+    for (const o of this.snakes) {
+      if (o === s || !o.alive || o.immune > 0 || o.frozenFor > 0) continue;
+      const d = Math.hypot(o.x - s.x, o.z - s.z);
+      if (d <= radius && d < bestD) {
+        bestD = d;
+        best = o;
+      }
+    }
+    if (!best) {
+      s.freezeIn = 0.3;
+      return;
+    }
+    s.freezeIn = Math.max(2.5, 5 - 0.5 * lv);
+    best.frozenFor = 0.8 + 0.4 * lv;
+    best.immune = Math.max(best.immune, best.frozenFor); // frozen and untouchable, so it is not a free bonk
+    this.events.push({ type: 'power', who: s.id, kind: 'freeze', x: best.x, z: best.z, heading: s.heading, range: radius });
+    this.events.push({ type: 'hit', who: best.id, by: s.id, kind: 'freeze', x: best.x, z: best.z });
   }
 
   private shed(s: Snake, lost: number, share: number, n: number): void {

@@ -1,5 +1,4 @@
 import type { Mode } from '../sim/modes';
-import type { PowerId } from '../sim/upgrades';
 import type { Input } from '../sim/snake';
 import { type ClientMessage, PROTOCOL, type ServerMessage } from './protocol';
 import { Replica } from './replica';
@@ -26,7 +25,7 @@ export class Connection {
   private constructor(private readonly socket: WebSocket, readonly replica: Replica) {}
 
   /** Resolves once seated. Rejects with a short reason a screen can show as a picture. */
-  static join(outfit: Outfit, mode: Mode, powers: PowerId[], onLost: () => void): Promise<Connection> {
+  static join(outfit: Outfit, mode: Mode, canBuy: boolean, onLost: () => void): Promise<Connection> {
     return new Promise((resolve, reject) => {
       let socket: WebSocket;
       try {
@@ -49,7 +48,7 @@ export class Connection {
         reject('offline' satisfies Sorry);
       }, CONNECT_TIMEOUT);
 
-      socket.addEventListener('open', () => send({ t: 'hello', v: PROTOCOL, mode, powers, ...outfit }));
+      socket.addEventListener('open', () => send({ t: 'hello', v: PROTOCOL, mode, buy: canBuy ? 1 : 0, ...outfit }));
       socket.addEventListener('message', (e) => {
         if (gaveUp) return;
         let m: ServerMessage;
@@ -104,6 +103,11 @@ export class Connection {
   /** Changed clothes mid-game: everyone in the room sees it. */
   wear(outfit: Outfit): void {
     this.send({ t: 'look', ...outfit });
+  }
+
+  /** Tell the server whether I now have a gem to spend, so it knows whether to offer power cards. */
+  setCanBuy(on: boolean): void {
+    this.send({ t: 'gems', on: on ? 1 : 0 });
   }
 
   /** The line has gone quiet: close it and let the usual "connection lost" path run. */

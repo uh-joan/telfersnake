@@ -7,7 +7,7 @@ import type { CardId } from '../sim/upgrades';
 import type { CooperState, WorldView } from '../sim/view';
 import { beePosition, type GameEvent, STEP } from '../sim/world';
 import {
-  ALIVE, AWAY, DASHING, type FoodRow, HELMET_READY, type PelletRow, type Seat, type ServerMessage, SLOWED,
+  ALIVE, AWAY, DASHING, type FoodRow, FROZEN, HELMET_READY, type PelletRow, type Seat, type ServerMessage, SLOWED,
   type Snapshot, unpackUpgrades,
 } from './protocol';
 
@@ -45,6 +45,8 @@ export class Replica implements WorldView {
   readonly trails: string[] = [];
   /** The server has my snake standing aside (I am in a menu). */
   away = false;
+  /** The server has my snake frozen (a rival's Freeze Puff): stop predicting or it rubber-bands. */
+  frozen = false;
   /** I have opened a menu: stop my snake on this screen at once, without waiting to hear back. */
   paused = false;
   readonly cooper: CooperState = { x: 0, z: 0, heading: 0, speed: 0, talking: 0 };
@@ -148,6 +150,7 @@ export class Replica implements WorldView {
     this.events.push(...snap.e);
     this.cards = snap.you.cards;
     this.away = (snap.s[this.me][5] & AWAY) !== 0;
+    this.frozen = (snap.s[this.me][5] & FROZEN) !== 0;
 
     snap.s.forEach((row, id) => {
       const s = this.snakes[id];
@@ -208,7 +211,7 @@ export class Replica implements WorldView {
     const mine = this.snake;
     this.silentFor += dt;
     // Not heard from the server for a while: do not let my snake slide on alone through a frozen world.
-    const free = mine.alive && !this.cards && !this.away && !this.paused && this.silentFor < 2;
+    const free = mine.alive && !this.cards && !this.away && !this.paused && !this.frozen && this.silentFor < 2;
 
     this.owed = Math.min(this.owed + dt, 0.25);
     while (this.owed >= STEP) {
