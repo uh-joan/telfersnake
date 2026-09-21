@@ -108,24 +108,28 @@
 
       <div id="start" class="screen show">
         <h1>Telfer<span>snake</span></h1>
-        <div id="howto">
-          <div><p><span class="swipe">👆</span></p><small>Drag</small></div>
-          <div><p>🍔<i>➜</i>🐍</p><small>Eat &amp; grow</small></div>
-          <div><p>🐍<i>💥</i>🐍</p><small>Don't bump!</small></div>
-          <div><p>⚡<i>➜</i>💨</p><small>Hold ⚡ to dash</small></div>
+
+        <div id="me-card">
+          <button id="name-button" class="name-pill">🐍 <b id="start-name"></b> ✏️</button>
+          <div id="best"><span>🏆</span><small>Best</small><b id="best-score">0</b></div>
         </div>
-        <div id="mode-pick" role="group" aria-label="Choose how hard">
-          <button class="mode" data-mode="easy">🐣<em>Easy</em></button>
-          <button class="mode" data-mode="normal">⚡<em>Normal</em></button>
-          <button class="mode god" data-mode="god" hidden>🧙<em>God</em></button>
+
+        <div id="mode-wrap">
+          <p id="mode-label">How hard?</p>
+          <div id="mode-pick" role="group" aria-label="Choose how hard">
+            <button class="mode" data-mode="easy">🐣<em>Easy</em></button>
+            <button class="mode" data-mode="normal">⚡<em>Normal</em></button>
+            <button class="mode god" data-mode="god" hidden>🧙<em>God</em></button>
+          </div>
         </div>
-        <div class="big-buttons">
-          <button id="play" class="round go huge">▶️<em>Play</em></button>
+
+        <button id="play" class="round go huge" aria-label="Play">▶️<em>Play</em></button>
+
+        <div id="start-extras">
           <button id="start-shop" class="round">🛒<em>Tuck Shop <span id="start-stars">⭐0</span></em></button>
           <button class="round sound" aria-label="Sound: everything, effects only, or off"><span>🔊</span><em>Sound</em></button>
         </div>
-        <button id="name-button" class="name-pill">🐍 <b id="start-name"></b> ✏️</button>
-        <div id="best"><span>🏆</span><small>Best</small><b id="best-score">0</b></div>
+
         <div id="build" aria-label="Build"></div>
       </div>
     </div>
