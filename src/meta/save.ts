@@ -22,8 +22,10 @@ export interface Save {
   bestLength: number;
   runs: number;
   audio: AudioMode;
-  /** Difficulty. 'god' only sticks once its two items are owned (see readDisk). */
+  /** Difficulty. 'god' only sticks once it is unlocked (see readDisk). */
   mode: Mode;
+  /** Reached the top size tier (MEGA Telfersnake) in a Normal game: God mode's proof-of-skill. */
+  mega: boolean;
   /** God mode's one-time "you've unlocked it" flourish has been shown. */
   godRevealed: boolean;
   /** Has ever dashed: until then the dash button teaches itself. */
@@ -44,6 +46,7 @@ const FRESH: Save = {
   runs: 0,
   audio: 'all',
   mode: 'easy', // new players start gently; the choice is remembered once they change it
+  mega: false,
   godRevealed: false,
   dashed: false,
 };
@@ -61,9 +64,11 @@ function readDisk(): Save {
     // You can only wear what you own.
     const worn = (value: unknown, otherwise: string) => (owned.includes(text(value, '')) ? (value as string) : otherwise);
     // No stored choice yet → the gentle default (Easy). A remembered one is kept; garbage falls
-    // back to Normal. God is secret: a hand-edited save can't force it without owning both items.
+    // back to Normal. God is secret: a hand-edited save can't force it without both owning its
+    // items and having gone MEGA in a Normal game.
+    const mega = data.mega === true;
     const wanted = asMode(data.mode ?? FRESH.mode);
-    const mode = wanted === 'god' && !godUnlocked(owned) ? 'normal' : wanted;
+    const mode = wanted === 'god' && !godUnlocked(owned, mega) ? 'normal' : wanted;
     return {
       stars: count(data.stars),
       owned,
@@ -76,6 +81,7 @@ function readDisk(): Save {
       runs: count(data.runs),
       audio: AUDIO_MODES.includes(data.audio as AudioMode) ? (data.audio as AudioMode) : FRESH.audio,
       mode,
+      mega,
       godRevealed: data.godRevealed === true,
       dashed: data.dashed === true,
     };
@@ -108,7 +114,8 @@ export function writeSave(save: Save): void {
       bestScore: Math.max(save.bestScore, disk.bestScore),
       bestLength: Math.max(save.bestLength, disk.bestLength),
       runs: Math.max(save.runs, disk.runs),
-      // Once God mode has revealed itself in any tab, it stays revealed.
+      // The MEGA-in-Normal proof and the God reveal are sticky: once earned in any tab, they stay.
+      mega: save.mega || disk.mega,
       godRevealed: save.godRevealed || disk.godRevealed,
     };
     localStorage.setItem(KEY, JSON.stringify(merged));

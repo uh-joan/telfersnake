@@ -16,9 +16,14 @@ export type Mode = 'easy' | 'normal' | 'god';
 export const MODES: readonly Mode[] = ['easy', 'normal', 'god'];
 export const DEFAULT_MODE: Mode = 'normal';
 
-/** God mode unlocks only when both of these are owned: the Golden Snake and the Wizard Hat. */
+/**
+ * God mode unlocks only when you own both these items (the Golden Snake and the Wizard Hat) AND
+ * you have proven yourself by going MEGA (the top size tier) in a Normal game — so it can't be
+ * bought purely by farming Easy. `mega` is that Normal-mode proof (tracked in the save).
+ */
 export const GOD_ITEMS = ['gold', 'wizard'] as const;
-export const godUnlocked = (owned: readonly string[]): boolean => GOD_ITEMS.every((id) => owned.includes(id));
+export const godUnlocked = (owned: readonly string[], mega: boolean): boolean =>
+  mega && GOD_ITEMS.every((id) => owned.includes(id));
 
 export interface Rules {
   mode: Mode;

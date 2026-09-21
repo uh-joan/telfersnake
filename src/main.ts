@@ -125,8 +125,12 @@ function trailFor(id: number): number[] {
 /** What the results screen and the star count are built from. */
 const run = { gulps: 0, rivalBonks: 0, longest: 0, banked: 0, over: false };
 
+/** Easy is the gentle sandbox, not a star farm: it pays half, so Normal is the road to anything dear. */
+const MODE_STARS: Record<Mode, number> = { easy: 0.5, normal: 1, god: 1 };
+
 function earned(): number {
-  return starsFor(world.snake.score, world.snake.highestTier, run.rivalBonks);
+  const raw = starsFor(world.snake.score, world.snake.highestTier, run.rivalBonks);
+  return Math.floor(raw * MODE_STARS[save.mode]);
 }
 
 /** Stars go into the save as they are earned, so closing the tab mid-run loses nothing. */
@@ -336,6 +340,11 @@ function handleEvents(): void {
         sparkles.burst(world.snake.x, world.snake.z, CONFETTI, 30, 1.4);
         sfx?.tierUp();
         music?.setLevel(e.tier);
+        // Going MEGA (the top tier) in a Normal game is the proof God mode asks for.
+        if (e.tier >= TIERS.length - 1 && save.mode === 'normal' && !save.mega) {
+          save.mega = true;
+          writeSave(save);
+        }
         break;
       case 'cards':
         // Only the fanfare: the card screen itself follows world.cards (see frame), so a level-up
@@ -580,7 +589,7 @@ const modeButtons = [...document.querySelectorAll<HTMLButtonElement>('#mode-pick
 function refreshModePicker(): void {
   const godBtn = modeButtons.find((b) => b.dataset.mode === 'god');
   if (godBtn) {
-    const unlocked = godUnlocked(save.owned);
+    const unlocked = godUnlocked(save.owned, save.mega);
     godBtn.hidden = !unlocked;
     // The first time both items are owned, God appears with a little flourish. Kept secret till then.
     if (unlocked && !save.godRevealed) {
