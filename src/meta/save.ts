@@ -43,7 +43,7 @@ const FRESH: Save = {
   bestLength: 0,
   runs: 0,
   audio: 'all',
-  mode: 'normal',
+  mode: 'easy', // new players start gently; the choice is remembered once they change it
   godRevealed: false,
   dashed: false,
 };
@@ -60,8 +60,9 @@ function readDisk(): Save {
     const owned = [...new Set([...FRESH.owned, ...bought])];
     // You can only wear what you own.
     const worn = (value: unknown, otherwise: string) => (owned.includes(text(value, '')) ? (value as string) : otherwise);
-    // God is a secret mode: a hand-edited save can't force it without owning both its items.
-    const wanted = asMode(data.mode);
+    // No stored choice yet → the gentle default (Easy). A remembered one is kept; garbage falls
+    // back to Normal. God is secret: a hand-edited save can't force it without owning both items.
+    const wanted = asMode(data.mode ?? FRESH.mode);
     const mode = wanted === 'god' && !godUnlocked(owned) ? 'normal' : wanted;
     return {
       stars: count(data.stars),
