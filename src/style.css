@@ -714,14 +714,15 @@ small {
   gap: 10px;
 }
 
-#mode-wrap {
+#mode-wrap,
+#stage-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
 }
 
-#mode-label {
+.pick-label {
   margin: 0;
   color: rgba(255, 255, 255, 0.92);
   font-size: 15px;
@@ -762,15 +763,18 @@ small {
   margin-bottom: 10px;
 }
 
-/* ---------- how hard: Easy · Normal · (God) ---------- */
-#mode-pick {
+/* ---------- pickers: where to play, and how hard ---------- */
+#mode-pick,
+#stage-pick {
   display: flex;
   gap: 8px;
   justify-content: center;
+  align-items: stretch;
   margin: 2px 0 -2px;
 }
 
-#mode-pick .mode {
+#mode-pick .mode,
+#stage-pick .stage {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -788,20 +792,45 @@ small {
   transition: transform 0.08s, background 0.12s;
 }
 
-#mode-pick .mode em {
+#mode-pick .mode em,
+#stage-pick .stage em {
   font-style: normal;
   font-size: 13px;
   font-weight: 800;
 }
 
-#mode-pick .mode:active {
+#mode-pick .mode:active,
+#stage-pick .stage:active {
   transform: translateY(2px);
   box-shadow: 0 1px 0 rgba(29, 36, 51, 0.25);
 }
 
-#mode-pick .mode.on {
+#mode-pick .mode.on,
+#stage-pick .stage.on {
   background: var(--sun);
   box-shadow: 0 3px 0 var(--sun-deep);
+}
+
+/* The Common: a green highlight when chosen, a 💎100 lock until it is bought. */
+#stage-pick .stage.common.on {
+  background: #7ac74f;
+  box-shadow: 0 3px 0 #4e8b2f;
+}
+
+#stage-pick .stage .lock {
+  display: none;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 900;
+  color: #1c4fa3;
+}
+
+#stage-pick .stage.locked .lock {
+  display: block;
+}
+
+#stage-pick .stage.shake {
+  animation: shake 0.3s;
 }
 
 #mode-pick .mode.god.on {

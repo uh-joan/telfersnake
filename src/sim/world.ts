@@ -5,8 +5,9 @@ import { isFree, makeHit, resolveCircle, wrapAngle } from './collide';
 import { Cooper, COOPER_AURA, COOPER_RADIUS } from './cooper';
 import { type Food, type FoodKind, FOOD_VALUE, GOLDEN_MULTIPLIER, placeFood } from './food';
 import { type Hazard, type HazardKind, makeHazards, type Pellet, PELLET_LIFE_TICKS, placeHazard } from './hazards';
-import { BOUNDS, inBox, SAIL, SNAKE_SPAWN } from './layout';
+import { inBox, SCHOOL } from './layout';
 import { Rng } from './rng';
+import type { Stage } from './stage';
 import { type Input, Snake, type SnakeLook } from './snake';
 import { type CardId, type PowerId, rollCards, type UpgradeId } from './upgrades';
 
@@ -100,8 +101,10 @@ export class World {
   readonly snakes: Snake[] = [];
   /** What each seat's player is pressing, by snake id. Bots ignore theirs. */
   readonly inputs: Input[] = [];
-  readonly cooper = new Cooper();
+  readonly cooper: Cooper;
   readonly hazards: Hazard[];
+  /** The place this world is played: fence, solids, spawn tables, sanctuary, who patrols it. */
+  readonly stage: Stage;
   readonly foods: Food[] = [];
   readonly animals: Animal[] = [];
   readonly pellets: Pellet[] = [];
@@ -127,15 +130,17 @@ export class World {
    * `playerLook` is purely cosmetic (the Tuck Shop skin); it never affects the rules.
    * A shared room: `World.room(seed, rules)` fills every seat with a bot, and players join() later.
    */
-  constructor(seed = 1, playerLook: SnakeLook | null = PLAYER_LOOK, rules: Rules = rulesFor('normal')) {
+  constructor(seed = 1, playerLook: SnakeLook | null = PLAYER_LOOK, rules: Rules = rulesFor('normal'), stage: Stage = SCHOOL) {
     this.rng = new Rng(seed);
     this.rules = rules;
-    this.hazards = makeHazards(this.rng);
+    this.stage = stage;
+    this.cooper = new Cooper(stage.cooper);
+    this.hazards = makeHazards(this.rng, stage);
     this.pausesForCards = playerLook !== null;
 
     if (playerLook) {
       const player = new Snake(PLAYER, playerLook, false);
-      player.placeAt(SNAKE_SPAWN.x, SNAKE_SPAWN.z, SNAKE_SPAWN.heading);
+      player.placeAt(stage.snakeSpawn.x, stage.snakeSpawn.z, stage.snakeSpawn.heading);
       this.snakes.push(player);
       this.inputs.push({ x: 0, z: 0, active: false, dash: false });
     }
@@ -153,7 +158,7 @@ export class World {
 
     for (let i = 0; i < rules.foodCount; i++) {
       const food: Food = { kind: 'cookie', golden: false, x: 0, z: 0, born: -999 };
-      placeFood(food, this.rng, -999, player.x, player.z, 2, this.hazards);
+      placeFood(food, this.rng, stage, -999, player.x, player.z, 2, this.hazards);
       this.foods.push(food);
     }
     for (const kind of ANIMAL_KINDS) {
@@ -166,8 +171,8 @@ export class World {
     }
   }
 
-  static room(seed: number, rules: Rules = rulesFor('normal')): World {
-    return new World(seed, null, rules);
+  static room(seed: number, rules: Rules = rulesFor('normal'), stage: Stage = SCHOOL): World {
+    return new World(seed, null, rules, stage);
   }
 
   /** The local player's snake. */
@@ -290,7 +295,7 @@ export class World {
 
       s.slowed = Math.hypot(s.x - c.x, s.z - c.z) < COOPER_AURA;
       s.speedFactor += ((s.slowed ? SLOW_FACTOR : 1) - s.speedFactor) * Math.min(1, dt * 4);
-      s.update(input, dt, !s.slowed, this.hazards);
+      s.update(input, dt, !s.slowed, this.stage, this.hazards);
 
       const ouch = this.bonkRock(s);
       if (s.touchingWall && !s.wasTouchingWall && !ouch && s.bumpQuiet <= 0 && s.immune <= 0) {
@@ -342,7 +347,7 @@ export class World {
     const nx = d > 1e-5 ? dx / d : 1;
     const nz = d > 1e-5 ? dz / d : 0;
     // The push must not shoulder the head into a wall or fence.
-    resolveCircle(cx + nx * reach, cz + nz * reach, s.radius, this.hit, this.hazards);
+    resolveCircle(this.stage, cx + nx * reach, cz + nz * reach, s.radius, this.hit, this.hazards);
     s.x = this.hit.x;
     s.z = this.hit.z;
     s.deflect(nx, nz, dt);
@@ -363,7 +368,7 @@ export class World {
       this.events.push({ type: 'ouch', who: s.id, kind: h.kind, x: h.x, z: h.z, lost, broke });
       if (broke) {
         const i = this.hazards.indexOf(h);
-        placeHazard(h, this.rng, this.hazards.filter((o) => o !== h), (x, z) => !this.clearOfSnakes(x, z, 9));
+        placeHazard(h, this.rng, this.stage, this.hazards.filter((o) => o !== h), (x, z) => !this.clearOfSnakes(x, z, 9));
         this.events.push({ type: 'rock', i, x: h.x, z: h.z, turn: h.turn });
       }
       return true;
@@ -530,7 +535,7 @@ export class World {
     const value = FOOD_VALUE[f.kind] * (f.golden ? GOLDEN_MULTIPLIER : 1) * (toasted ? 2 : 1);
     const points = s.gain(value);
     this.events.push({ type: 'eat', who: s.id, kind: f.kind, x: f.x, z: f.z, points, golden: f.golden, toasted });
-    placeFood(f, this.rng, this.tick, s.x, s.z, 8, this.hazards, s.luck);
+    placeFood(f, this.rng, this.stage, this.tick, s.x, s.z, 8, this.hazards, s.luck);
   }
 
   private swallowPellet(s: Snake, index: number): void {
@@ -573,7 +578,7 @@ export class World {
       const nx = o.x + (dx / d) * move;
       const nz = o.z + (dz / d) * move;
       // Fences and benches still count: food stops at them instead of sliding through.
-      if (!isFree(nx, nz, 0.25, this.hazards)) return;
+      if (!isFree(this.stage, nx, nz, 0.25, this.hazards)) return;
       o.x = nx;
       o.z = nz;
     };
@@ -649,7 +654,7 @@ export class World {
    */
   private bonkSnakes(): void {
     for (const a of this.snakes) {
-      if (!a.alive || a.immune > 0 || inBox(SAIL, a.x, a.z)) continue;
+      if (!a.alive || a.immune > 0 || (this.stage.sanctuary !== null && inBox(this.stage.sanctuary, a.x, a.z))) continue;
       for (const b of this.snakes) {
         if (b === a || !b.alive || b.immune > 0) continue;
         const gap = Math.hypot(a.x - b.x, a.z - b.z);
@@ -684,7 +689,7 @@ export class World {
           a.helmetIn = a.helmetRecharge;
           a.immune = HELMET_GRACE;
           a.heading = Math.atan2(a.z - hitZ, a.x - hitX);
-          resolveCircle(a.x + Math.cos(a.heading) * 0.6, a.z + Math.sin(a.heading) * 0.6, a.radius, this.hit, this.hazards);
+          resolveCircle(this.stage, a.x + Math.cos(a.heading) * 0.6, a.z + Math.sin(a.heading) * 0.6, a.radius, this.hit, this.hazards);
           a.x = this.hit.x;
           a.z = this.hit.z;
           this.events.push({ type: 'helmet', who: a.id, x: a.x, z: a.z });
@@ -725,22 +730,23 @@ export class World {
    * people from inside the building once its grace ran out.
    */
   private dropIn(s: Snake): void {
-    let bestX: number = SNAKE_SPAWN.x;
-    let bestZ: number = SNAKE_SPAWN.z;
+    let bestX: number = this.stage.snakeSpawn.x;
+    let bestZ: number = this.stage.snakeSpawn.z;
     let bestHeading = 0;
     let fewest = Infinity;
     const length = s.length;
+    const B = this.stage.bounds;
     for (let tries = 0; tries < 60 && fewest > 0; tries++) {
-      const x = this.rng.range(BOUNDS.minX, BOUNDS.maxX);
-      const z = this.rng.range(BOUNDS.minZ, BOUNDS.maxZ);
+      const x = this.rng.range(B.minX, B.maxX);
+      const z = this.rng.range(B.minZ, B.maxZ);
       // Later tries settle for less elbow room rather than giving up.
-      if (!isFree(x, z, 2.5, this.hazards) || !this.clearOfSnakes(x, z, tries < 40 ? SNAKE_CLEARANCE : 5)) continue;
+      if (!isFree(this.stage, x, z, 2.5, this.hazards) || !this.clearOfSnakes(x, z, tries < 40 ? SNAKE_CLEARANCE : 5)) continue;
       const turn = this.rng.range(0, Math.PI * 2);
       for (let k = 0; k < DROP_HEADINGS && fewest > 0; k++) {
         const heading = wrapAngle(turn + (k * Math.PI * 2) / DROP_HEADINGS);
         let blocked = 0;
         for (let d = 1; d <= length; d += 1) {
-          if (!isFree(x - Math.cos(heading) * d, z - Math.sin(heading) * d, 0.4, this.hazards)) blocked++;
+          if (!isFree(this.stage, x - Math.cos(heading) * d, z - Math.sin(heading) * d, 0.4, this.hazards)) blocked++;
         }
         if (blocked >= fewest) continue;
         fewest = blocked;

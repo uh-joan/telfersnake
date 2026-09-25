@@ -6,6 +6,8 @@ import {
   type Seat, type ServerMessage, SNAPSHOT_EVERY, snakeRow, type Snapshot,
 } from '../src/net/protocol';
 import { type Mode, rulesFor } from '../src/sim/modes';
+import type { StageId } from '../src/sim/stage';
+import { stageFor } from '../src/sim/stages';
 import { type GameEvent, World } from '../src/sim/world';
 
 /** What a phone says it is wearing. None of it is trusted: every id is checked against the catalogue. */
@@ -49,8 +51,8 @@ export class Room {
   /** Someone changed clothes: tell the room, at most once a second. */
   private seatsChanged = false;
 
-  constructor(readonly code: string, readonly isPublic: boolean, readonly mode: Mode = 'normal') {
-    this.world = World.room((Math.random() * 0x7fffffff) | 0 || 1, rulesFor(mode));
+  constructor(readonly code: string, readonly isPublic: boolean, readonly mode: Mode = 'normal', readonly stage: StageId = 'school') {
+    this.world = World.room((Math.random() * 0x7fffffff) | 0 || 1, rulesFor(mode), stageFor(stage));
     this.hats = this.world.snakes.map(() => 'no-hat');
     this.trails = this.world.snakes.map(() => 'no-trail');
   }
@@ -95,7 +97,7 @@ export class Room {
 
     const w = this.world;
     send(socket, {
-      t: 'welcome', me: snake.id, room: this.code, tick: w.tick, seats: this.seats(),
+      t: 'welcome', me: snake.id, room: this.code, stage: this.stage, tick: w.tick, seats: this.seats(),
       hazards: w.hazards.map(hazardRow), animalKinds: w.animals.map(animalKindIndex),
       foods: w.foods.map(foodRow), pellets: w.pellets.map(pelletRow),
     });

@@ -19,6 +19,8 @@ import { Sparkles } from './render/sparkles';
 import { Stage } from './render/stage';
 import { UpgradeFx } from './render/upgradeFx';
 import { asMode, godUnlocked, type Mode, rulesFor } from './sim/modes';
+import { asStage, type StageId } from './sim/stage';
+import { stageFor } from './sim/stages';
 import { TIERS } from './sim/snake';
 import { POWER_GEM_COST, POWER_IDS, UPGRADES } from './sim/upgrades';
 import type { WorldView } from './sim/view';
@@ -37,7 +39,7 @@ const save = loadSave();
 const stage = new Stage($<HTMLCanvasElement>('game'));
 /** A fresh solo world at the chosen difficulty; also the backdrop behind the start screen. */
 const makeSolo = (): World => {
-  const w = new World((Date.now() & 0x7fffffff) || 1, skinLook(save.skin, save.name), rulesFor(save.mode));
+  const w = new World((Date.now() & 0x7fffffff) || 1, skinLook(save.skin, save.name), rulesFor(save.mode), stageFor(save.stage));
   w.snake.canBuyPowers = save.gems > 0;
   return w;
 };
@@ -104,6 +106,7 @@ function mountWorld(next: WorldView): void {
   foodView = new FoodView(world.foods.length);
   animalView = new AnimalView(world.animals.length);
   stage.scene.add(hazardView.group, foodView.group, animalView.group);
+  hud.setStage(world.stage);
   mountSnakes();
 }
 mountWorld(solo);
@@ -232,7 +235,10 @@ function show(next: Screen): void {
   for (const id of ['start', 'pause', 'results', 'name'] as const) $(id).classList.toggle('show', id === next);
   $('app').classList.toggle('menu', next !== null);
   // Coming back to the start screen may be the moment God mode's two items were just bought.
-  if (next === 'start') refreshModePicker();
+  if (next === 'start') {
+    refreshModePicker();
+    refreshStagePicker();
+  }
   // A shared playground cannot stop for one player, so their snake stands aside, safe, while they are in a menu.
   if (!run.over) connection?.away(next !== null);
   screen = next;
@@ -590,7 +596,7 @@ $('play').addEventListener('click', async () => {
   $('start').classList.add('busy'); // every button on the start screen is dead until we are in
 
   try {
-    connection = await Connection.join(outfit(), save.mode, save.gems > 0, () => {
+    connection = await Connection.join(outfit(), save.mode, save.gems > 0, save.stage, () => {
       // The line dropped mid-game: keep what was earned and call it home time.
       connection = null;
       hud.toast('😴', 'Connection lost');
@@ -681,6 +687,49 @@ function setMode(mode: Mode): void {
 
 for (const b of modeButtons) b.addEventListener('click', () => setMode(asMode(b.dataset.mode)));
 refreshModePicker();
+
+// ---------------------------------------------------------------- where to play: School · The Common
+
+/** The one-off blue-gem ticket to the Common (Level 2). */
+const COMMON_COST = 100;
+const stageButtons = [...document.querySelectorAll<HTMLButtonElement>('#stage-pick .stage')];
+
+/** Mark the chosen place; show the Common's 💎100 lock until it is bought. */
+function refreshStagePicker(): void {
+  const commonBtn = stageButtons.find((b) => b.dataset.stage === 'common');
+  if (commonBtn) commonBtn.classList.toggle('locked', !save.commonUnlocked);
+  for (const b of stageButtons) b.classList.toggle('on', b.dataset.stage === save.stage);
+}
+
+/** Tapping the Common pays the 100 gems the first time (if you can), then selects the place. */
+function chooseStage(id: StageId): void {
+  if (id === 'common' && !save.commonUnlocked) {
+    if (save.gems < COMMON_COST) {
+      wakeAudio()?.nope();
+      const t = stageButtons.find((b) => b.dataset.stage === 'common');
+      t?.classList.remove('shake');
+      void t?.offsetWidth;
+      t?.classList.add('shake');
+      return;
+    }
+    save.gems -= COMMON_COST;
+    save.commonUnlocked = true;
+    updateCanBuy(); // spending gems may drop the "can pick a power card" flag
+    wakeAudio()?.chaChing();
+  }
+  if (id !== save.stage) {
+    save.stage = id;
+    solo = makeSolo();
+    if (!connection && screen === 'start') mountWorld(solo);
+  } else {
+    wakeAudio()?.pick();
+  }
+  writeSave(save);
+  refreshStagePicker();
+}
+
+for (const b of stageButtons) b.addEventListener('click', () => chooseStage(asStage(b.dataset.stage)));
+refreshStagePicker();
 
 // ---------------------------------------------------------------- the rest of the buttons
 

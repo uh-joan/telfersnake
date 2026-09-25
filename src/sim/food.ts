@@ -40,7 +40,7 @@ export interface Food {
   born: number;
 }
 
-function weighted(rng: Rng, weights: number[]): number {
+function weighted(rng: Rng, weights: readonly number[]): number {
   let total = 0;
   for (const w of weights) total += w;
   let roll = rng.next() * total;

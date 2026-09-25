@@ -1,5 +1,6 @@
 import { ANIMALS } from '../sim/animals';
-import { BOUNDS, BUILDINGS, COURT, GREEN, LAGOON } from '../sim/layout';
+import { SCHOOL } from '../sim/layout';
+import type { Stage as PlayStage } from '../sim/stage';
 import { TIERS } from '../sim/snake';
 import { UPGRADES, xpForLevel } from '../sim/upgrades';
 import type { WorldView } from '../sim/view';
@@ -52,7 +53,8 @@ export class Hud {
   private shownBoard = '';
   private boardIn = 0;
   private readonly map = $<HTMLCanvasElement>('minimap').getContext('2d')!;
-  private readonly mapBase: HTMLCanvasElement;
+  private stage: PlayStage = SCHOOL;
+  private mapBase!: HTMLCanvasElement;
   private readonly popups: Popup[] = [];
   private readonly sp: ScreenPoint = { x: 0, y: 0, visible: false };
   private readonly mapPoint = { x: 0, z: 0 };
@@ -64,30 +66,22 @@ export class Hud {
   private shownTier = -1;
 
   constructor() {
-    this.mapBase = this.paintMapBase();
+    this.setStage(SCHOOL);
   }
 
-  private paintMapBase(): HTMLCanvasElement {
-    const cv = document.createElement('canvas');
-    cv.width = (BOUNDS.maxX - BOUNDS.minX) * MAP_SCALE;
-    cv.height = (BOUNDS.maxZ - BOUNDS.minZ) * MAP_SCALE;
-    const c = cv.getContext('2d')!;
-    const X = (x: number) => (x - BOUNDS.minX) * MAP_SCALE;
-    const Z = (z: number) => (z - BOUNDS.minZ) * MAP_SCALE;
-    const fillBox = (b: { x: number; z: number; w: number; d: number }, color: string) => {
-      c.fillStyle = color;
-      c.fillRect(X(b.x - b.w / 2), Z(b.z - b.d / 2), b.w * MAP_SCALE, b.d * MAP_SCALE);
-    };
-    c.fillStyle = '#7c818b';
-    c.fillRect(0, 0, cv.width, cv.height);
-    fillBox(COURT, '#55c8d6');
-    fillBox(GREEN, '#4cc04a');
-    c.fillStyle = '#3d8fe6';
-    c.beginPath();
-    c.ellipse(X(LAGOON.x), Z(LAGOON.z), LAGOON.rx * MAP_SCALE, LAGOON.rz * MAP_SCALE, LAGOON.rot, 0, Math.PI * 2);
-    c.fill();
-    for (const b of BUILDINGS) fillBox(b, b.id === 'redHut' ? '#e9633b' : '#4a3b36');
-    return cv;
+  /** Point the minimap at a stage: size it to that stage's bounds and paint its fixed base once. */
+  setStage(stage: PlayStage): void {
+    this.stage = stage;
+    const B = stage.bounds;
+    const w = (B.maxX - B.minX) * MAP_SCALE;
+    const h = (B.maxZ - B.minZ) * MAP_SCALE;
+    this.map.canvas.width = w;
+    this.map.canvas.height = h;
+    const base = document.createElement('canvas');
+    base.width = w;
+    base.height = h;
+    stage.paintMinimap(base.getContext('2d')!, (x) => (x - B.minX) * MAP_SCALE, (z) => (z - B.minZ) * MAP_SCALE, MAP_SCALE);
+    this.mapBase = base;
   }
 
   /** `tone` picks the colour: good (points), bad (ouch) or fun (boing). */
@@ -278,8 +272,9 @@ export class Hud {
 
   private drawMap(world: WorldView): void {
     const c = this.map;
-    const X = (x: number) => (x - BOUNDS.minX) * MAP_SCALE;
-    const Z = (z: number) => (z - BOUNDS.minZ) * MAP_SCALE;
+    const B = this.stage.bounds;
+    const X = (x: number) => (x - B.minX) * MAP_SCALE;
+    const Z = (z: number) => (z - B.minZ) * MAP_SCALE;
     c.drawImage(this.mapBase, 0, 0);
 
     c.fillStyle = 'rgba(255,255,255,0.75)';

@@ -1,8 +1,13 @@
 /**
  * The Telferscot playground, blocked out from the satellite view and squared up
  * to the axes. Units are metres. +x is east (Radbourne Rd), +z is south (Hyde Farm Mews).
- * Pure data: the sim reads it for collisions, the renderer for looks.
+ * Pure data: the sim reads it for collisions, the renderer for looks. Level 1, the `SCHOOL`
+ * stage, is assembled from it at the bottom of this file.
  */
+
+import { pickFoodKind, WEIGHTS_GREEN, WEIGHTS_YARD } from './food';
+import type { Rng } from './rng';
+import type { Spot, Stage } from './stage';
 
 export interface Box {
   x: number;
@@ -112,3 +117,50 @@ export const SOLID_CIRCLES: Circle[] = TREES;
 export function inBox(b: Box, x: number, z: number): boolean {
   return Math.abs(x - b.x) <= b.w / 2 && Math.abs(z - b.z) <= b.d / 2;
 }
+
+/** Level 1: the school playground as a Stage the sim runs on. */
+export const SCHOOL: Stage = {
+  id: 'school',
+  name: 'School',
+  bounds: BOUNDS,
+  solidBoxes: SOLID_BOXES,
+  solidCircles: SOLID_CIRCLES,
+  snakeSpawn: SNAKE_SPAWN,
+  fallbackSpot: COOPER_SPAWN,
+  // Veg grows on The Green; lunch leftovers everywhere else.
+  foodKindAt: (rng, x, z) => pickFoodKind(rng, inBox(GREEN, x, z) ? WEIGHTS_GREEN : WEIGHTS_YARD),
+  homePoint: (rng: Rng, home: string): Spot => {
+    switch (home) {
+      case 'green':
+        return { x: rng.range(GREEN.x - GREEN.w / 2, GREEN.x + GREEN.w / 2), z: rng.range(GREEN.z - GREEN.d / 2, GREEN.z + GREEN.d / 2) };
+      case 'lagoon': {
+        const a = rng.range(0, Math.PI * 2);
+        const d = rng.range(0, LAGOON.rx + 2);
+        return { x: LAGOON.x + Math.cos(a) * d, z: LAGOON.z + Math.sin(a) * d * 0.8 };
+      }
+      case 'yard':
+        return { x: rng.range(LANES.x0 - 2, LANES.x1 + 2), z: rng.range(LANES.z0 - 6, LANES.z1 + 3) };
+      default:
+        return { x: rng.range(BOUNDS.minX, BOUNDS.maxX), z: rng.range(BOUNDS.minZ, BOUNDS.maxZ) };
+    }
+  },
+  sanctuary: SAIL,
+  // Bike Shed Alley and the yard behind the Old School get more than their share of rocks.
+  hazardArea: { rough: { minX: 12, maxX: BOUNDS.maxX, minZ: 8, maxZ: BOUNDS.maxZ }, share: 0.4 },
+  cooper: { spawn: COOPER_SPAWN, beat: COOPER_BEAT },
+  paintMinimap: (c, X, Z, scale) => {
+    const fillBox = (b: Box, color: string) => {
+      c.fillStyle = color;
+      c.fillRect(X(b.x - b.w / 2), Z(b.z - b.d / 2), b.w * scale, b.d * scale);
+    };
+    c.fillStyle = '#7c818b';
+    c.fillRect(0, 0, (BOUNDS.maxX - BOUNDS.minX) * scale, (BOUNDS.maxZ - BOUNDS.minZ) * scale);
+    fillBox(COURT, '#55c8d6');
+    fillBox(GREEN, '#4cc04a');
+    c.fillStyle = '#3d8fe6';
+    c.beginPath();
+    c.ellipse(X(LAGOON.x), Z(LAGOON.z), LAGOON.rx * scale, LAGOON.rz * scale, LAGOON.rot, 0, Math.PI * 2);
+    c.fill();
+    for (const b of BUILDINGS) fillBox(b, b.id === 'redHut' ? '#e9633b' : '#4a3b36');
+  },
+};

@@ -3,6 +3,7 @@ import { wrapAngle } from '../sim/collide';
 import { FOOD_KINDS, type Food } from '../sim/food';
 import { HAZARD_KINDS, type Hazard, type Pellet } from '../sim/hazards';
 import { type Input, Snake } from '../sim/snake';
+import type { Stage } from '../sim/stage';
 import type { CardId } from '../sim/upgrades';
 import type { CooperState, WorldView } from '../sim/view';
 import { beePosition, type GameEvent, STEP } from '../sim/world';
@@ -76,7 +77,7 @@ export class Replica implements WorldView {
   private shownHeading = 0;
   private wasAlive: boolean[] = [];
 
-  constructor(welcome: Welcome, private readonly sendInput: (q: number, input: Input) => void) {
+  constructor(welcome: Welcome, readonly stage: Stage, private readonly sendInput: (q: number, input: Input) => void) {
     this.me = welcome.me;
     this.room = welcome.room;
     this.tick = this.renderTick = welcome.tick;
@@ -202,7 +203,7 @@ export class Replica implements WorldView {
     g.speedMul = this.snake.speedMul;
     // Its wall memory belongs to the previous replay, not to this starting point; steer() must not act on it.
     g.touchingWall = false;
-    for (const p of this.pending) g.move(p.input, STEP, !this.snake.slowed, this.hazards);
+    for (const p of this.pending) g.move(p.input, STEP, !this.snake.slowed, this.stage, this.hazards);
     if (Math.hypot(g.x - this.shownX, g.z - this.shownZ) > SNAP_IF_OFF_BY) this.resetPrediction(g.x, g.z, g.heading);
   }
 
@@ -222,7 +223,7 @@ export class Replica implements WorldView {
       if (free) {
         this.pending.push({ q: this.q, input: copy });
         if (this.pending.length > 120) this.pending.shift();
-        this.ghost.move(copy, STEP, !mine.slowed, this.hazards);
+        this.ghost.move(copy, STEP, !mine.slowed, this.stage, this.hazards);
       }
     }
 

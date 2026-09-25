@@ -53,8 +53,3 @@ export interface Stage extends Terrain {
   /** Paint the fixed features onto the minimap. X/Z map metres to canvas pixels. */
   paintMinimap(c: CanvasRenderingContext2D, X: (x: number) => number, Z: (z: number) => number, scale: number): void;
 }
-
-/** True when (x, z) lies inside `b`. */
-export function inBox(b: Box, x: number, z: number): boolean {
-  return Math.abs(x - b.x) <= b.w / 2 && Math.abs(z - b.z) <= b.d / 2;
-}

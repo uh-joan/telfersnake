@@ -1,5 +1,7 @@
 import type { Mode } from '../sim/modes';
 import type { Input } from '../sim/snake';
+import type { StageId } from '../sim/stage';
+import { stageFor } from '../sim/stages';
 import { type ClientMessage, PROTOCOL, type ServerMessage } from './protocol';
 import { Replica } from './replica';
 
@@ -25,7 +27,7 @@ export class Connection {
   private constructor(private readonly socket: WebSocket, readonly replica: Replica) {}
 
   /** Resolves once seated. Rejects with a short reason a screen can show as a picture. */
-  static join(outfit: Outfit, mode: Mode, canBuy: boolean, onLost: () => void): Promise<Connection> {
+  static join(outfit: Outfit, mode: Mode, canBuy: boolean, stage: StageId, onLost: () => void): Promise<Connection> {
     return new Promise((resolve, reject) => {
       let socket: WebSocket;
       try {
@@ -48,7 +50,7 @@ export class Connection {
         reject('offline' satisfies Sorry);
       }, CONNECT_TIMEOUT);
 
-      socket.addEventListener('open', () => send({ t: 'hello', v: PROTOCOL, mode, buy: canBuy ? 1 : 0, ...outfit }));
+      socket.addEventListener('open', () => send({ t: 'hello', v: PROTOCOL, mode, stage, buy: canBuy ? 1 : 0, ...outfit }));
       socket.addEventListener('message', (e) => {
         if (gaveUp) return;
         let m: ServerMessage;
@@ -60,7 +62,7 @@ export class Connection {
         if (m.t === 'welcome') {
           window.clearTimeout(timer);
           // Thumb state goes up at 30 Hz: every other tick is plenty.
-          const replica = new Replica(m, (q: number, i: Input) => {
+          const replica = new Replica(m, stageFor(m.stage), (q: number, i: Input) => {
             if (q % 2 === 0) send({ t: 'in', q, x: i.x, z: i.z, a: i.active ? 1 : 0, d: i.dash ? 1 : 0 });
           });
           connection = new Connection(socket, replica);
