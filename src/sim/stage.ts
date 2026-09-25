@@ -46,6 +46,8 @@ export interface Stage extends Terrain {
   homePoint(rng: Rng, home: string): Spot;
   /** Nobody can be bonked inside this box (the blue sail at school). Null: no sanctuary. */
   sanctuary: Box | null;
+  /** Multiplies the mode's food count, so a bigger stage stays worth foraging. School: 1. */
+  foodScale: number;
   /** Static hazards (rocks, sticks): a corner that gets more than its share. Null: none spawn. */
   hazardArea: { rough: Bounds; share: number } | null;
   /** Mr Cooper's spawn and beat, or null on a stage he never visits. */

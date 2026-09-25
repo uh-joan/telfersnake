@@ -156,7 +156,7 @@ export class World {
     // Everyone starts blinking: a long rival dropped in at random may be lying across someone.
     for (const s of this.snakes) s.immune = RESPAWN_GRACE;
 
-    for (let i = 0; i < rules.foodCount; i++) {
+    for (let i = 0; i < Math.round(rules.foodCount * stage.foodScale); i++) {
       const food: Food = { kind: 'cookie', golden: false, x: 0, z: 0, born: -999 };
       placeFood(food, this.rng, stage, -999, player.x, player.z, 2, this.hazards);
       this.foods.push(food);
