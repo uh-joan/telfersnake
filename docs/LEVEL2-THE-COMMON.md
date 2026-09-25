@@ -138,9 +138,16 @@ Each phase is independently shippable, verified headless, reviewed, then deploye
 
 ## 12. Progress log
 
-### ⏸ Paused 2026-09-26 — Phase 0 about 60% done, mid-refactor
+### ✅ Phase 0 complete 2026-09-26 — on branch `level2-phase0`, NOT deployed
 
-**State of the working tree:** uncommitted, and it does **not** typecheck or build yet (the second half of the threading hasn't landed). That's safe: `deploy/deploy.sh` builds first and aborts on error, so nothing broken can reach the live site. The live game is untouched (last deploy: PR #1, build 19:32). Resume by finishing the "Not yet" list below in order, then typecheck.
+**Done and verified.** The Stage refactor is finished and compiles; the school is untouched.
+- `tsc --noEmit` clean; full `npm run build` (client + 218 kB server bundle) clean.
+- **School byte-identical:** a deterministic fingerprint of a school room over 3600 ticks (every event + snake positions/scores) is identical on this branch and on `main`, across easy/normal/god. The refactor changed plumbing only, so multiplayer determinism is safe.
+- **Destination picker works** (verified in the browser): 🏫 School / 🌳 Common; paying 100 gems unlocks + selects the Common (gems 150→50); with too few gems the tile shakes and nothing changes; selection persists.
+
+**Do NOT deploy Phase 0 on its own.** The Common is buyable but still falls back to the school (the registry maps `common → SCHOOL` until Phase 1), so a child could pay 100 gems and get the school again. Ship it together with Phase 1, or gate the Common tile as "Soon" first. The live game is untouched (PR #1, build 19:32).
+
+**Original resume checklist (all done):**
 
 **Design landed:** a `Stage` contract (`src/sim/stage.ts`) — `Terrain` (bounds + fixed solids) for collision, plus spawn/home/sanctuary/hazard/Cooper config and a minimap painter. The sim never reads a layout as a module global any more: everything takes the stage it runs on, because the server runs many rooms (of possibly different stages) in one process.
 
@@ -171,4 +178,4 @@ Each phase is independently shippable, verified headless, reviewed, then deploye
 12. `src/style.css` — stage chips (reuse mode-chip look), `.locked`, `.price`, shake keyframes.
 13. Verify: `tsc`; a headless determinism check that the school is **byte-identical** (same seed → same event stream before/after); review pass; branch → PR → merge → deploy.
 
-**Then:** Phase 1 (the Common's geometry from §3, portal, Miss Sami).
+**Next — Phase 1 (the Common's geometry from §3, portal, Miss Sami):** replace the `common → SCHOOL` line in `stages.ts` with a real `COMMON: Stage` (its own `commonLayout.ts`: bounds x −60…60 / z −100…60, Telferscot Road corridor + Emmanuel Road + the meadow/copses/woods/paths as solids, `foodKindAt` by zone, `homePoint` for the common's zones, `sanctuary: null`, `hazardArea: null`, `cooper: null`, `paintMinimap` for the green + woods + road). Then the render side (a `common` painter + scenery in `ground.ts`/`school.ts`, or new `commonScene.ts`, keyed off `world.stage.id`), the fence-gap portal, and Miss Sami at the gap. When it lands, deploy Phase 0 + 1 together.
