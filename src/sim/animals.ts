@@ -1,5 +1,4 @@
 import { isFree, resolveCircle, slideAlong, turnToward } from './collide';
-import { BOUNDS, COOPER_SPAWN, GREEN, LAGOON, LANES, SNAKE_SPAWN } from './layout';
 import type { World } from './world';
 
 /**
@@ -75,22 +74,8 @@ export interface Animal {
   chargeFor: number;
 }
 
-function homePoint(w: World, home: Home): { x: number; z: number } {
-  const r = w.rng;
-  switch (home) {
-    case 'green':
-      return { x: r.range(GREEN.x - GREEN.w / 2, GREEN.x + GREEN.w / 2), z: r.range(GREEN.z - GREEN.d / 2, GREEN.z + GREEN.d / 2) };
-    case 'lagoon': {
-      const a = r.range(0, Math.PI * 2);
-      const d = r.range(0, LAGOON.rx + 2);
-      return { x: LAGOON.x + Math.cos(a) * d, z: LAGOON.z + Math.sin(a) * d * 0.8 };
-    }
-    case 'yard':
-      return { x: r.range(LANES.x0 - 2, LANES.x1 + 2), z: r.range(LANES.z0 - 6, LANES.z1 + 3) };
-    case 'anywhere':
-      return { x: r.range(BOUNDS.minX, BOUNDS.maxX), z: r.range(BOUNDS.minZ, BOUNDS.maxZ) };
-  }
-}
+/** A random point in an animal's home turf: the stage knows where its green, lagoon and yard are. */
+const homePoint = (w: World, home: Home): { x: number; z: number } => w.stage.homePoint(w.rng, home);
 
 /** Put `a` down somewhere free near its home, at least `clear` metres from the snake. */
 export function placeAnimal(a: Animal, w: World, clear: number): void {
@@ -99,7 +84,7 @@ export function placeAnimal(a: Animal, w: World, clear: number): void {
   for (let tries = 0; tries < 120 && !placed; tries++) {
     // Home turf first; if a snake is camping there, anywhere will do, then with less elbow room.
     const p = homePoint(w, tries < 30 ? spec.home : 'anywhere');
-    if (!isFree(p.x, p.z, spec.radius + 0.3, w.hazards)) continue;
+    if (!isFree(w.stage, p.x, p.z, spec.radius + 0.3, w.hazards)) continue;
     if (!w.clearOfSnakes(p.x, p.z, tries < 60 ? clear : Math.min(clear, 6))) continue;
     a.x = p.x;
     a.z = p.z;
@@ -107,7 +92,8 @@ export function placeAnimal(a: Animal, w: World, clear: number): void {
   }
   if (!placed) {
     // Never leave it where it was eaten: it would be gulped again every tick.
-    const spot = w.clearOfSnakes(SNAKE_SPAWN.x, SNAKE_SPAWN.z, 6) ? SNAKE_SPAWN : COOPER_SPAWN;
+    const s = w.stage.snakeSpawn;
+    const spot = w.clearOfSnakes(s.x, s.z, 6) ? s : w.stage.fallbackSpot;
     a.x = spot.x;
     a.z = spot.z;
   }
@@ -221,7 +207,7 @@ export function updateAnimal(a: Animal, w: World, dt: number): void {
   if (a.speed === 0) return;
   a.heading = turnToward(a.heading, a.want, TURN_RATE * dt);
   const step = a.speed * dt;
-  const hit = resolveCircle(a.x + Math.cos(a.heading) * step, a.z + Math.sin(a.heading) * step, spec.radius, w.hit, w.hazards);
+  const hit = resolveCircle(w.stage, a.x + Math.cos(a.heading) * step, a.z + Math.sin(a.heading) * step, spec.radius, w.hit, w.hazards);
   a.travel += Math.hypot(hit.x - a.x, hit.z - a.z);
   a.x = hit.x;
   a.z = hit.z;

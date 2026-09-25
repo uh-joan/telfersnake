@@ -1,5 +1,6 @@
 import { makeHit, resolveCircle, turnToward, wrapAngle } from './collide';
 import type { Circle } from './layout';
+import type { Terrain } from './stage';
 import { type CardId, refreshStats, SNACK_MASS, type UpgradeId, xpForLevel } from './upgrades';
 
 export interface Input {
@@ -276,8 +277,8 @@ export class Snake {
   }
 
   /** One tick of being a snake: steer, move, and lay down the trail the body follows. */
-  update(input: Input, dt: number, canDash: boolean, rocks: readonly Circle[]): void {
-    this.move(input, dt, canDash, rocks);
+  update(input: Input, dt: number, canDash: boolean, terrain: Terrain, rocks: readonly Circle[]): void {
+    this.move(input, dt, canDash, terrain, rocks);
     this.extendTrail();
   }
 
@@ -298,9 +299,9 @@ export class Snake {
 
   /**
    * Steering and movement only: no trail. `rocks` are this world's extra solids, on top of the
-   * fixed school layout. A client replays this to predict its own snake ahead of the server.
+   * stage's fixed layout. A client replays this to predict its own snake ahead of the server.
    */
-  move(input: Input, dt: number, canDash: boolean, rocks: readonly Circle[]): void {
+  move(input: Input, dt: number, canDash: boolean, terrain: Terrain, rocks: readonly Circle[]): void {
     this.immune = Math.max(0, this.immune - dt);
     this.bumpQuiet = Math.max(0, this.bumpQuiet - dt);
     this.steerX = input.active ? input.x : 0;
@@ -318,7 +319,7 @@ export class Snake {
     const nx = this.x + Math.cos(this.heading) * speed * dt;
     const nz = this.z + Math.sin(this.heading) * speed * dt;
 
-    const hit = resolveCircle(nx, nz, this.radius, this.hit, rocks);
+    const hit = resolveCircle(terrain, nx, nz, this.radius, this.hit, rocks);
     this.x = hit.x;
     this.z = hit.z;
     this.wasTouchingWall = this.touchingWall;

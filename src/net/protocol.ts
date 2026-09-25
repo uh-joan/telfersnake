@@ -3,6 +3,7 @@ import type { CooperState } from '../sim/view';
 import { FOOD_KINDS, type Food } from '../sim/food';
 import { HAZARD_KINDS, type Hazard, type Pellet } from '../sim/hazards';
 import type { Mode } from '../sim/modes';
+import type { StageId } from '../sim/stage';
 import type { Snake, SnakeLook } from '../sim/snake';
 import { type CardId, UPGRADE_IDS, type UpgradeId } from '../sim/upgrades';
 import type { GameEvent } from '../sim/world';
@@ -22,7 +23,7 @@ export const SNAPSHOT_EVERY = 4;
 
 export type ClientMessage =
   /** "Seat me anywhere": there is one way in, the shared playgrounds. `mode` picks which pool. */
-  | { t: 'hello'; v: number; mode?: Mode; buy?: 0 | 1; skin: string; hat: string; trail: string; name: string }
+  | { t: 'hello'; v: number; mode?: Mode; stage?: StageId; buy?: 0 | 1; skin: string; hat: string; trail: string; name: string }
   /** Changed clothes (or name) in the Tuck Shop, mid-game. */
   | { t: 'look'; skin: string; hat: string; trail: string; name: string }
   /** Whether I now have a gem to spend, so the server knows whether to offer me power cards. */
@@ -81,7 +82,7 @@ export interface Snapshot {
 
 export type ServerMessage =
   | {
-      t: 'welcome'; me: number; room: string; tick: number; seats: Seat[];
+      t: 'welcome'; me: number; room: string; stage: StageId; tick: number; seats: Seat[];
       hazards: HazardRow[]; animalKinds: number[]; foods: FoodRow[]; pellets: PelletRow[];
     }
   | { t: 'seats'; seats: Seat[] }

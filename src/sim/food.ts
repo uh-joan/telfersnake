@@ -1,6 +1,7 @@
 import { isFree } from './collide';
-import { BOUNDS, COOPER_SPAWN, GREEN, inBox, SNAKE_SPAWN, type Circle } from './layout';
+import type { Circle } from './layout';
 import type { Rng } from './rng';
+import type { Stage } from './stage';
 
 export const FOOD_KINDS = ['burger', 'sausage', 'cookie', 'broccoli', 'carrot', 'apple'] as const;
 export type FoodKind = (typeof FOOD_KINDS)[number];
@@ -15,9 +16,13 @@ export const FOOD_VALUE: Record<FoodKind, number> = {
   apple: 2,
 };
 
-// Spawn weights, same order as FOOD_KINDS. Veg grows on The Green, lunch leftovers everywhere else.
-const WEIGHTS_YARD = [1.5, 2, 3, 1, 1, 1.5];
-const WEIGHTS_GREEN = [0, 0, 0.5, 4, 4, 2];
+// Spawn weights, same order as FOOD_KINDS. The school's tables: veg grows on The Green, lunch
+// leftovers everywhere else. A stage decides which table applies where (see Stage.foodKindAt).
+export const WEIGHTS_YARD = [1.5, 2, 3, 1, 1, 1.5];
+export const WEIGHTS_GREEN = [0, 0, 0.5, 4, 4, 2];
+
+/** One food kind drawn from a weight table (same order as FOOD_KINDS). */
+export const pickFoodKind = (rng: Rng, weights: readonly number[]): FoodKind => FOOD_KINDS[weighted(rng, weights)];
 
 /** Golden food is rare, sparkly and worth this many times the usual. */
 export const GOLDEN_MULTIPLIER = 5;
@@ -51,26 +56,27 @@ function weighted(rng: Rng, weights: number[]): number {
  * (avoidX, avoidZ). `luck` is the eater's Four-leaf Clover level.
  */
 export function placeFood(
-  food: Food, rng: Rng, tick: number, avoidX: number, avoidZ: number, clear: number, rocks: readonly Circle[], luck = 0,
+  food: Food, rng: Rng, stage: Stage, tick: number, avoidX: number, avoidZ: number, clear: number, rocks: readonly Circle[], luck = 0,
 ): void {
   food.golden = rng.next() < GOLDEN_CHANCE + GOLDEN_PER_LUCK * luck;
   food.born = tick;
+  const B = stage.bounds;
   for (let tries = 0; tries < 120; tries++) {
-    const x = rng.range(BOUNDS.minX, BOUNDS.maxX);
-    const z = rng.range(BOUNDS.minZ, BOUNDS.maxZ);
-    if (!isFree(x, z, 0.8, rocks)) continue;
+    const x = rng.range(B.minX, B.maxX);
+    const z = rng.range(B.minZ, B.maxZ);
+    if (!isFree(stage, x, z, 0.8, rocks)) continue;
     // Settle for less room after a while, but never within anyone's bite.
     const room = tries < 40 ? clear : Math.min(clear, OUT_OF_BITE);
     if ((x - avoidX) ** 2 + (z - avoidZ) ** 2 < room * room) continue;
     food.x = x;
     food.z = z;
-    food.kind = FOOD_KINDS[weighted(rng, inBox(GREEN, x, z) ? WEIGHTS_GREEN : WEIGHTS_YARD)];
+    food.kind = stage.foodKindAt(rng, x, z);
     return;
   }
   // Never leave it where it was: that is inside the mouth that just ate it, and it would be
   // swallowed again every tick. Use whichever known-open spot is further away.
   const far = (p: { x: number; z: number }) => (p.x - avoidX) ** 2 + (p.z - avoidZ) ** 2;
-  const spot = far(SNAKE_SPAWN) > far(COOPER_SPAWN) ? SNAKE_SPAWN : COOPER_SPAWN;
+  const spot = far(stage.snakeSpawn) > far(stage.fallbackSpot) ? stage.snakeSpawn : stage.fallbackSpot;
   food.x = spot.x;
   food.z = spot.z;
 }

@@ -1,11 +1,13 @@
 import { isFree } from './collide';
-import { BOUNDS, SNAKE_SPAWN, type Circle } from './layout';
+import type { Circle } from './layout';
 import type { Rng } from './rng';
+import type { Stage } from './stage';
 
 /**
  * Playground debris. Bumping one never ends the game: the snake bounces off, says "ouch"
  * and hiccups out a few tail segments as pellets that anyone can gobble back up. After a few
  * bumps a piece breaks and a fresh one appears somewhere else, so the map never feels static.
+ * A stage with no `hazardArea` (the Common) has none of these: its dangers move.
  */
 
 export const HAZARD_KINDS = ['rock', 'stones', 'sticks'] as const;
@@ -27,26 +29,26 @@ const SPAWN_CLEARANCE = 7;
 const FENCE_GAP = 2.8; // wider than the fattest snake (2.2 m)
 const MIN_HITS = 2;
 const MAX_HITS = 5;
-/** Bike Shed Alley and the yard behind the Old School get more than their share. */
-const ROUGH_CORNER = { minX: 12, maxX: BOUNDS.maxX, minZ: 8, maxZ: BOUNDS.maxZ };
-const ROUGH_SHARE = 0.4;
 
 const hitLimit = (rng: Rng) => MIN_HITS + rng.int(MAX_HITS - MIN_HITS + 1);
 
 /**
- * Drop `h` somewhere sensible: a free spot with room to slither round, off the fence, clear of
- * the other pieces and of wherever `avoid` says (living snakes). Returns false if it gave up.
+ * Drop `h` somewhere sensible on `stage`: a free spot with room to slither round, off the fence,
+ * clear of the other pieces and of wherever `avoid` says (living snakes). Returns false if it gave up.
  */
-export function placeHazard(h: Hazard, rng: Rng, others: readonly Hazard[], avoid: (x: number, z: number) => boolean): boolean {
+export function placeHazard(h: Hazard, rng: Rng, stage: Stage, others: readonly Hazard[], avoid: (x: number, z: number) => boolean): boolean {
+  const area = stage.hazardArea;
+  if (!area) return false;
+  const B = stage.bounds;
   for (let tries = 0; tries < 200; tries++) {
-    const area = rng.next() < ROUGH_SHARE ? ROUGH_CORNER : BOUNDS;
-    const x = rng.range(area.minX, area.maxX);
-    const z = rng.range(area.minZ, area.maxZ);
-    if (!isFree(x, z, h.r + 1.6, others)) continue;
+    const box = rng.next() < area.share ? area.rough : B;
+    const x = rng.range(box.minX, box.maxX);
+    const z = rng.range(box.minZ, box.maxZ);
+    if (!isFree(stage, x, z, h.r + 1.6, others)) continue;
     // The fence clamp runs after the rock push-out, so a snake squeezed between the two would sit
     // inside the rock and be shrunk over and over. Leave room for the widest snake to pass.
     const edge = h.r + FENCE_GAP;
-    if (x < BOUNDS.minX + edge || x > BOUNDS.maxX - edge || z < BOUNDS.minZ + edge || z > BOUNDS.maxZ - edge) continue;
+    if (x < B.minX + edge || x > B.maxX - edge || z < B.minZ + edge || z > B.maxZ - edge) continue;
     if (avoid(x, z)) continue;
     h.x = x;
     h.z = z;
@@ -58,13 +60,15 @@ export function placeHazard(h: Hazard, rng: Rng, others: readonly Hazard[], avoi
   return false;
 }
 
-export function makeHazards(rng: Rng): Hazard[] {
+export function makeHazards(rng: Rng, stage: Stage): Hazard[] {
   const hazards: Hazard[] = [];
-  const clearOfSpawn = (x: number, z: number) => Math.hypot(x - SNAKE_SPAWN.x, z - SNAKE_SPAWN.z) < SPAWN_CLEARANCE;
+  if (!stage.hazardArea) return hazards;
+  const spawn = stage.snakeSpawn;
+  const clearOfSpawn = (x: number, z: number) => Math.hypot(x - spawn.x, z - spawn.z) < SPAWN_CLEARANCE;
   for (let i = 0; i < COUNT; i++) {
     const kind = rng.pick(HAZARD_KINDS);
     const h: Hazard = { kind, x: 0, z: 0, r: RADIUS[kind], turn: 0, hits: 0, limit: hitLimit(rng) };
-    if (placeHazard(h, rng, hazards, clearOfSpawn)) hazards.push(h);
+    if (placeHazard(h, rng, stage, hazards, clearOfSpawn)) hazards.push(h);
   }
   return hazards;
 }

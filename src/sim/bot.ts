@@ -1,7 +1,6 @@
 import { ANIMALS } from './animals';
 import { isFree } from './collide';
 import { FOOD_VALUE, GOLDEN_MULTIPLIER } from './food';
-import { BOUNDS } from './layout';
 import type { Input, Snake, SnakeLook } from './snake';
 import type { World } from './world';
 
@@ -112,9 +111,10 @@ export class Bot {
 
   private wander(w: World, seconds: number): void {
     for (let tries = 0; tries < 20; tries++) {
-      const x = w.rng.range(BOUNDS.minX, BOUNDS.maxX);
-      const z = w.rng.range(BOUNDS.minZ, BOUNDS.maxZ);
-      if (!isFree(x, z, 1.5, w.hazards)) continue;
+      const B = w.stage.bounds;
+      const x = w.rng.range(B.minX, B.maxX);
+      const z = w.rng.range(B.minZ, B.maxZ);
+      if (!isFree(w.stage, x, z, 1.5, w.hazards)) continue;
       this.tx = x;
       this.tz = z;
       break;
