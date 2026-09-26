@@ -1444,3 +1444,157 @@ small {
 #name-input::placeholder {
   color: #c3cad4;
 }
+
+/* ---------- Common unlock splash: a golden lock shatters, the park blooms (wordless, one-shot) ---------- */
+#unlock-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.us-veil {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 45%, rgba(20, 40, 15, 0), rgba(8, 18, 6, 0.5));
+  animation: us-veil 2.6s ease-out forwards;
+}
+@keyframes us-veil {
+  0% { opacity: 0; }
+  18%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Sunbeams that bloom out from the middle. */
+.us-rays {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 220vmax;
+  height: 220vmax;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 222, 90, 0) 0deg, rgba(255, 228, 125, 0.55) 3deg, rgba(255, 222, 90, 0) 8deg);
+  opacity: 0;
+  animation: us-rays 1.9s ease-out 0.66s forwards;
+}
+@keyframes us-rays {
+  0% { transform: scale(0.15) rotate(0deg); opacity: 0; }
+  25% { opacity: 0.9; }
+  100% { transform: scale(2.4) rotate(48deg); opacity: 0; }
+}
+
+/* The white flash at the instant the lock breaks. */
+.us-flash {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 44vmax;
+  height: 44vmax;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95), rgba(255, 240, 190, 0) 70%);
+  opacity: 0;
+  animation: us-flash 0.6s ease-out 0.68s forwards;
+}
+@keyframes us-flash {
+  0% { transform: scale(0.1); opacity: 0.95; }
+  100% { transform: scale(3.2); opacity: 0; }
+}
+
+.us-lock {
+  position: absolute;
+  width: 140px;
+  height: 168px;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.35));
+  animation:
+    us-lock-in 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) both,
+    us-shake 0.16s ease-in-out 0.5s 1,
+    us-lock-break 0.34s ease-in 0.7s forwards;
+}
+@keyframes us-lock-in {
+  0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+  70% { transform: scale(1.15) rotate(4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes us-shake {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  25% { transform: translateX(-5px) rotate(-4deg); }
+  75% { transform: translateX(5px) rotate(4deg); }
+}
+@keyframes us-lock-break {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.3) rotate(35deg); opacity: 0; }
+}
+
+/* A zero-size point in the centre; every particle flies out from here. */
+.us-burst {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 0;
+  height: 0;
+}
+.us-burst > * {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.us-shard {
+  width: 16px;
+  height: 16px;
+  margin: -8px;
+  background: linear-gradient(135deg, #ffe98a, #e0a613);
+  clip-path: polygon(50% 0, 100% 60%, 30% 100%, 0 40%);
+  opacity: 0;
+  animation: us-shard 1s ease-out 0.7s forwards;
+}
+@keyframes us-shard {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)); opacity: 0; }
+}
+
+.us-spark {
+  width: 9px;
+  height: 9px;
+  margin: -4.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff6c9, #ffcf3e 60%, rgba(255, 207, 62, 0) 100%);
+  opacity: 0;
+  animation: us-spark 0.95s ease-out forwards;
+}
+@keyframes us-spark {
+  0% { transform: translate(0, 0) scale(1.2); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(0.2); opacity: 0; }
+}
+
+.us-bit {
+  line-height: 1;
+  opacity: 0;
+  animation: us-bit 1.5s ease-out forwards;
+}
+@keyframes us-bit {
+  0% { transform: translate(0, 0) scale(0.2) rotate(0deg); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(1) rotate(var(--rot)); opacity: 0; }
+}
+
+.us-bfly {
+  font-size: clamp(26px, 7vw, 40px);
+  line-height: 1;
+  margin: -20px;
+  opacity: 0;
+  animation: us-bfly 2s ease-out forwards;
+}
+@keyframes us-bfly {
+  0% { transform: translate(0, 22vh) rotate(0deg); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: translate(var(--x), -45vh) rotate(0deg); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #unlock-splash { display: none; }
+}
