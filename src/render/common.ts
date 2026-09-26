@@ -293,6 +293,35 @@ function playground(): THREE.Group {
   return g;
 }
 
+/** A big old tree that came down a year ago: now a bleached white log the kids love to run over. */
+function fallenLog(): THREE.Group {
+  const g = new THREE.Group();
+  const bark = lambert(0xe6e2d6); // bleached white-grey
+  const ring = lambert(0xcabfa6); // pale cut-end wood
+  const len = 11, r = 0.9;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.82, len, 12), bark);
+  trunk.rotation.z = Math.PI / 2; // lie the trunk down along its length
+  trunk.position.y = r;
+  g.add(trunk);
+  // The broken end-grain at each end.
+  for (const s of [-1, 1]) {
+    const end = new THREE.Mesh(new THREE.CircleGeometry(r * (s < 0 ? 1 : 0.82), 12), ring);
+    end.rotation.y = (s * Math.PI) / 2;
+    end.position.set((s * len) / 2, r, 0);
+    g.add(end);
+  }
+  // A couple of snapped branch stubs.
+  for (const [x, ang] of [[-2.4, 0.7], [3.1, -0.9]]) {
+    const stub = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 1.1, 7), bark);
+    stub.position.set(x, r + 0.15, 0.4);
+    stub.rotation.set(0.5, 0, ang);
+    g.add(stub);
+  }
+  g.position.set(43, 0, -25); // top-right of the park, ~10 m below Emmanuel Road
+  g.rotation.y = 0.5; // a natural, not-quite-square angle
+  return g;
+}
+
 /** A couple of picnic benches out on the grass. */
 function picnicBenches(): THREE.Group {
   const g = new THREE.Group();
@@ -361,7 +390,7 @@ export function makeCommon(maxAnisotropy: number): School {
   beyond.position.set((B.minX + B.maxX) / 2, -0.05, (B.minZ + B.maxZ) / 2);
 
   const fireflies = makeFireflies();
-  group.add(beyond, houses(), trees(rng), emmanuelRoad(rng), playground(), picnicBenches(), schoolBackdrop(), fenceGate(), greeters(), fireflies.mesh);
+  group.add(beyond, houses(), trees(rng), emmanuelRoad(rng), playground(), picnicBenches(), fallenLog(), schoolBackdrop(), fenceGate(), greeters(), fireflies.mesh);
 
   // reveal runs every frame with the elapsed dt: the Common uses it to drift its fireflies.
   return { group, reveal: (_x, _z, dt) => fireflies.tick(dt) };
