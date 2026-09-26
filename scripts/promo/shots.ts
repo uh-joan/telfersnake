@@ -66,9 +66,9 @@ const animal = (d: Director, kind: string, n = 0) => d.world.animals.filter((a) 
 
 // Heading helpers: +x east, +z south.
 const EAST = 0;
-const SOUTH = Math.PI / 2;
 /** South-east: with the camera looking south, that is up and to the left on screen. */
-const HOOK_HEADING = Math.PI / 4;
+const HOOK_HEADING = Math.PI / 3.3;
+const HOOK_FOCUS = { x: -9.4, z: 17.2 };
 
 /** Where the six children run, relative to the snake (metres east, south). */
 const KID_SPOTS: [number, number][] = [[4, -1.6], [6, 2.6], [2, 3.6], [9, -0.4], [7.5, 5.2], [11, 2]];
@@ -91,14 +91,15 @@ function clearActors(d: Director): void {
 
 export const SHOTS: Shot[] = [
   // ------------------------------------------------------------------ 0–4 · HOOK
-  // The Dragon tears across the Common, up through the title, breathing fire on beat 2.
+  // The Dragon tears across the school yard, up through the title, breathing fire on beat 2.
   // It enters lower right on frame 0 (the strongest image first) and heads up-screen to the left.
+  // The camera looks south over the lanes and the green, away from the painted crest.
   {
     name: 'hook',
     mute: ['eat', 'golden', 'gulp', 'pellet'],
     from: 0,
     to: 4,
-    stage: 'common',
+    stage: 'school',
     seed: 7,
     fg: true,
     popups: false,
@@ -106,8 +107,7 @@ export const SHOTS: Shot[] = [
     skin: 'telfer',
     setup(d) {
       d.benchRivals();
-      clearActors(d);
-      d.lay([[-46, -24], [-34, -20], [-22, -14], [-13, -7], [-6, 0]], 760);
+      d.lay([[-36, 40], [-35, 30], [-31, 21], [-26, 15.5], [-18, 14.5], [-11, 15]], 760);
       d.snake.setUpgrades({ dragon: 3 });
       d.snake.breathIn = 99;
     },
@@ -119,7 +119,7 @@ export const SHOTS: Shot[] = [
     },
     camera(d, t) {
       const k = 0.42 * 9.3 * t; // the camera drifts after the Dragon at a bit under half its speed
-      d.look(-3.6 + Math.cos(HOOK_HEADING) * k, 3.5 + Math.sin(HOOK_HEADING) * k, ramp(t, 0, 1.69, 21, 18.5, smooth), 44, 180);
+      d.look(HOOK_FOCUS.x + Math.cos(HOOK_HEADING) * k, HOOK_FOCUS.z + Math.sin(HOOK_HEADING) * k, ramp(t, 0, 1.69, 21, 18.5, smooth), 44, 180);
     },
     sky: SUNNY,
   },
@@ -381,29 +381,30 @@ export const SHOTS: Shot[] = [
   },
 
   // ------------------------------------------------------------------ 40–52 · RACE TO THE DRAGON
-  // Size after size on every other beat, exactly as the game calls them, until The Dragon breathes fire.
+  // Back at school, size after size on every other beat, exactly as the game calls them, along the
+  // running lanes (looking south, away from the crest), until The Dragon breathes fire.
   {
     name: 'grow',
     mute: ['eat', 'golden', 'gulp', 'pellet'],
     from: 40,
     to: 52,
-    stage: 'common',
+    stage: 'school',
     seed: 61,
     hud: ['hud-tier'],
     popups: false,
     skin: 'telfer',
     setup(d) {
       d.benchRivals();
-      clearActors(d);
-      // Lay down the Dragon's worth of body first, so growing just unrolls it along the path.
-      d.lay([[-44, 36], [-40, 22], [-36, 10], [-30, 2], [-22, 0], [-14, 2]], 760);
+      // Lay down the Dragon's worth of body first, so growing just unrolls it along the path:
+      // round the green and out along the running lanes.
+      d.lay([[-2, 39.3], [-18, 39.4], [-31, 37], [-36, 31], [-35, 25], [-30, 21]], 760);
       d.snake.mass = 19.2;
       d.snake.highestTier = 0;
       d.snake.setUpgrades({ dragon: 3 });
       d.snake.breathIn = 99;
     },
     tick(d, t) {
-      d.steer(EAST + 0.12);
+      d.steer(EAST);
       const s = d.snake;
       // Mass eases up to each threshold and crosses it on the beat: 20, 70, 170, 350, 700.
       const steps: [number, number][] = [[40, 20.2], [42, 70.5], [44, 171], [46, 352], [48, 705]];
@@ -418,6 +419,9 @@ export const SHOTS: Shot[] = [
       }
       if (t > d.localOf(48)) m = 705 + (t - d.localOf(48)) * 12;
       s.mass = m;
+      // The Dragon takes it steady in the yard (as snakes do in Mr Cooper's "walking feet" aura),
+      // so it stays in the open, clear of the Old School.
+      if (t > d.localOf(48)) s.speedFactor = 0.62;
       // Fire on the Dragon's beats.
       for (const b of [49, 51]) {
         d.bait(snack(d, b === 49 ? 0 : 1, 'sausage'), b + 0.2, 6, t);
@@ -432,7 +436,7 @@ export const SHOTS: Shot[] = [
       // less, so the body visibly fattens and lengthens.
       const r = d.snake.radius;
       const dragon = ramp(t, d.localOf(47.8), d.localOf(49), 0, 1, smooth);
-      d.chase({ dist: 11 + dragon * 9 + (r - 0.3) * 2, tilt: 50, yaw: 186, lead: 1.5 + r * 2, offX: -0.5 - dragon * 3, offZ: 1.2 + r * 1.5, stiff: 2.5 }, dt);
+      d.chase({ dist: 11 + dragon * 9 + (r - 0.3) * 2, tilt: 50, yaw: 186 + dragon * 20, lead: 1.5 + r * 2, offX: -0.5 - dragon * 3, offZ: 1.2 + r * 1.5, stiff: 2.5 }, dt);
     },
     sky: SUNNY,
   },
@@ -493,7 +497,7 @@ export const SHOTS: Shot[] = [
     mute: ['eat', 'golden', 'gulp', 'pellet'],
     from: 64,
     to: 72,
-    stage: 'common',
+    stage: 'school',
     seed: 81,
     popups: false,
     banners: false,
@@ -503,14 +507,14 @@ export const SHOTS: Shot[] = [
     soften: 'blur(5px) saturate(1.1) brightness(0.92)',
     setup(d) {
       d.benchRivals();
-      d.lay([[-40, 30], [-36, 16], [-26, 8], [-14, 10], [-6, 18], [-2, 26]], 760);
+      d.lay([[8, 38.5], [-8, 39], [-30, 38], [-35, 28], [-30, 22], [-18, 21.5], [-8, 22]], 760);
     },
     tick(d) {
-      d.steer(SOUTH + 0.35);
+      d.steer(EAST);
       d.snake.mass = 760;
     },
     camera(d, t) {
-      d.look(ramp(t, 0, 3.4, -8, -4), ramp(t, 0, 3.4, 16, 20), 34, 40, ramp(t, 0, 3.4, 190, 170));
+      d.look(ramp(t, 0, 3.4, -10, -4), ramp(t, 0, 3.4, 27, 29), 30, 42, ramp(t, 0, 3.4, 192, 172));
     },
     sky: SUNNY,
   },

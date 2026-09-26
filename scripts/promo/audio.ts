@@ -19,10 +19,10 @@ export const MUSIC_CUES: { beat: number; place?: 'school' | 'common'; level?: nu
   { beat: 12, place: 'common', level: 2 }, // out onto the Common: the gentler arrangement, birdsong
   { beat: 20, level: 3 }, // the Common's soft drums as the park opens out
   { beat: 36, level: 2 }, // magic: a lighter bar before the race
-  { beat: 42, level: 2 }, // then a layer for every size, as the game adds them (Music.setLevel on 'tier')
+  { beat: 40, place: 'school', level: 1 }, // back at school for the race: the bright theme, building up
+  { beat: 42, level: 2 }, // a layer for every size, as the game adds them (Music.setLevel on 'tier')
   { beat: 44, level: 3 },
   { beat: 46, level: 4 },
-  { beat: 52, place: 'school', level: 4 }, // back to the bright school theme for the Tuck Shop and the end
 ];
 /** The theme's last note: the downbeat of bar 17, under the end card's school bell. */
 export const MUSIC_END = 68;

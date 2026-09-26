@@ -2,6 +2,9 @@
 
 *30.4 s · 9:16 (1080×1920) with a 16:9 (1920×1080) cut · 60 fps · for parents, teachers and kids, shared on WhatsApp/Instagram.*
 
+The film is bookended by the school grounds (hook, yard, race to the Dragon, Tuck Shop, end card: about
+20 s); the Common (road, splash, weather, friends, bear and wolves, magic: about 10 s) is the adventure in the middle.
+
 Every frame is the real game running in-engine: the game's own renderer, sim, HUD banners, weather, unlock splash
 and synth (music and SFX). The director stages it, and the motion graphics are drawn on top. Nothing is faked:
 where a moment is staged (a chicken nudged onto the beat, a tier crossed on cue, the sky forced to rain),
@@ -18,7 +21,7 @@ about a frame). Staged gulps, boings, tier-ups and fire land within 30 ms of the
 
 | Beats | Time | Shot | What happens (all in-engine) | On screen | Sound |
 |---|---|---|---|---|---|
-| 0–4 | 0.0–1.7 | **Hook** · Common | The Dragon (top tier: red head, horns, flame) tears up-screen and bursts through the title. Its letters pop and spring back. Fire breath on beat 2. | **TELFER / SNAKE**, both there on frame 0, over a sun-ray burst | Theme at full (level 4) · `tierUp` on 0 · `whoosh` (fire) on 2 |
+| 0–4 | 0.0–1.7 | **Hook** · school yard | The Dragon (top tier: red head, horns, flame) tears across the lanes, the green and the pond, and bursts through the title. Its letters pop and spring back. Fire breath on beat 2. | **TELFER / SNAKE**, both there on frame 0, over a sun-ray burst | Theme at full (level 4) · `tierUp` on 0 · `whoosh` (fire) on 2 |
 | 4 | 1.7 | wipe | Yellow and green cut-paper bands | | |
 | 4–12 | 1.7–5.1 | **School yard** | A Wiggly Worm on the green: munch (5), **BOING** off a sheep (6), munch (7), crosses into **Grass Snake** on 8 (the game's banner), gulps a chicken on 10 | EAT! 🍪 · BOING! · GROW! · GULP! 🐔 | level 1 · `eat` `boing`+sheep `eat` `tierUp` `gulp` `eat` on the beats |
 | 12–20 | 5.1–8.5 | **Up Telferscot Road** · Common | Out of the school gate, down the road between the terraces, dashing from 16.5 | LEVEL 2 🌳 | Common arrangement (birdsong), level 2 · `zip` |
@@ -28,11 +31,11 @@ about a frame). Staged gulps, boings, tier-ups and fire land within 30 ms of the
 | 32–36 | 13.5–15.2 | **Bear & wolves** | A bear blocks the way; on 34 two wolves spot the snake, howl and chase; it dashes off (no bites) | BEAR! 🐻 · WOLVES! 🐺 | `growl` on 34 · `zip` |
 | 36–40 | 15.2–16.9 | **Magic** | A unicorn; the snake catches it on 38: *🦄 Rainbow Rush* (the game's banner) and the rainbow trail | MAGIC! ✨ 🦄 | level 2 · `golden` on 38 |
 | 40 | 16.9 | wipe | | | |
-| 40–52 | 16.9–22.0 | **Race to the Dragon** | Grass Snake (40) → Python (42) → Anaconda (44) → MEGA Telfersnake (46) → **The Dragon** (48), each on the beat with the game's banner and tier bar. Fire breath on 49 and 51 | rings on each tier · **THE DRAGON!** 🐲 | a layer added per size (levels 2, 3, 4, as the game does) · `tierUp` ×5 · `whoosh` ×2 |
+| 40–52 | 16.9–22.0 | **Race to the Dragon** · school yard | Along the running lanes: Grass Snake (40) → Python (42) → Anaconda (44) → MEGA Telfersnake (46) → **The Dragon** (48), each on the beat with the game's banner and tier bar. Fire breath on 49 and 51, beside the Old School | rings on each tier · **THE DRAGON!** 🐲 | school arrangement again, a layer added per size (levels 1→4, as the game does) · `tierUp` ×5 · `whoosh` ×2 |
 | 52 | 22.0 | wipe | | | |
 | 52–64 | 22.0–27.0 | **Tuck Shop** · school | An outfit per beat: skins (52–55), hats (56–59), trails (60–63) | TUCK SHOP · SKINS! · HATS! · TRAILS!, plus the item's icon each beat | school arrangement, level 4 · `chaChing` on 52/56/60, `pick` on the rest |
 | 64 | 27.0 | wipe | | | |
-| 64–72 | 27.0–30.4 | **End card** · Common | Rainbow-skinned, crowned Dragon with the stardust trail, softly blurred | **Telfer / snake** (the start screen's logo colours) · 🐍 · ▶ telfersnake.joans.cat · star burst on 68 | last note on 68 · the game's school **bell** (home time) |
+| 64–72 | 27.0–30.4 | **End card** · school yard | Rainbow-skinned, crowned Dragon with the stardust trail, softly blurred | **Telfer / snake** (the start screen's logo colours) · 🐍 · ▶ telfersnake.joans.cat · star burst on 68 | last note on 68 · the game's school **bell** (home time) |
 
 ## Guardrails kept
 
