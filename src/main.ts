@@ -35,6 +35,7 @@ import { STEP, World } from './sim/world';
 import { CardPicker } from './ui/cards';
 import { Hud } from './ui/hud';
 import { Shop } from './ui/shop';
+import { playCommonUnlock } from './ui/unlockSplash';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -864,6 +865,7 @@ function refreshStagePicker(): void {
 
 /** Tapping the Common pays the 300 stars the first time (if you can), then selects the place. */
 function chooseStage(id: StageId): void {
+  let justUnlocked = false;
   if (id === 'common' && !save.commonUnlocked) {
     if (save.stars < COMMON_COST) {
       wakeAudio()?.nope();
@@ -877,6 +879,7 @@ function chooseStage(id: StageId): void {
     save.commonUnlocked = true;
     refreshWallet(); // the stars just spent
     wakeAudio()?.chaChing();
+    justUnlocked = true;
   }
   if (id !== save.stage) {
     save.stage = id;
@@ -887,6 +890,8 @@ function chooseStage(id: StageId): void {
   }
   writeSave(save);
   refreshStagePicker();
+  // First time in: a wordless splash — the lock shatters and the park blooms open behind it.
+  if (justUnlocked) playCommonUnlock();
 }
 
 for (const b of stageButtons) b.addEventListener('click', () => chooseStage(asStage(b.dataset.stage)));
