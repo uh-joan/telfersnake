@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { logClamberHeight } from '../sim/commonLayout';
 import { KID_KINDS, type KidKind } from '../sim/kids';
 import type { WorldView } from '../sim/view';
 import { model, paint, PAINTED } from './paint';
@@ -92,7 +93,9 @@ export class KidView {
       this.q.setFromEuler(this.e);
       // A touch bigger than life, so they read as a proper crowd of children (~1.2 m tall).
       const s = 1.35;
-      this.pos.set(k.x, Math.abs(Math.sin(phase)) * hop * moving, k.z);
+      // Ride up and over the fallen log when scampering across it.
+      const clamber = logClamberHeight(k.x, k.z);
+      this.pos.set(k.x, clamber + Math.abs(Math.sin(phase)) * hop * moving, k.z);
       this.m.compose(this.pos, this.q, this.scale.set(s, s, s));
       mesh.setMatrixAt(mesh.count++, this.m);
     }

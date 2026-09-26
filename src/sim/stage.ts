@@ -55,6 +55,8 @@ export interface Stage extends Terrain {
   foodScale: number;
   /** Static hazards (rocks, sticks): a corner that gets more than its share. Null: none spawn. */
   hazardArea: { rough: Bounds; share: number } | null;
+  /** Solid things the snake goes round but the children clamber over (the Common's fallen log). Empty: none. */
+  logs: readonly Circle[];
   /** Active predators (bears, wolves) and how many of each. Empty on a stage with none. */
   predators: { kind: PredatorKind; count: number }[];
   /** The children who run about here, one entry per child (their kind is fixed). Empty: no kids. */

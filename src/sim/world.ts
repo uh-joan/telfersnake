@@ -8,7 +8,7 @@ import { isFree, makeHit, resolveCircle, slideAlong, turnToward, wrapAngle } fro
 import { Cooper, COOPER_AURA, COOPER_RADIUS } from './cooper';
 import { type Food, type FoodKind, FOOD_VALUE, GOLDEN_MULTIPLIER, placeFood } from './food';
 import { type Hazard, type HazardKind, makeHazards, type Pellet, PELLET_LIFE_TICKS, placeHazard } from './hazards';
-import { inBox, SCHOOL } from './layout';
+import { type Circle, inBox, SCHOOL } from './layout';
 import { Rng } from './rng';
 import type { Stage } from './stage';
 import { type Input, Snake, type SnakeLook, TIERS } from './snake';
@@ -133,6 +133,8 @@ export class World {
   readonly inputs: Input[] = [];
   readonly cooper: Cooper;
   readonly hazards: Hazard[];
+  /** Everything the snake bounces off: rocks (which shrink it) and the log (which does not). */
+  private readonly snakeSolids: Circle[];
   /** The place this world is played: fence, solids, spawn tables, sanctuary, who patrols it. */
   readonly stage: Stage;
   readonly foods: Food[] = [];
@@ -174,6 +176,8 @@ export class World {
     this.stage = stage;
     this.cooper = new Cooper(stage.cooper);
     this.hazards = makeHazards(this.rng, stage);
+    // What the snake bounces off: the rocks, plus the fallen log (the children clamber it instead).
+    this.snakeSolids = [...this.hazards, ...stage.logs];
     this.pausesForCards = playerLook !== null;
 
     if (playerLook) {
@@ -342,7 +346,7 @@ export class World {
 
       s.slowed = Math.hypot(s.x - c.x, s.z - c.z) < COOPER_AURA;
       s.speedFactor += ((s.slowed ? SLOW_FACTOR : 1) - s.speedFactor) * Math.min(1, dt * 4);
-      s.update(input, dt, !s.slowed, this.stage, this.hazards);
+      s.update(input, dt, !s.slowed, this.stage, this.snakeSolids);
 
       const ouch = this.bonkRock(s);
       if (s.touchingWall && !s.wasTouchingWall && !ouch && s.bumpQuiet <= 0 && s.immune <= 0) {
@@ -396,7 +400,7 @@ export class World {
     const nx = d > 1e-5 ? dx / d : 1;
     const nz = d > 1e-5 ? dz / d : 0;
     // The push must not shoulder the head into a wall or fence.
-    resolveCircle(this.stage, cx + nx * reach, cz + nz * reach, s.radius, this.hit, this.hazards);
+    resolveCircle(this.stage, cx + nx * reach, cz + nz * reach, s.radius, this.hit, this.snakeSolids);
     s.x = this.hit.x;
     s.z = this.hit.z;
     s.deflect(nx, nz, dt);
@@ -584,7 +588,7 @@ export class World {
         const flee = this.nearestSnake(p.x, p.z);
         if (flee) p.heading = turnToward(p.heading, Math.atan2(p.z - flee.z, p.x - flee.x), 6 * dt);
         const dash = spec.chaseSpeed * 0.9;
-        resolveCircle(this.stage, p.x + Math.cos(p.heading) * dash * dt, p.z + Math.sin(p.heading) * dash * dt, spec.radius, this.hit);
+        resolveCircle(this.stage, p.x + Math.cos(p.heading) * dash * dt, p.z + Math.sin(p.heading) * dash * dt, spec.radius, this.hit, this.stage.logs);
         p.x = this.hit.x;
         p.z = this.hit.z;
         p.speed = dash;
@@ -617,7 +621,7 @@ export class World {
         speed = spec.roamSpeed;
       }
 
-      resolveCircle(this.stage, p.x + Math.cos(p.heading) * speed * dt, p.z + Math.sin(p.heading) * speed * dt, spec.radius, this.hit);
+      resolveCircle(this.stage, p.x + Math.cos(p.heading) * speed * dt, p.z + Math.sin(p.heading) * speed * dt, spec.radius, this.hit, this.stage.logs);
       p.x = this.hit.x;
       p.z = this.hit.z;
       p.speed = speed;
@@ -651,7 +655,7 @@ export class World {
     for (let tries = 0; tries < 20; tries++) {
       const x = this.rng.range(B.minX, B.maxX);
       const z = this.rng.range(B.minZ, B.maxZ);
-      if (!isFree(this.stage, x, z, PREDATORS[p.kind].radius + 0.5)) continue;
+      if (!isFree(this.stage, x, z, PREDATORS[p.kind].radius + 0.5, this.stage.logs)) continue;
       p.wx = x;
       p.wz = z;
       break;
@@ -857,7 +861,7 @@ export class World {
         c.heading = turnToward(c.heading, Math.atan2(c.wz - c.z, c.wx - c.x), 2 * dt);
         speed = spec.flee * 0.3; // an ethereal drift while nothing is near
       }
-      resolveCircle(this.stage, c.x + Math.cos(c.heading) * speed * dt, c.z + Math.sin(c.heading) * speed * dt, spec.radius, this.hit);
+      resolveCircle(this.stage, c.x + Math.cos(c.heading) * speed * dt, c.z + Math.sin(c.heading) * speed * dt, spec.radius, this.hit, this.stage.logs);
       c.x = this.hit.x;
       c.z = this.hit.z;
       c.speed = speed;
@@ -872,7 +876,7 @@ export class World {
     for (let tries = 0; tries < 20; tries++) {
       const x = c.x + this.rng.range(-14, 14);
       const z = c.z + this.rng.range(-14, 14);
-      if (!isFree(this.stage, x, z, CREATURES[c.kind].radius + 0.5)) continue;
+      if (!isFree(this.stage, x, z, CREATURES[c.kind].radius + 0.5, this.stage.logs)) continue;
       c.wx = x;
       c.wz = z;
       break;

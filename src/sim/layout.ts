@@ -153,6 +153,7 @@ export const SCHOOL: Stage = {
   predators: [],
   kids: [], // the children are out on the Common, not in the school yard
   creatureCount: 0, // no magic in the school yard
+  logs: [],
   greeters: null,
   cooper: { spawn: COOPER_SPAWN, beat: COOPER_BEAT },
   paintMinimap: (c, X, Z, scale) => {

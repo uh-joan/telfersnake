@@ -51,6 +51,34 @@ export const COMMON_GREETERS = { sami: { x: -2.5, z: -91 }, mum: { x: 1, z: -90.
 /** The Glade: a hidden clearing in the south woods where the fantastic creatures gather. */
 export const GLADE = { x: 0, z: 46 };
 
+/**
+ * The big fallen log in the top-right of the park. It is a solid the snake, predators and creatures
+ * go round — but the children clamber over it (they rise as they cross; see logClamberHeight).
+ */
+export const COMMON_LOG = { x: 43, z: -25, angle: 0.5, half: 5.2, r: 0.85 };
+const LOG_DIR = { x: Math.cos(COMMON_LOG.angle), z: -Math.sin(COMMON_LOG.angle) };
+
+/** The log approximated as a row of circles along its length, for collision. */
+export const COMMON_LOG_CIRCLES: Circle[] = (() => {
+  const out: Circle[] = [];
+  for (let t = -COMMON_LOG.half; t <= COMMON_LOG.half + 0.01; t += 1.5) {
+    out.push({ x: COMMON_LOG.x + LOG_DIR.x * t, z: COMMON_LOG.z + LOG_DIR.z * t, r: COMMON_LOG.r });
+  }
+  return out;
+})();
+
+/** How high a point sits on the log (0 off it): the children ride this as they scamper over. */
+export function logClamberHeight(x: number, z: number): number {
+  const dx = x - COMMON_LOG.x;
+  const dz = z - COMMON_LOG.z;
+  const along = dx * LOG_DIR.x + dz * LOG_DIR.z;
+  const perp = Math.abs(dx * -LOG_DIR.z + dz * LOG_DIR.x);
+  if (Math.abs(along) > COMMON_LOG.half + 0.4 || perp > COMMON_LOG.r + 0.3) return 0;
+  const dome = Math.sqrt(Math.max(0, COMMON_LOG.r * COMMON_LOG.r - perp * perp)); // 0..r
+  const endFade = Math.min(1, (COMMON_LOG.half + 0.4 - Math.abs(along)) / 0.9);
+  return (COMMON_LOG.r * 0.5 + dome) * endFade;
+}
+
 /** A random point out in the open meadow — where the animals and scattered food live. */
 const meadow = (rng: Rng): Spot => ({ x: rng.range(-40, 46), z: rng.range(-28, 46) });
 
@@ -79,6 +107,7 @@ export const COMMON: Stage = {
   },
   sanctuary: null,
   hazardArea: null, // no rocks here: the Common's dangers move
+  logs: COMMON_LOG_CIRCLES, // the fallen log: solid to snakes, clambered by kids
   predators: [{ kind: 'bear', count: 1 }, { kind: 'wolf', count: 2 }],
   // A crowd of children running the meadow: runners for whimsy, the odd pebble-thrower and kiss-blower.
   kids: ['runner', 'naughty', 'nice', 'runner', 'naughty', 'nice', 'runner', 'naughty'],
