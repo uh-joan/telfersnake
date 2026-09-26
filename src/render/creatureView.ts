@@ -123,8 +123,10 @@ export class CreatureView {
       const bob = Math.sin(time * 2 + i) * 0.12;
       this.e.set(0, Math.PI / 2 - c.heading, 0);
       this.q.setFromEuler(this.e);
+      // A little grander than life, so these rare things feel worth the chase.
+      const s = 1.35;
       this.pos.set(c.x, bob, c.z);
-      this.m.compose(this.pos, this.q, this.scale.set(1, 1, 1));
+      this.m.compose(this.pos, this.q, this.scale.set(s, s, s));
       mesh.setMatrixAt(mesh.count++, this.m);
     });
     for (const mesh of this.meshes.values()) mesh.instanceMatrix.needsUpdate = true;
