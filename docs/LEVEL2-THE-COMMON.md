@@ -178,4 +178,19 @@ Each phase is independently shippable, verified headless, reviewed, then deploye
 12. `src/style.css` — stage chips (reuse mode-chip look), `.locked`, `.price`, shake keyframes.
 13. Verify: `tsc`; a headless determinism check that the school is **byte-identical** (same seed → same event stream before/after); review pass; branch → PR → merge → deploy.
 
-**Next — Phase 1 (the Common's geometry from §3, portal, Miss Sami):** replace the `common → SCHOOL` line in `stages.ts` with a real `COMMON: Stage` (its own `commonLayout.ts`: bounds x −60…60 / z −100…60, Telferscot Road corridor + Emmanuel Road + the meadow/copses/woods/paths as solids, `foodKindAt` by zone, `homePoint` for the common's zones, `sanctuary: null`, `hazardArea: null`, `cooper: null`, `paintMinimap` for the green + woods + road). Then the render side (a `common` painter + scenery in `ground.ts`/`school.ts`, or new `commonScene.ts`, keyed off `world.stage.id`), the fence-gap portal, and Miss Sami at the gap. When it lands, deploy Phase 0 + 1 together.
+### ✅ Phase 1 core complete 2026-09-26 — the Common is a real, playable place (on branch, NOT deployed)
+
+**Done and verified.**
+- **Sim:** `commonLayout.ts` — the `COMMON` stage: bounds −60…60 / −100…60; Telferscot Road corridor + Emmanuel Road; a wooded meadow with copses; no rocks (`hazardArea: null`), no Cooper (`cooper: null`); ×2 food for the bigger map (new per-stage `foodScale`). Wired into `stages.ts`. Headless: **0 in-solid ticks, 0 out-of-bounds, no stuck snakes** over 3 min; the **school stays byte-identical** to `main`.
+- **Render:** `render/common.ts` paints the meadow, roads (with lane markings), the footpath and darker woods, and builds instanced trees (woods + copses) and terraced houses. `render/scenery.ts` bundles each stage's ground + scenery behind one `School` shape; `main.ts` caches and **swaps scenery in `mountWorld`**. Verified in the browser: the Common renders and plays as a green meadow with copses; the school is unchanged.
+- **Playable today** with the existing food, animals and rivals (forest life is Phase 2).
+
+**Deferred out of Phase 1 (by design):**
+- The **in-world fence-gap portal** (physically slithering school→Common mid-run) — that means a mid-run stage transition, which breaks the one-world-per-run model. Access is the **menu destination picker** (already built). Revisit as its own feature if we want it.
+- **Miss Sami + the mum at the gap** — they're NPCs; they land with the NPC framework in Phase 4.
+
+**Found & handled during Phase 1:** a stale dev `tsx server/index.ts` (pre-Stage code) was squatting on :8787, so dev Play connected to it and served a school room. Killed it; dev Play now falls to the offline Common. For dev multiplayer, run `npm run server` (new code). The live Docker server is separate and untouched.
+
+**Ship gate unchanged:** still NOT deployed (per request). When we do, deploy Phases 0 + 1 together — the Common is now a real payoff for the 100 gems.
+
+**Next — Phase 2 (forest life):** squirrels (tree-climb), crows (steal), deer (bolt), hedgehog/fox/pigeons; mushrooms (+golden), tomatoes, berries, acorns; per-zone spawns. Extend `ANIMALS`/`FOOD_KINDS`, give the Common its own `foodKindAt` mix and animal set (the Stage can carry which animals it spawns).
