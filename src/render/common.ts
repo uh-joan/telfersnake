@@ -236,7 +236,7 @@ function terraceHouses(): THREE.Group {
 }
 
 /** A grown-up standing on the grass, facing `heading`: a coat, a head, a mop of hair, two legs. */
-function adult(top: number, hair: number, x: number, z: number, heading: number): THREE.Group {
+function adult(top: number, hair: number, x: number, z: number, heading: number, scale = 1): THREE.Group {
   const g = new THREE.Group();
   const skin = lambert(0xf0c8a0);
   const coat = lambert(top);
@@ -255,6 +255,7 @@ function adult(top: number, hair: number, x: number, z: number, heading: number)
   }
   g.position.set(x, 0, z);
   g.rotation.y = Math.PI / 2 - heading;
+  g.scale.setScalar(scale);
   return g;
 }
 
@@ -263,8 +264,8 @@ function greeters(): THREE.Group {
   const g = new THREE.Group();
   const { sami, mum } = COMMON_GREETERS;
   const toMum = Math.atan2(mum.z - sami.z, mum.x - sami.x);
-  g.add(adult(0x2f8f8a, 0x4a2f1c, sami.x, sami.z, toMum)); // Miss Sami, teal coat
-  g.add(adult(0x8a5cc0, 0x7a5230, mum.x, mum.z, toMum + Math.PI)); // the mum, purple coat, facing her
+  g.add(adult(0x2f8f8a, 0x4a2f1c, sami.x, sami.z, toMum, 1.5)); // Miss Sami, teal coat — a grown-up presence
+  g.add(adult(0x8a5cc0, 0x7a5230, mum.x, mum.z, toMum + Math.PI, 1.15)); // the mum, purple coat, facing her
   return g;
 }
 

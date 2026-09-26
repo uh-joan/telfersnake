@@ -209,7 +209,9 @@ export class Hud {
     }
 
     this.bubbleAge += dt;
-    stage.project(world.cooper.x, COOPER_HEAD_Y + 0.5, world.cooper.z, this.sp);
+    // The bubble sits over whoever does the talking here: Mr Cooper at school, Miss Sami on the Common.
+    const talker = this.stage.greeters && !this.stage.cooper ? this.stage.greeters.sami : world.cooper;
+    stage.project(talker.x, COOPER_HEAD_Y + 0.9, talker.z, this.sp);
     const showBubble = this.bubbleAge < BUBBLE_LIFE && this.sp.visible;
     this.bubble.classList.toggle('show', showBubble);
     if (showBubble) {

@@ -568,7 +568,7 @@ function handleEvents(): void {
         break;
       }
       case 'say':
-        // Mr Cooper tells people off in a speech bubble only. He had a spoken voice once; it grated.
+        // A grown-up says something, in a speech bubble over their head (Mr Cooper, Miss Sami…).
         hud.say(e.text);
         break;
     }
