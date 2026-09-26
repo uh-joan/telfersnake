@@ -845,8 +845,9 @@ refreshModePicker();
 
 // ---------------------------------------------------------------- where to play: School · The Common
 
-/** The one-off blue-gem ticket to the Common (Level 2). */
-const COMMON_COST = 100;
+/** The one-off star ticket to the Common (Level 2). Stars, not gems: gems are the in-run
+ * power-card currency, so a gem price fights the core loop; stars are earned in bulk. */
+const COMMON_COST = 300;
 const stageButtons = [...document.querySelectorAll<HTMLButtonElement>('#stage-pick .stage')];
 
 /** The wallet on the start screen's Tuck Shop button: stars earned and blue gems banked. */
@@ -854,17 +855,17 @@ function refreshWallet(): void {
   $('start-stars').textContent = `⭐${save.stars} 💎${save.gems}`;
 }
 
-/** Mark the chosen place; show the Common's 💎100 lock until it is bought. */
+/** Mark the chosen place; show the Common's ⭐300 lock until it is bought. */
 function refreshStagePicker(): void {
   const commonBtn = stageButtons.find((b) => b.dataset.stage === 'common');
   if (commonBtn) commonBtn.classList.toggle('locked', !save.commonUnlocked);
   for (const b of stageButtons) b.classList.toggle('on', b.dataset.stage === save.stage);
 }
 
-/** Tapping the Common pays the 100 gems the first time (if you can), then selects the place. */
+/** Tapping the Common pays the 300 stars the first time (if you can), then selects the place. */
 function chooseStage(id: StageId): void {
   if (id === 'common' && !save.commonUnlocked) {
-    if (save.gems < COMMON_COST) {
+    if (save.stars < COMMON_COST) {
       wakeAudio()?.nope();
       const t = stageButtons.find((b) => b.dataset.stage === 'common');
       t?.classList.remove('shake');
@@ -872,9 +873,9 @@ function chooseStage(id: StageId): void {
       t?.classList.add('shake');
       return;
     }
-    save.gems -= COMMON_COST;
+    save.stars -= COMMON_COST;
     save.commonUnlocked = true;
-    updateCanBuy(); // spending gems may drop the "can pick a power card" flag
+    refreshWallet(); // the stars just spent
     wakeAudio()?.chaChing();
   }
   if (id !== save.stage) {
