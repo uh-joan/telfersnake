@@ -171,6 +171,69 @@ function greeters(): THREE.Group {
   return g;
 }
 
+/** Telferscot Primary, glimpsed beyond the fence at the top of the street: a brick block and a clock tower. */
+function schoolBackdrop(): THREE.Group {
+  const g = new THREE.Group();
+  const brick = lambert(0xc06a52);
+  const roof = lambert(0x6b4a3a);
+  const win = lambert(0xbfe3f5);
+  const cx = 4, cz = -108, w = 26, h = 5, d = 9;
+  const front = cz + d / 2 + 0.05; // the park-facing (+z) wall
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), brick);
+  body.position.set(cx, h / 2, cz);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(w + 1, 1, d + 1), roof);
+  cap.position.set(cx, h + 0.5, cz);
+  g.add(body, cap);
+
+  // A little clock tower, so it reads as a school (🏫).
+  const tower = new THREE.Mesh(new THREE.BoxGeometry(3.4, 3.4, 3.4), brick);
+  tower.position.set(cx, h + 1.7, cz);
+  const towerRoof = new THREE.Mesh(new THREE.ConeGeometry(2.7, 2.2, 4), roof);
+  towerRoof.position.set(cx, h + 4.5, cz);
+  towerRoof.rotation.y = Math.PI / 4;
+  const clock = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.2, 12), lambert(0xf5f0e0));
+  clock.rotation.x = Math.PI / 2;
+  clock.position.set(cx, h + 2, cz + 1.75);
+  g.add(tower, towerRoof, clock);
+
+  // Two rows of windows and a door on the front.
+  for (let row = 0; row < 2; row++) {
+    for (let i = -3; i <= 3; i++) {
+      if (i === 0 && row === 0) continue; // leave room for the door
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.3, 0.1), win);
+      m.position.set(cx + i * 3.2, 1.4 + row * 2.4, front);
+      g.add(m);
+    }
+  }
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.4, 0.15), lambert(0x5a3a24));
+  door.position.set(cx, 1.2, front);
+  g.add(door);
+  return g;
+}
+
+/** The school-fence railings across the top of Telferscot Road, with a gate the street leads to. */
+function fenceGate(): THREE.Group {
+  const g = new THREE.Group();
+  const rail = lambert(0x3a3f47);
+  const z = -99;
+  for (let x = -9; x <= 9; x += 1.3) {
+    if (Math.abs(x) < 2.4) continue; // the gate opening
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.3, 6), rail);
+    post.position.set(x, 0.65, z);
+    g.add(post);
+  }
+  for (const side of [-1, 1]) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.08, 0.08), rail);
+    bar.position.set(side * 5.7, 1.15, z);
+    g.add(bar);
+    const gatePost = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.9, 0.22), lambert(0x2a2e34));
+    gatePost.position.set(side * 2.4, 0.95, z);
+    g.add(gatePost);
+  }
+  return g;
+}
+
 /** A parked car: a coloured body with a dark cabin. */
 function carMesh(x: number, z: number, color: number): THREE.Group {
   const g = new THREE.Group();
@@ -298,7 +361,7 @@ export function makeCommon(maxAnisotropy: number): School {
   beyond.position.set((B.minX + B.maxX) / 2, -0.05, (B.minZ + B.maxZ) / 2);
 
   const fireflies = makeFireflies();
-  group.add(beyond, houses(), trees(rng), emmanuelRoad(rng), playground(), picnicBenches(), greeters(), fireflies.mesh);
+  group.add(beyond, houses(), trees(rng), emmanuelRoad(rng), playground(), picnicBenches(), schoolBackdrop(), fenceGate(), greeters(), fireflies.mesh);
 
   // reveal runs every frame with the elapsed dt: the Common uses it to drift its fireflies.
   return { group, reveal: (_x, _z, dt) => fireflies.tick(dt) };

@@ -44,8 +44,8 @@ const WOODS = COMMON_WOODS;
 
 const SNAKE_SPAWN = { x: 0, z: 4, heading: 0 };
 
-/** Miss Sami and a mum, nattering on the grass just off the Telfer Road mouth (also drawn by the renderer). */
-export const COMMON_GREETERS = { sami: { x: -3, z: -31 }, mum: { x: 0.4, z: -30.4 } };
+/** Miss Sami and a mum, nattering by the fence door at the top of Telferscot Road, in front of the school. */
+export const COMMON_GREETERS = { sami: { x: -2.5, z: -91 }, mum: { x: 1, z: -90.5 } };
 
 /** The Glade: a hidden clearing in the south woods where the fantastic creatures gather. */
 export const GLADE = { x: 0, z: 46 };
