@@ -66,6 +66,8 @@ export interface Stage extends Terrain {
   kids: readonly KidKind[];
   /** How many fantastic creatures haunt the woods here (picked by rarity). 0: none. */
   creatureCount: number;
+  /** Extra rival bots this (bigger) stage seats on top of the mode's roster, so it isn't sparse. 0: none. */
+  extraRivals: number;
   /** Miss Sami and a mum, nattering at the edge of the Common. Null on a stage without them. */
   greeters: { sami: Spot; mum: Spot } | null;
   /** The stage's warden (Mr Cooper at school, the park keeper on the Common), or null if it has none. */

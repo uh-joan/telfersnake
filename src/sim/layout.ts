@@ -155,6 +155,7 @@ export const SCHOOL: Stage = {
   predators: [],
   kids: [], // the children are out on the Common, not in the school yard
   creatureCount: 0, // no magic in the school yard
+  extraRivals: 0, // the school's roster is the classic five/six
   logs: [],
   greeters: null,
   cooper: { spawn: COOPER_SPAWN, beat: COOPER_BEAT },

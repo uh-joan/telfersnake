@@ -2,7 +2,7 @@ import { ANIMALS, type Animal, type AnimalKind, makeAnimal, placeAnimal, updateA
 import { makePredators, type Predator, PREDATORS } from './predators';
 import { KID_RADIUS, KIDS, type Kid, makeKids, type Projectile, type ProjectileKind } from './kids';
 import { type Creature, type CreatureKind, CREATURES, creatureSpot, makeCreatures } from './creatures';
-import { Bot, type Personality } from './bot';
+import { Bot, MORE_RIVALS, type Personality } from './bot';
 import { botCardChoice, type Rules, rulesFor } from './modes';
 import { isFree, makeHit, resolveCircle, slideAlong, turnToward, wrapAngle } from './collide';
 import { Cooper, COOPER_AURA, COOPER_RADIUS } from './cooper';
@@ -186,7 +186,10 @@ export class World {
       this.snakes.push(player);
       this.inputs.push({ x: 0, z: 0, active: false, dash: false });
     }
-    for (const who of playerLook ? rules.soloRivals : rules.rivals) {
+    // The mode's roster, plus any extra rivals a bigger stage asks for (the Common), difficulty-matched.
+    const base = playerLook ? rules.soloRivals : rules.rivals;
+    const extras = MORE_RIVALS.slice(0, stage.extraRivals).map(rules.transform);
+    for (const who of [...base, ...extras]) {
       const s = new Snake(this.snakes.length, who, true);
       this.snakes.push(s);
       this.inputs.push({ x: 0, z: 0, active: false, dash: false });

@@ -35,6 +35,8 @@ export interface Rules {
   /** Six rival personalities for a shared room; the four met when playing alone. */
   rivals: Personality[];
   soloRivals: Personality[];
+  /** How this mode tweaks a personality (easify/deify/none): applied to a stage's extra rivals too. */
+  transform: (p: Personality) => Personality;
 }
 
 // Easy: shrink them, slow them, turn off the hunting, and let them blunder into their own rocks.
@@ -63,9 +65,9 @@ const deify = (p: Personality): Personality => ({
 });
 
 export const RULES: Record<Mode, Rules> = {
-  easy: { mode: 'easy', foodCount: 55, botsGetUpgrades: false, predatorFerocity: 0.7, rivals: RIVALS.map(easify), soloRivals: SOLO_RIVALS.map(easify) },
-  normal: { mode: 'normal', foodCount: 42, botsGetUpgrades: false, predatorFerocity: 1, rivals: RIVALS, soloRivals: SOLO_RIVALS },
-  god: { mode: 'god', foodCount: 42, botsGetUpgrades: true, predatorFerocity: 1.3, rivals: RIVALS.map(deify), soloRivals: SOLO_RIVALS.map(deify) },
+  easy: { mode: 'easy', foodCount: 55, botsGetUpgrades: false, predatorFerocity: 0.7, rivals: RIVALS.map(easify), soloRivals: SOLO_RIVALS.map(easify), transform: easify },
+  normal: { mode: 'normal', foodCount: 42, botsGetUpgrades: false, predatorFerocity: 1, rivals: RIVALS, soloRivals: SOLO_RIVALS, transform: (p) => p },
+  god: { mode: 'god', foodCount: 42, botsGetUpgrades: true, predatorFerocity: 1.3, rivals: RIVALS.map(deify), soloRivals: SOLO_RIVALS.map(deify), transform: deify },
 };
 
 export const rulesFor = (mode: Mode): Rules => RULES[mode] ?? RULES.normal;

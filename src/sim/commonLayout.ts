@@ -145,6 +145,8 @@ export const COMMON: Stage = {
   kids: ['runner', 'naughty', 'nice', 'runner', 'naughty', 'nice', 'runner', 'naughty'],
   // A few shy fantastic creatures haunt the woods and the Glade (which four is a lucky-day roll).
   creatureCount: 4,
+  // The Common is big, so seat four more rivals: nine snakes solo, ten in a shared room.
+  extraRivals: 4,
   // Miss Sami and a mum, nattering on the grass just off the Telfer Road mouth.
   greeters: COMMON_GREETERS,
   paintMinimap: (c, X, Z, scale) => {
