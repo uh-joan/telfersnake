@@ -193,4 +193,14 @@ Each phase is independently shippable, verified headless, reviewed, then deploye
 
 **Ship gate unchanged:** still NOT deployed (per request). When we do, deploy Phases 0 + 1 together — the Common is now a real payoff for the 100 gems.
 
-**Next — Phase 2 (forest life):** squirrels (tree-climb), crows (steal), deer (bolt), hedgehog/fox/pigeons; mushrooms (+golden), tomatoes, berries, acorns; per-zone spawns. Extend `ANIMALS`/`FOOD_KINDS`, give the Common its own `foodKindAt` mix and animal set (the Stage can carry which animals it spawns).
+### ✅ Phase 2 complete 2026-09-26 — forest life (on branch, NOT deployed)
+
+**Done and verified.** Per-stage animals + food, so the school is untouched.
+- **Stage.animals** — each stage names its animal kinds; `SCHOOL_ANIMALS` (the eight) vs `COMMON_ANIMALS` (squirrel, crow, deer, hedgehog, fox, pigeon + rabbit, duck). The world constructor spawns `stage.animals`.
+- **New animals** (specs + models + gaits): 🐿️ squirrel (fast, darty, woods), 🐦‍⬛ crow (flies — baked elevated, tier 2), 🦌 deer (bolts far, big prize, tier 3), 🦔 hedgehog (woods), 🦊 fox (woods), 🐦 pigeon (flock). `'woods'` home draws them near the copses.
+- **New food** (values + models): 🍄 mushroom, 🍅 tomato, 🫐 berry, 🌰 acorn — appended to `FOOD_KINDS` (indices stable for the protocol). The Common uses `WEIGHTS_COMMON` (mostly forest food); the school's 6-long tables can't reach the new kinds.
+- **Verified:** headless — all forest kinds spawn, **0 in-solid / 0 out-of-bounds** over 3 min, **school byte-identical** to `main`; browser — berries/tomatoes/mushrooms/acorns and the animals render on the Common, gulped normally.
+
+**Simplified vs the original pitch (behaviours, not creatures):** squirrels don't yet climb-and-vanish, crows don't steal, hedgehogs don't curl — they're distinct via stats (bolt = high flee, etc.) and models. Those signature behaviours are cheap follow-ups if we want them; noted for later.
+
+**Next — Phase 3 (danger):** bears and wolves as *active* predators that pursue you (built on the goat-charge / Cooper patterns, deterministic), replacing rocks in the Common; freeze/zap counterplay; mode-scaled ferocity.
