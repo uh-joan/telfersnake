@@ -12,6 +12,8 @@ const el = (tag: string, className: string, text = ''): HTMLElement => {
 };
 
 const SLOT: Record<ItemKind, 'skin' | 'hat' | 'trail'> = { skin: 'skin', hat: 'hat', trail: 'trail' };
+/** What each slot falls back to when you sell the thing you were wearing. */
+const DEFAULT_ITEM: Record<'skin' | 'hat' | 'trail', string> = { skin: 'telfer', hat: 'no-hat', trail: 'no-trail' };
 
 export interface ShopSounds {
   pick(): void;
@@ -30,6 +32,7 @@ export class Shop {
   private readonly stars = $('shop-stars-value');
   private readonly gems = $('shop-gems-value');
   private readonly buy = $('shop-buy');
+  private readonly sell = $('shop-sell');
   private readonly tabs = [...document.querySelectorAll<HTMLElement>('#shop-tabs button')];
   private kind: ItemKind = 'skin';
   private picked: Item | null = null;
@@ -51,6 +54,17 @@ export class Shop {
       this.onClose();
     });
     this.buy.addEventListener('click', () => this.act());
+    this.sell.addEventListener('click', () => this.sellPicked());
+  }
+
+  /** Half the price you paid, in the coin you paid it with. */
+  private refundFor(item: Item): number {
+    return Math.floor(item.price / 2);
+  }
+
+  /** Can this item be sold back? Only bought items — never the free starter kit. */
+  private sellable(item: Item): boolean {
+    return item.price > 0 && this.save.owned.includes(item.id);
   }
 
   open(): void {
@@ -95,11 +109,35 @@ export class Shop {
     // The one action button: wear it, buy it, or show how much more of the right coin it needs.
     const item = this.picked;
     this.buy.classList.toggle('show', !!item && !this.wearing(item));
+    // Sell is offered alongside, for anything bought (never the free starter kit).
+    const canSell = !!item && this.sellable(item);
+    this.sell.classList.toggle('show', canSell);
+    if (item && canSell) {
+      const coin = item.gem ? '💎' : '⭐';
+      this.sell.textContent = `Sell  ${coin} ${this.refundFor(item)}`;
+    }
     if (!item) return;
     const coin = item.gem ? '💎' : '⭐';
     const short = item.price - (item.gem ? this.save.gems : this.save.stars);
     this.buy.classList.toggle('poor', !this.owns(item) && short > 0);
     this.buy.textContent = this.owns(item) ? '✔ Wear it' : short > 0 ? `${coin} ${short} more` : `Buy  ${coin} ${item.price}`;
+  }
+
+  /** Sell the picked item back for half its price; if it was being worn, fall back to the default. */
+  private sellPicked(): void {
+    const item = this.picked;
+    if (!item || !this.sellable(item)) return;
+    const refund = this.refundFor(item);
+    if (item.gem) this.save.gems += refund;
+    else this.save.stars += refund;
+    this.save.owned = this.save.owned.filter((id) => id !== item.id);
+    if (this.wearing(item)) {
+      this.save[SLOT[item.kind]] = DEFAULT_ITEM[SLOT[item.kind]];
+      this.changed = true; // the worn look changed, so the snake needs rebuilding
+    }
+    this.sounds()?.chaChing();
+    writeSave(this.save);
+    this.render();
   }
 
   /** A skin drawn as a tiny snake: a head and a run of body beads in its colours. */
