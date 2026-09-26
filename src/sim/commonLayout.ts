@@ -10,25 +10,26 @@ import type { Box, Circle } from './layout';
 import type { Rng } from './rng';
 import type { Spot, Stage } from './stage';
 
-const BOUNDS = { minX: -60, maxX: 60, minZ: -100, maxZ: 60 };
+export const COMMON_BOUNDS = { minX: -60, maxX: 60, minZ: -100, maxZ: 60 };
+const BOUNDS = COMMON_BOUNDS;
 
 // Terraced houses lining Telferscot Road (they leave a 12 m road down the middle).
-const HOUSES: Box[] = [
+export const COMMON_HOUSES: Box[] = [
   { x: -33, z: -71, w: 54, d: 58 }, // west terrace: x -60..-6, z -100..-42
   { x: 33, z: -71, w: 54, d: 58 }, // east terrace: x 6..60
   { x: 54, z: 4, w: 12, d: 76 }, // Rastell Ave houses down the common's east edge
 ];
 // Woods that wall the meadow in and pinch it to a point in the south.
-const WOODS: Box[] = [
+export const COMMON_WOODS: Box[] = [
   { x: -52, z: 4, w: 16, d: 76 }, // west woods: x -60..-44, z -34..42
   { x: -5, z: 56, w: 110, d: 8 }, // south wood cap: z 52..60
   { x: -34, z: 44, w: 20, d: 20 }, // south-west wedge, narrowing the tip
   { x: 40, z: 42, w: 16, d: 24 }, // south-east wedge
 ];
-const SOLID_BOXES: Box[] = [...HOUSES, ...WOODS];
+const SOLID_BOXES: Box[] = [...COMMON_HOUSES, ...COMMON_WOODS];
 
 // Tree copses out in the meadow: things to slither round, like the real common's clumps.
-const COPSES: Circle[] = [
+export const COMMON_COPSES: Circle[] = [
   { x: 30, z: -12, r: 5 },
   { x: 6, z: -6, r: 3 },
   { x: -18, z: 22, r: 1.4 },
@@ -36,6 +37,9 @@ const COPSES: Circle[] = [
   { x: -8, z: -22, r: 1 },
   { x: 38, z: 26, r: 1.6 },
 ];
+const COPSES = COMMON_COPSES;
+const HOUSES = COMMON_HOUSES;
+const WOODS = COMMON_WOODS;
 
 const SNAKE_SPAWN = { x: 0, z: 4, heading: 0 };
 

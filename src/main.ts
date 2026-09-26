@@ -10,9 +10,9 @@ import { AnimalView } from './render/animalView';
 import { BeeView } from './render/beeView';
 import { CooperView } from './render/cooperView';
 import { FoodView } from './render/foodView';
-import { makeGround } from './render/ground';
+import { type School } from './render/school';
+import { makeStageScene } from './render/scenery';
 import { HazardView } from './render/hazardView';
-import { makeSchool } from './render/school';
 import { SnakeView } from './render/snakeView';
 import { disposeTree } from './render/paint';
 import { Sparkles } from './render/sparkles';
@@ -61,8 +61,22 @@ const cooperView = new CooperView();
 const beeView = new BeeView();
 const sparkles = new Sparkles();
 const upgradeFx = new UpgradeFx();
-const school = makeSchool();
-stage.scene.add(makeGround(stage.maxAnisotropy), school.group, cooperView.group, beeView.mesh, upgradeFx.group, sparkles.mesh);
+// The travelling actors (Cooper, bees, upgrade FX, sparkles) stay in the scene; each stage's
+// ground + fixed scenery is swapped in and out (and cached) as you move between school and Common.
+stage.scene.add(cooperView.group, beeView.mesh, upgradeFx.group, sparkles.mesh);
+const sceneryCache = new Map<StageId, School>();
+let scenery: School | null = null;
+function mountScenery(id: StageId): void {
+  let next = sceneryCache.get(id);
+  if (!next) {
+    next = makeStageScene(id, stage.maxAnisotropy);
+    sceneryCache.set(id, next);
+  }
+  if (scenery === next) return;
+  if (scenery) stage.scene.remove(scenery.group);
+  scenery = next;
+  stage.scene.add(scenery.group);
+}
 
 /** Everyone's hat, by seat: yours from the save, other players' as the server tells it. */
 function hatFor(id: number): string {
@@ -106,6 +120,7 @@ function mountWorld(next: WorldView): void {
   foodView = new FoodView(world.foods.length);
   animalView = new AnimalView(world.animals.length);
   stage.scene.add(hazardView.group, foodView.group, animalView.group);
+  mountScenery(world.stage.id);
   hud.setStage(world.stage);
   mountSnakes();
 }
@@ -571,7 +586,7 @@ function frame(now: number): void {
   beeView.update(world, time);
   sparkles.update(dt);
   upgradeFx.update(world, playing ? dt : 0, time);
-  school.reveal(s.x, s.z, dt);
+  scenery?.reveal(s.x, s.z, dt);
   cooperView.update(world.cooper, playing ? dt : 0, time);
   stage.follow(s.x, s.z, s.heading, s.radius, dt);
   hud.update(world, stage, dt);
