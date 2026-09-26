@@ -71,21 +71,13 @@ export function xpForLevel(level: number): number {
   return Math.round(20 + 14 * level + 2 * level * level);
 }
 
-/** Three different cards the snake can still use; Snack Packs fill any gaps. */
-export function rollCards(rng: Rng, snake: Snake): CardId[] {
-  // Base upgrades always; powers too, but only when this snake can pay a gem for one.
-  const available = snake.canBuyPowers ? UPGRADE_IDS : BASE_IDS;
-  let pool = available.filter((id) => snake.levelOf(id) < UPGRADES[id].max);
-  // Owl Eyes (the Wise Owl): the next draw is epic-or-better, if enough of those are still on offer.
-  if (snake.luckyCards > 0) {
-    const posh = pool.filter((id) => UPGRADES[id].rarity === 'epic' || UPGRADES[id].rarity === 'legendary');
-    if (posh.length >= 3) {
-      pool = posh;
-      snake.luckyCards--;
-    }
-  }
-  const cards: CardId[] = [];
-  while (cards.length < 3 && pool.length > 0) {
+const isPower = (id: CardId): boolean => (POWER_IDS as readonly string[]).includes(id);
+
+/** Up to `n` different cards from `from`, weighted by rarity (and the clover's luck). */
+function draw(rng: Rng, snake: Snake, from: readonly UpgradeId[], n: number): UpgradeId[] {
+  const pool = [...from];
+  const cards: UpgradeId[] = [];
+  while (cards.length < n && pool.length > 0) {
     const weights = pool.map((id) => RARITY_WEIGHT[UPGRADES[id].rarity] + snake.luck * LUCK_BONUS[UPGRADES[id].rarity]);
     let roll = rng.next() * weights.reduce((a, b) => a + b, 0);
     let pick = pool.length - 1;
@@ -95,6 +87,31 @@ export function rollCards(rng: Rng, snake: Snake): CardId[] {
     }
     cards.push(pool[pick]);
     pool.splice(pick, 1);
+  }
+  return cards;
+}
+
+/** Three different cards the snake can still use; Snack Packs fill any gaps. */
+export function rollCards(rng: Rng, snake: Snake): CardId[] {
+  // Base upgrades always; powers too, but only when this snake can pay a gem for one.
+  const available = snake.canBuyPowers ? UPGRADE_IDS : BASE_IDS;
+  const pool = available.filter((id) => snake.levelOf(id) < UPGRADES[id].max);
+  let cards: CardId[];
+  if (snake.luckyCards > 0) {
+    // Owl Eyes (the Wise Owl): a lucky draw of the best *free* cards — the legendaries, topped up
+    // with rares. Never a gem card: the owl's gift must not turn into a bill.
+    snake.luckyCards--;
+    const legendary = pool.filter((id) => UPGRADES[id].rarity === 'legendary');
+    const rare = pool.filter((id) => UPGRADES[id].rarity === 'rare');
+    cards = draw(rng, snake, legendary, 3);
+    cards.push(...draw(rng, snake, rare, 3 - cards.length));
+  } else {
+    cards = draw(rng, snake, pool, 3);
+    // Never force a spend: a player always gets at least one free card to pick. (Bots pay no gems.)
+    if (!snake.isBot && cards.length === 3 && cards.every(isPower)) {
+      const free = pool.filter((id) => !isPower(id));
+      cards[2] = draw(rng, snake, free, 1)[0] ?? 'snack';
+    }
   }
   while (cards.length < 3) cards.push('snack');
   return cards;
