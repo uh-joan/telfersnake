@@ -2,7 +2,7 @@ import './style.css';
 import { Music } from './audio/music';
 import { Sfx } from './audio/sfx';
 import { Controls } from './input/controls';
-import { skinLook, starsFor, trailPalette } from './meta/catalogue';
+import { skinLook, starsFor } from './meta/catalogue';
 import { type AudioMode, loadSave, writeSave } from './meta/save';
 import { cleanName, randomName } from './meta/names';
 import { Connection, type Outfit } from './net/client';
@@ -78,7 +78,7 @@ const trailView = new TrailView();
 const upgradeFx = new UpgradeFx();
 // The travelling actors (Cooper, bees, upgrade FX, sparkles) stay in the scene; each stage's
 // ground + fixed scenery is swapped in and out (and cached) as you move between school and Common.
-stage.scene.add(cooperView.group, beeView.mesh, upgradeFx.group, sparkles.mesh, trailView.mesh);
+stage.scene.add(cooperView.group, beeView.mesh, upgradeFx.group, sparkles.mesh, trailView.group);
 /** Swap the warden figure (head teacher vs park keeper) when the stage changes. */
 function mountWarden(): void {
   const persona = world.stage.cooper?.persona ?? 'cooper';
@@ -171,7 +171,6 @@ const ICE = [0xa5d8ff, 0xe7f5ff, 0xffffff];
 const SPARK = [0xffd84a, 0xff6b6b, 0xffffff];
 const KISSES = [0xf0486f, 0xff9fbf, 0xffffff];
 const HALO = [0xffe066, 0xfff3b0, 0xffffff];
-const RAINBOW = [0xff5b5b, 0xffb703, 0xffe066, 0x8be36a, 0x4dabf7, 0xb197fc];
 const PIXIE_FX = [0xc0ffe6, 0x8be3c8, 0xffffff];
 const OWL_FX = [0xcde6ff, 0xa5d8ff, 0xffffff];
 
@@ -190,8 +189,9 @@ const MAGIC_LABEL: Record<string, [string, string]> = {
 const outfit = (): Outfit => ({ skin: save.skin, hat: save.hat, trail: save.trail, name: save.name });
 
 /** Trail colours by seat: mine from the save, other players' as the server tells it. */
-function trailFor(id: number): number[] {
-  return trailPalette(connection ? connection.replica.trails[id] : id === world.me ? save.trail : 'no-trail');
+/** The trail item a snake is wearing ('no-trail' if none): the TrailView resolves its look and colours. */
+function trailIdFor(id: number): string {
+  return connection ? connection.replica.trails[id] : id === world.me ? save.trail : 'no-trail';
 }
 
 // ---------------------------------------------------------------- this run
@@ -690,11 +690,11 @@ function frame(now: number): void {
     if ((trailIn -= dt) <= 0) {
       trailIn = TRAIL_EVERY;
       for (const o of world.snakes) {
-        // Rainbow Rush overrides the usual trail with a bright ribbon of colour.
-        const palette = o.hasMagic('rainbow') ? RAINBOW : trailFor(o.id);
-        if (palette.length === 0 || !o.alive) continue;
+        // Rainbow Rush overrides the usual trail with a bright rainbow ribbon.
+        const trailId = o.hasMagic('rainbow') ? 'rainbow-trail' : trailIdFor(o.id);
+        if (trailId === 'no-trail' || !o.alive) continue;
         o.sampleAt(o.length, tail);
-        trailView.add(tail.x, tail.z, palette);
+        trailView.add(tail.x, tail.z, trailId);
       }
     }
   } else {

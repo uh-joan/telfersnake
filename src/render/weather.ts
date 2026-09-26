@@ -58,13 +58,14 @@ export class Weather {
     this.rain.frustumCulled = false;
     this.group.add(this.rain);
 
-    for (let i = 0; i < 7; i++) {
+    // Small, high, flattened puffs scattered across the sky — far daintier than one big blob.
+    for (let i = 0; i < 12; i++) {
       const c = new THREE.Mesh(
-        new THREE.SphereGeometry(rand(6, 11), 8, 6),
+        new THREE.SphereGeometry(rand(1.4, 2.6), 8, 6),
         new THREE.MeshLambertMaterial({ color: 0xdfe2e6, transparent: true, opacity: 0 }),
       );
-      c.scale.set(1, 0.38, 1);
-      c.position.set(rand(-55, 55), rand(33, 42), rand(-55, 55));
+      c.scale.set(1.5, 0.42, 1.1);
+      c.position.set(rand(-55, 55), rand(24, 32), rand(-55, 55));
       this.clouds.push(c);
       this.group.add(c);
     }
