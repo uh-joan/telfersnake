@@ -150,6 +150,7 @@ export const SCHOOL: Stage = {
   foodScale: 1,
   // Bike Shed Alley and the yard behind the Old School get more than their share of rocks.
   hazardArea: { rough: { minX: 12, maxX: BOUNDS.maxX, minZ: 8, maxZ: BOUNDS.maxZ }, share: 0.4 },
+  predators: [],
   cooper: { spawn: COOPER_SPAWN, beat: COOPER_BEAT },
   paintMinimap: (c, X, Z, scale) => {
     const fillBox = (b: Box, color: string) => {

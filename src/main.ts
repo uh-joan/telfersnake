@@ -10,6 +10,7 @@ import { AnimalView } from './render/animalView';
 import { BeeView } from './render/beeView';
 import { CooperView } from './render/cooperView';
 import { FoodView } from './render/foodView';
+import { PredatorView } from './render/predatorView';
 import { type School } from './render/school';
 import { makeStageScene } from './render/scenery';
 import { HazardView } from './render/hazardView';
@@ -56,6 +57,7 @@ let music: Music | null = null;
 let snakeViews: SnakeView[] = [];
 let foodView = new FoodView(world.foods.length);
 let animalView = new AnimalView(world.animals.length);
+let predatorView = new PredatorView(world.predators.length);
 let hazardView = new HazardView(world.hazards);
 const cooperView = new CooperView();
 const beeView = new BeeView();
@@ -111,7 +113,7 @@ function wearOutfit(): void {
 
 /** Point the renderer at a different world: its own rocks, food, animals and snakes. */
 function mountWorld(next: WorldView): void {
-  for (const old of [hazardView.group, foodView.group, animalView.group]) {
+  for (const old of [hazardView.group, foodView.group, animalView.group, predatorView.group]) {
     stage.scene.remove(old);
     disposeTree(old);
   }
@@ -119,7 +121,8 @@ function mountWorld(next: WorldView): void {
   hazardView = new HazardView(world.hazards);
   foodView = new FoodView(world.foods.length);
   animalView = new AnimalView(world.animals.length);
-  stage.scene.add(hazardView.group, foodView.group, animalView.group);
+  predatorView = new PredatorView(world.predators.length);
+  stage.scene.add(hazardView.group, foodView.group, animalView.group, predatorView.group);
   mountScenery(world.stage.id);
   hud.setStage(world.stage);
   mountSnakes();
@@ -473,6 +476,19 @@ function handleEvents(): void {
       case 'bump':
         if (mine) sfx?.bump();
         break;
+      case 'howl':
+        // A wolf about to charge: a puff of dust and a snarl so you feel it coming.
+        sparkles.burst(e.x, e.z, DUST, 8, 0.7);
+        sfx?.growl();
+        break;
+      case 'chomp':
+        // A bear or wolf bit someone: dust cloud like a rock bonk.
+        sparkles.burst(e.x, e.z, DUST, e.kind === 'bear' ? 22 : 14, e.kind === 'bear' ? 1.2 : 0.9);
+        if (e.who === world.me) {
+          hud.popup(e.kind === 'bear' ? '🐻 OUCH!' : '🐺 OUCH!', e.x, e.z, 'bad');
+          sfx?.ouch();
+        }
+        break;
       case 'say':
         // Mr Cooper tells people off in a speech bubble only. He had a spoken voice once; it grated.
         hud.say(e.text);
@@ -582,6 +598,7 @@ function frame(now: number): void {
   for (const v of snakeViews) v.update(playing ? dt : 0, time);
   foodView.update(world, time);
   animalView.update(world, time);
+  predatorView.update(world, playing ? dt : 0);
   hazardView.update(world, time);
   beeView.update(world, time);
   sparkles.update(dt);

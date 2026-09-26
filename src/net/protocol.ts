@@ -2,6 +2,7 @@ import { ANIMAL_KINDS, type Animal } from '../sim/animals';
 import type { CooperState } from '../sim/view';
 import { FOOD_KINDS, type Food } from '../sim/food';
 import { HAZARD_KINDS, type Hazard, type Pellet } from '../sim/hazards';
+import { PREDATOR_KINDS, type Predator } from '../sim/predators';
 import type { Mode } from '../sim/modes';
 import type { StageId } from '../sim/stage';
 import type { Snake, SnakeLook } from '../sim/snake';
@@ -46,6 +47,8 @@ export interface Seat {
 export type SnakeRow = [number, number, number, number, number, number, number, number, number];
 /** x, z, heading, speed, travel, dazed, born */
 export type AnimalRow = [number, number, number, number, number, number, number];
+/** x, z, heading, speed (kind is fixed per index, sent once in welcome) */
+export type PredatorRow = [number, number, number, number];
 /** index, kind, golden, x, z, born */
 export type FoodRow = [number, number, 0 | 1, number, number, number];
 /** x, z, value, born */
@@ -71,6 +74,7 @@ export interface Snapshot {
   k: number;
   s: SnakeRow[];
   a: AnimalRow[];
+  pd: PredatorRow[];
   /** Only the foods that changed since the last snapshot. */
   f: FoodRow[];
   /** The whole list, and only when it changed. */
@@ -83,7 +87,7 @@ export interface Snapshot {
 export type ServerMessage =
   | {
       t: 'welcome'; me: number; room: string; stage: StageId; tick: number; seats: Seat[];
-      hazards: HazardRow[]; animalKinds: number[]; foods: FoodRow[]; pellets: PelletRow[];
+      hazards: HazardRow[]; animalKinds: number[]; predatorKinds: number[]; foods: FoodRow[]; pellets: PelletRow[];
     }
   | { t: 'seats'; seats: Seat[] }
   | Snapshot
@@ -125,6 +129,8 @@ export function snakeRow(s: Snake): SnakeRow {
 }
 
 export const animalRow = (a: Animal): AnimalRow => [r2(a.x), r2(a.z), r3(a.heading), r2(a.speed), r2(a.travel), r2(Math.max(0, a.dazed)), a.born];
+export const predatorRow = (p: Predator): PredatorRow => [r2(p.x), r2(p.z), r3(p.heading), r2(p.speed)];
+export const predatorKindIndex = (p: Predator) => PREDATOR_KINDS.indexOf(p.kind);
 export const foodRow = (f: Food, i: number): FoodRow => [i, FOOD_KINDS.indexOf(f.kind), f.golden ? 1 : 0, r2(f.x), r2(f.z), f.born];
 export const pelletRow = (p: Pellet): PelletRow => [r2(p.x), r2(p.z), r2(p.value), p.born];
 export const hazardRow = (h: Hazard): HazardRow => [HAZARD_KINDS.indexOf(h.kind), r2(h.x), r2(h.z), h.r, r3(h.turn)];

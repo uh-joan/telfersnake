@@ -2,6 +2,7 @@ import { ANIMAL_KINDS, type Animal, makeAnimal } from '../sim/animals';
 import { wrapAngle } from '../sim/collide';
 import { FOOD_KINDS, type Food } from '../sim/food';
 import { HAZARD_KINDS, type Hazard, type Pellet } from '../sim/hazards';
+import { blankPredator, PREDATOR_KINDS, type Predator } from '../sim/predators';
 import { type Input, Snake } from '../sim/snake';
 import type { Stage } from '../sim/stage';
 import type { CardId } from '../sim/upgrades';
@@ -54,6 +55,7 @@ export class Replica implements WorldView {
   readonly hazards: Hazard[];
   readonly foods: Food[];
   readonly animals: Animal[];
+  readonly predators: Predator[];
   pellets: Pellet[];
   readonly events: GameEvent[] = [];
   cards: CardId[] | null = null;
@@ -85,6 +87,7 @@ export class Replica implements WorldView {
     this.foods = welcome.foods.map(() => ({ kind: FOOD_KINDS[0], golden: false, x: 0, z: 0, born: -999 }));
     for (const row of welcome.foods) this.setFood(row);
     this.animals = welcome.animalKinds.map((k) => makeAnimal(ANIMAL_KINDS[k]));
+    this.predators = welcome.predatorKinds.map((k) => blankPredator(PREDATOR_KINDS[k]));
     this.pellets = welcome.pellets.map(this.toPellet);
     this.ghost = new Snake(-1, welcome.seats[0].look, false);
     this.setSeats(welcome.seats);
@@ -292,6 +295,18 @@ export class Replica implements WorldView {
       an.travel = lerp(ra[4], rb[4], u);
       an.dazed = rb[5];
       an.born = rb[6];
+    });
+
+    this.predators.forEach((pr, i) => {
+      const ra = a.pd[i];
+      const rb = b.pd[i];
+      if (!ra || !rb) return;
+      const moved = Math.hypot(rb[0] - ra[0], rb[1] - ra[1]) > SNAP_IF_OFF_BY;
+      const u = moved ? 1 : t;
+      pr.x = lerp(ra[0], rb[0], u);
+      pr.z = lerp(ra[1], rb[1], u);
+      pr.heading = lerpAngle(ra[2], rb[2], u);
+      pr.speed = rb[3];
     });
 
     const ca = a.c;

@@ -292,6 +292,14 @@ export class Hud {
       c.fill();
     }
 
+    // Predators: red danger dots, a touch bigger for the bear.
+    for (const pr of world.predators) {
+      c.fillStyle = '#e03131';
+      c.beginPath();
+      c.arc(X(pr.x), Z(pr.z), pr.kind === 'bear' ? 3.4 : 2.6, 0, Math.PI * 2);
+      c.fill();
+    }
+
     // Mr Cooper: navy dot, white hair
     c.fillStyle = '#1f2a44';
     c.beginPath();

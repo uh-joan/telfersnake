@@ -1,7 +1,8 @@
 import { ANIMALS, type Animal, type AnimalKind, makeAnimal, placeAnimal, updateAnimal } from './animals';
+import { makePredators, type Predator, PREDATORS } from './predators';
 import { Bot, type Personality } from './bot';
 import { botCardChoice, type Rules, rulesFor } from './modes';
-import { isFree, makeHit, resolveCircle, wrapAngle } from './collide';
+import { isFree, makeHit, resolveCircle, slideAlong, turnToward, wrapAngle } from './collide';
 import { Cooper, COOPER_AURA, COOPER_RADIUS } from './cooper';
 import { type Food, type FoodKind, FOOD_VALUE, GOLDEN_MULTIPLIER, placeFood } from './food';
 import { type Hazard, type HazardKind, makeHazards, type Pellet, PELLET_LIFE_TICKS, placeHazard } from './hazards';
@@ -79,6 +80,10 @@ export type GameEvent =
   | { type: 'respawn'; who: number; x: number; z: number }
   | { type: 'breath'; who: number; x: number; z: number; heading: number; range: number }
   | { type: 'sneeze'; who: number; by: number; x: number; z: number }
+  /** A wolf about to sprint: its warning howl. */
+  | { type: 'howl'; x: number; z: number }
+  /** A predator bit a snake: puff at the victim, who loses mass like a rock bonk. */
+  | { type: 'chomp'; kind: 'bear' | 'wolf'; who: number; x: number; z: number }
   /** A power was cast: FX at the caster. */
   | { type: 'power'; who: number; kind: PowerId; x: number; z: number; heading: number; range: number }
   /** A rival was shrunk or frozen by a power (or bonk): puff at the victim; `by` earns the gem. */
@@ -107,6 +112,7 @@ export class World {
   readonly stage: Stage;
   readonly foods: Food[] = [];
   readonly animals: Animal[] = [];
+  readonly predators: Predator[] = [];
   readonly pellets: Pellet[] = [];
   /** Things that happened since the caller last drained this. */
   readonly events: GameEvent[] = [];
@@ -169,6 +175,7 @@ export class World {
         this.animals.push(a);
       }
     }
+    for (const p of makePredators(stage, this.rng)) this.predators.push(p);
   }
 
   static room(seed: number, rules: Rules = rulesFor('normal'), stage: Stage = SCHOOL): World {
@@ -266,6 +273,7 @@ export class World {
 
     c.update(this, dt);
     for (const a of this.animals) updateAnimal(a, this, dt);
+    this.updatePredators(dt);
 
     for (const s of this.snakes) {
       if (!s.alive) {
@@ -411,13 +419,17 @@ export class World {
       bestD = d;
       best = o;
     }
-    if (!best) {
+    const bx = s.x + Math.cos(s.heading) * range * 0.5;
+    const bz = s.z + Math.sin(s.heading) * range * 0.5;
+    const scares = this.predatorsNear(bx, bz, range * 0.5);
+    if (!best && !scares) {
       s.laserIn = 0.3;
       return;
     }
     s.laserIn = Math.max(0.8, 2.4 - 0.25 * lv);
     this.events.push({ type: 'power', who: s.id, kind: 'laser', x: s.x, z: s.z, heading: s.heading, range });
-    this.scorch(best, s, 0.09, 8);
+    if (best) this.scorch(best, s, 0.09, 8);
+    if (scares) this.scarePredators(bx, bz, range * 0.5, false);
   }
 
   /** Stink Cloud: a puff behind the head that shrinks anyone chasing. */
@@ -428,7 +440,9 @@ export class World {
     const radius = 2.5 + 0.5 * lv;
     const bx = s.x - Math.cos(s.heading) * radius * 0.6;
     const bz = s.z - Math.sin(s.heading) * radius * 0.6;
-    let fired = false;
+    const scares = this.predatorsNear(bx, bz, radius);
+    let fired = scares;
+    if (scares) this.events.push({ type: 'power', who: s.id, kind: 'stink', x: bx, z: bz, heading: s.heading, range: radius });
     for (const o of this.snakes) {
       if (o === s || !o.alive || o.immune > 0 || Math.hypot(o.x - bx, o.z - bz) > radius) continue;
       if (!fired) {
@@ -437,6 +451,7 @@ export class World {
       }
       this.scorch(o, s, 0.08, 6);
     }
+    if (scares) this.scarePredators(bx, bz, radius, false);
     s.stinkIn = fired ? Math.max(1.5, 3 - 0.4 * lv) : 0.3;
   }
 
@@ -446,7 +461,9 @@ export class World {
     if (s.zapIn > 0) return;
     const lv = s.levelOf('zap');
     const radius = 2.5 + 0.4 * lv;
-    let fired = false;
+    const scares = this.predatorsNear(s.x, s.z, radius);
+    let fired = scares;
+    if (scares) this.events.push({ type: 'power', who: s.id, kind: 'zap', x: s.x, z: s.z, heading: s.heading, range: radius });
     for (const o of this.snakes) {
       if (o === s || !o.alive || o.immune > 0 || Math.hypot(o.x - s.x, o.z - s.z) > radius) continue;
       if (!fired) {
@@ -455,6 +472,7 @@ export class World {
       }
       this.scorch(o, s, 0.08, 6);
     }
+    if (scares) this.scarePredators(s.x, s.z, radius, false);
     s.zapIn = fired ? Math.max(1.2, 3.5 - 0.4 * lv) : 0.3;
   }
 
@@ -474,15 +492,170 @@ export class World {
         best = o;
       }
     }
-    if (!best) {
+    const scares = this.predatorsNear(s.x, s.z, radius);
+    if (!best && !scares) {
       s.freezeIn = 0.3;
       return;
     }
     s.freezeIn = Math.max(2.5, 5 - 0.5 * lv);
-    best.frozenFor = 0.8 + 0.4 * lv;
-    best.immune = Math.max(best.immune, best.frozenFor); // frozen and untouchable, so it is not a free bonk
-    this.events.push({ type: 'power', who: s.id, kind: 'freeze', x: best.x, z: best.z, heading: s.heading, range: radius });
-    this.events.push({ type: 'hit', who: best.id, by: s.id, kind: 'freeze', x: best.x, z: best.z });
+    if (best) {
+      best.frozenFor = 0.8 + 0.4 * lv;
+      best.immune = Math.max(best.immune, best.frozenFor); // frozen and untouchable, so it is not a free bonk
+      this.events.push({ type: 'power', who: s.id, kind: 'freeze', x: best.x, z: best.z, heading: s.heading, range: radius });
+      this.events.push({ type: 'hit', who: best.id, by: s.id, kind: 'freeze', x: best.x, z: best.z });
+    } else {
+      this.events.push({ type: 'power', who: s.id, kind: 'freeze', x: s.x, z: s.z, heading: s.heading, range: radius });
+    }
+    if (scares) this.scarePredators(s.x, s.z, radius, true);
+  }
+
+  // ---------------------------------------------------------------- predators (the Common's dangers)
+
+  /** Bears and wolves: they seek out snakes, chase and bite. Deterministic, so a room stays in sync. */
+  private updatePredators(dt: number): void {
+    const fer = this.rules.predatorFerocity;
+    for (const p of this.predators) {
+      const spec = PREDATORS[p.kind];
+      if (p.frozenFor > 0) {
+        p.frozenFor -= dt;
+        p.speed = 0;
+        continue;
+      }
+      p.biteIn -= dt;
+      p.wanderIn -= dt;
+
+      // The nearest living snake head within sight.
+      let target: Snake | null = null;
+      let bestD = spec.sight;
+      for (const s of this.snakes) {
+        if (!s.alive) continue;
+        const d = Math.hypot(s.x - p.x, s.z - p.z);
+        if (d < bestD) {
+          bestD = d;
+          target = s;
+        }
+      }
+
+      // Spooked (fire / zap / laser): turn tail and bolt away from the nearest snake, no hunting.
+      if (p.scaredFor > 0) {
+        p.scaredFor -= dt;
+        p.chargeFor = 0;
+        const flee = this.nearestSnake(p.x, p.z);
+        if (flee) p.heading = turnToward(p.heading, Math.atan2(p.z - flee.z, p.x - flee.x), 6 * dt);
+        const dash = spec.chaseSpeed * 0.9;
+        resolveCircle(this.stage, p.x + Math.cos(p.heading) * dash * dt, p.z + Math.sin(p.heading) * dash * dt, spec.radius, this.hit);
+        p.x = this.hit.x;
+        p.z = this.hit.z;
+        p.speed = dash;
+        if (this.hit.hit) p.heading = slideAlong(p.heading, this.hit.nx, this.hit.nz);
+        continue;
+      }
+
+      // Wolves rest after a sprint; a fresh sighting starts another with a howl.
+      if (p.kind === 'wolf') {
+        if (p.restFor > 0) {
+          p.restFor -= dt;
+          target = null;
+        } else if (p.chargeFor > 0) {
+          p.chargeFor -= dt;
+          if (p.chargeFor <= 0) p.restFor = spec.restTime / fer;
+        } else if (target) {
+          p.chargeFor = spec.chaseTime;
+          this.events.push({ type: 'howl', x: p.x, z: p.z });
+        }
+      }
+
+      const chasing = target && (p.kind === 'bear' || p.chargeFor > 0);
+      let speed: number;
+      if (chasing && target) {
+        p.heading = turnToward(p.heading, Math.atan2(target.z - p.z, target.x - p.x), 4 * dt);
+        speed = spec.chaseSpeed * (p.kind === 'wolf' ? fer : 1);
+      } else {
+        if (p.wanderIn <= 0 || Math.hypot(p.x - p.wx, p.z - p.wz) < 1) this.wanderPredator(p);
+        p.heading = turnToward(p.heading, Math.atan2(p.wz - p.z, p.wx - p.x), 3 * dt);
+        speed = spec.roamSpeed;
+      }
+
+      resolveCircle(this.stage, p.x + Math.cos(p.heading) * speed * dt, p.z + Math.sin(p.heading) * speed * dt, spec.radius, this.hit);
+      p.x = this.hit.x;
+      p.z = this.hit.z;
+      p.speed = speed;
+      if (this.hit.hit) {
+        p.heading = slideAlong(p.heading, this.hit.nx, this.hit.nz);
+        this.wanderPredator(p);
+      }
+
+      // A bite: shrink whoever is in reach, like a big rock, then wait.
+      if (p.biteIn <= 0) {
+        for (const s of this.snakes) {
+          if (!s.alive || s.immune > 0 || Math.hypot(s.x - p.x, s.z - p.z) > spec.biteReach + s.radius) continue;
+          s.immune = OUCH_GRACE;
+          const lost = s.mass < 1 ? 0 : Math.min(spec.biteCap, Math.max(2, s.mass * spec.biteShare * fer));
+          if (lost > 0) this.shed(s, lost, PELLET_RETURN, 4);
+          this.events.push({ type: 'chomp', kind: p.kind, who: s.id, x: s.x, z: s.z });
+          p.biteIn = spec.biteEvery;
+          if (p.kind === 'wolf') {
+            p.chargeFor = 0;
+            p.restFor = spec.restTime / fer; // a wolf snaps once, then slinks off
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  /** Pick a fresh spot for a predator to amble toward. */
+  private wanderPredator(p: Predator): void {
+    const B = this.stage.bounds;
+    for (let tries = 0; tries < 20; tries++) {
+      const x = this.rng.range(B.minX, B.maxX);
+      const z = this.rng.range(B.minZ, B.maxZ);
+      if (!isFree(this.stage, x, z, PREDATORS[p.kind].radius + 0.5)) continue;
+      p.wx = x;
+      p.wz = z;
+      break;
+    }
+    p.wanderIn = this.rng.range(3, 7);
+  }
+
+  /** The closest living snake head to a point, or null if nobody is alive. */
+  private nearestSnake(x: number, z: number): Snake | null {
+    let best: Snake | null = null;
+    let bestD = Infinity;
+    for (const s of this.snakes) {
+      if (!s.alive) continue;
+      const d = Math.hypot(s.x - x, s.z - z);
+      if (d < bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  /** Is any predator within this circle? Always false on the school (no predators). */
+  private predatorsNear(x: number, z: number, radius: number): boolean {
+    for (const p of this.predators) {
+      if (Math.hypot(p.x - x, p.z - z) <= radius + PREDATORS[p.kind].radius) return true;
+    }
+    return false;
+  }
+
+  /**
+   * A power splash reaches the Common's beasts: Freeze roots them; fire, zaps and lasers spook them
+   * into fleeing. Empty on the school (no predators there), so it changes nothing that plays there.
+   */
+  private scarePredators(x: number, z: number, radius: number, freeze: boolean): void {
+    for (const p of this.predators) {
+      if (Math.hypot(p.x - x, p.z - z) > radius + PREDATORS[p.kind].radius) continue;
+      if (freeze) {
+        p.frozenFor = Math.max(p.frozenFor, 1.4);
+      } else {
+        p.scaredFor = Math.max(p.scaredFor, 2.5);
+        p.chargeFor = 0;
+        p.biteIn = Math.max(p.biteIn, 1);
+      }
+    }
   }
 
   private shed(s: Snake, lost: number, share: number, n: number): void {
@@ -625,6 +798,7 @@ export class World {
     for (const f of this.foods) if (this.inBreath(s, f.x, f.z, range)) { worth = true; break; }
     if (!worth) for (const o of this.snakes) if (o !== s && o.alive && o.immune <= 0 && this.inBreath(s, o.x, o.z, range)) { worth = true; break; }
     if (!worth) for (const a of this.animals) if (s.tier >= ANIMALS[a.kind].tier && this.inBreath(s, a.x, a.z, range)) { worth = true; break; }
+    if (!worth) for (const p of this.predators) if (this.inBreath(s, p.x, p.z, range)) { worth = true; break; }
     if (!worth) {
       s.breathIn = BREATH_RECHECK;
       return;
@@ -635,6 +809,9 @@ export class World {
     for (const f of this.foods) if (this.inBreath(s, f.x, f.z, range)) this.swallowFood(s, f, true);
     for (const a of this.animals) {
       if (s.tier >= ANIMALS[a.kind].tier && this.inBreath(s, a.x, a.z, range)) a.dazed = DAZE;
+    }
+    for (const p of this.predators) {
+      if (this.inBreath(s, p.x, p.z, range)) { p.scaredFor = Math.max(p.scaredFor, 2.5); p.chargeFor = 0; p.biteIn = Math.max(p.biteIn, 1); }
     }
     for (const o of this.snakes) {
       if (o === s || !o.alive || o.immune > 0 || !this.inBreath(s, o.x, o.z, range)) continue;

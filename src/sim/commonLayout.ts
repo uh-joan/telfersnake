@@ -69,7 +69,8 @@ export const COMMON: Stage = {
     return meadow(rng);
   },
   sanctuary: null,
-  hazardArea: null, // no rocks here: the Common's dangers move (Phase 3)
+  hazardArea: null, // no rocks here: the Common's dangers move
+  predators: [{ kind: 'bear', count: 1 }, { kind: 'wolf', count: 2 }],
   cooper: null, // Mr Cooper stays at school
   paintMinimap: (c, X, Z, scale) => {
     const box = (b: Box, color: string) => {

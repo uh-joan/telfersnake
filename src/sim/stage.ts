@@ -1,6 +1,7 @@
 import type { AnimalKind } from './animals';
 import type { FoodKind } from './food';
 import type { Box, Circle } from './layout';
+import type { PredatorKind } from './predators';
 import type { Rng } from './rng';
 
 /**
@@ -53,6 +54,8 @@ export interface Stage extends Terrain {
   foodScale: number;
   /** Static hazards (rocks, sticks): a corner that gets more than its share. Null: none spawn. */
   hazardArea: { rough: Bounds; share: number } | null;
+  /** Active predators (bears, wolves) and how many of each. Empty on a stage with none. */
+  predators: { kind: PredatorKind; count: number }[];
   /** Mr Cooper's spawn and beat, or null on a stage he never visits. */
   cooper: { spawn: Spot; beat: Bounds } | null;
   /** Paint the fixed features onto the minimap. X/Z map metres to canvas pixels. */

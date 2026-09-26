@@ -203,4 +203,16 @@ Each phase is independently shippable, verified headless, reviewed, then deploye
 
 **Simplified vs the original pitch (behaviours, not creatures):** squirrels don't yet climb-and-vanish, crows don't steal, hedgehogs don't curl — they're distinct via stats (bolt = high flee, etc.) and models. Those signature behaviours are cheap follow-ups if we want them; noted for later.
 
-**Next — Phase 3 (danger):** bears and wolves as *active* predators that pursue you (built on the goat-charge / Cooper patterns, deterministic), replacing rocks in the Common; freeze/zap counterplay; mode-scaled ferocity.
+### ✅ Phase 3 complete 2026-09-26 — danger: bears & wolves (on branch, NOT deployed)
+
+**Done and verified.** The Common's dangers *come for you* — no rocks there, live predators instead.
+- **`src/sim/predators.ts`** — `PREDATOR_KINDS = ['bear', 'wolf']`, per-kind `PredatorSpec`, the `Predator` runtime state, `makePredators(stage, rng)` (spawns `stage.predators`, clear of the player's start), and `blankPredator()` for the client to fill from snapshots.
+  - 🐻 **Bear** — lumbers (roam 0.9 / chase 2.1), always hunts the nearest snake in a 16 m sight, a big slow bite (18% of mass, cap 22, every 2.6 s).
+  - 🐺 **Wolf** — fast (roam 1.7 / **sprint 5.6**) but in bursts: a warning **howl**, a 4 s charge, then a 5 s slink-off rest. Smaller, quicker bites (10%, cap 12).
+- **`Stage.predators`** — the school's is `[]` (so nothing there changes); the Common's is `1 bear + 2 wolves`. `World` spawns them, `updatePredators(dt)` runs them after the animals; bites `shed()` mass and puff pellets exactly like a rock bonk, with `OUCH_GRACE` immunity so they can't chain-bite.
+- **Mode ferocity** (`Rules.predatorFerocity`: easy 0.7 / normal 1 / god 1.3) — scales wolf sprint speed and bite size, and shortens their rest. Measured max speed easy 3.9 → normal 5.6 → god 7.3.
+- **Power counterplay** — Freeze Puff **roots** a predator (frozen 1.4 s); Dragon Breath, Zap Ring, Stink Cloud and Laser Eyes **spook** them into fleeing (`scaredFor`, turn tail and bolt). Powers now fire at a lone predator too, not only at rivals. New `howl` / `chomp` game events drive a snarl SFX + dust and a 🐻/🐺 "OUCH!" popup; red danger dots on the minimap (bigger for the bear).
+- **Multiplayer** — `PredatorRow [x,z,heading,speed]` in snapshots, `welcome.predatorKinds` fixes each index's kind once; the `Replica` reconstructs blanks and blends them like animals. Positions are server-authoritative; the flee/freeze state lives sim-side only.
+- **Verified:** typecheck + full build clean; headless — predators bite & howl, **0 in-solid / 0 out-of-bounds** over 200 s in all three modes, ferocity scales as designed; counterplay — freeze roots, breath scares; **school byte-identical** to the Phase 2 baseline (`4c82c20d` / `392056d6` / `38d6ad19`); browser — bear + wolf models render (2 instanced meshes, 1 + 2 instances), road/meadow scenery, 3 red minimap dots.
+
+**Next — Phase 4 (kids + Miss Sami):** the NPC framework — children running the Common (some naughty throwing stones, some nice sending kisses), and Miss Sami chatting with a mum by the fence gap.
