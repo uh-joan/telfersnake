@@ -5,7 +5,8 @@
  * Pure data, like the school's layout.ts; the renderer draws it, the sim collides against it.
  */
 
-import { pickFoodKind, WEIGHTS_YARD } from './food';
+import { COMMON_ANIMALS } from './animals';
+import { pickFoodKind, WEIGHTS_COMMON } from './food';
 import type { Box, Circle } from './layout';
 import type { Rng } from './rng';
 import type { Spot, Stage } from './stage';
@@ -54,12 +55,19 @@ export const COMMON: Stage = {
   solidCircles: COPSES,
   snakeSpawn: SNAKE_SPAWN,
   fallbackSpot: { x: 0, z: -80 }, // deep in the road corridor: always open
+  animals: COMMON_ANIMALS,
   // Big map, so twice the food to keep it worth chasing.
   foodScale: 2,
-  // Phase 1 reuses the school's food; mushrooms and tomatoes arrive in Phase 2.
-  foodKindAt: (rng) => pickFoodKind(rng, WEIGHTS_YARD),
-  homePoint: (rng, home) =>
-    home === 'anywhere' ? { x: rng.range(BOUNDS.minX, BOUNDS.maxX), z: rng.range(BOUNDS.minZ, BOUNDS.maxZ) } : meadow(rng),
+  // Mostly forest food (mushrooms, tomatoes, berries, acorns) with a little picnic litter.
+  foodKindAt: (rng) => pickFoodKind(rng, WEIGHTS_COMMON),
+  homePoint: (rng, home) => {
+    if (home === 'anywhere') return { x: rng.range(BOUNDS.minX, BOUNDS.maxX), z: rng.range(BOUNDS.minZ, BOUNDS.maxZ) };
+    if (home === 'woods') {
+      const t = COPSES[rng.int(COPSES.length)];
+      return { x: t.x + rng.range(-t.r - 2, t.r + 2), z: t.z + rng.range(-t.r - 2, t.r + 2) };
+    }
+    return meadow(rng);
+  },
   sanctuary: null,
   hazardArea: null, // no rocks here: the Common's dangers move (Phase 3)
   cooper: null, // Mr Cooper stays at school

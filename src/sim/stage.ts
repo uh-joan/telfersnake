@@ -1,3 +1,4 @@
+import type { AnimalKind } from './animals';
 import type { FoodKind } from './food';
 import type { Box, Circle } from './layout';
 import type { Rng } from './rng';
@@ -40,6 +41,8 @@ export interface Stage extends Terrain {
   snakeSpawn: Spot & { heading: number };
   /** A known-open spot well away from the snake spawn: the last resort when nothing else fits. */
   fallbackSpot: Spot;
+  /** Which animal kinds live here (and how many, via each kind's `count`). */
+  animals: readonly AnimalKind[];
   /** Which food grows where. */
   foodKindAt(rng: Rng, x: number, z: number): FoodKind;
   /** A random point in an animal's home turf ('green', 'lagoon', 'anywhere'…: names the stage understands). */

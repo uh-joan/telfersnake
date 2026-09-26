@@ -44,6 +44,30 @@ const MODELS: Record<FoodKind, () => THREE.BufferGeometry[]> = {
     paint(new THREE.CylinderGeometry(0.02, 0.02, 0.16, 5), 0x5b3a1e, (g) => g.translate(0, 0.66, 0)),
     paint(new THREE.SphereGeometry(0.09, 6, 4), 0x4caf50, (g) => g.scale(1.4, 0.3, 0.8).translate(0.12, 0.7, 0)),
   ],
+  // A red-capped toadstool with white spots.
+  mushroom: () => [
+    paint(new THREE.CylinderGeometry(0.11, 0.14, 0.34, 8), 0xf3ead3, (g) => g.translate(0, 0.17, 0)),
+    paint(new THREE.SphereGeometry(0.28, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xd23b32, (g) => g.scale(1, 0.75, 1).translate(0, 0.33, 0)),
+    ...[[0.12, 0.06], [-0.1, 0.1], [0.02, -0.13], [-0.14, -0.05]].map(([x, z]) =>
+      paint(new THREE.SphereGeometry(0.045, 6, 5), 0xffffff, (g) => g.translate(x, 0.44, z))),
+  ],
+  // A round red tomato with a green calyx.
+  tomato: () => [
+    paint(new THREE.SphereGeometry(0.26, 12, 9), 0xe6473a, (g) => g.scale(1.05, 0.9, 1.05).translate(0, 0.28, 0)),
+    ...[0, 1, 2, 3, 4].map((i) =>
+      paint(new THREE.ConeGeometry(0.05, 0.14, 4), 0x4a8a3a, (g) => g.rotateZ(-0.5).rotateY((i * Math.PI * 2) / 5).translate(0, 0.46, 0))),
+  ],
+  // A little cluster of blueberries.
+  berry: () => [
+    ...[[0, 0.12, 0], [0.12, 0.1, 0.05], [-0.1, 0.11, -0.04], [0.03, 0.1, -0.12], [-0.05, 0.22, 0]].map(([x, y, z]) =>
+      paint(new THREE.SphereGeometry(0.11, 8, 6), 0x3f5bd0, (g) => g.translate(x, y, z))),
+  ],
+  // An acorn: a nut with a little cap.
+  acorn: () => [
+    paint(new THREE.SphereGeometry(0.15, 10, 8), 0xc79a5b, (g) => g.scale(1, 1.25, 1).translate(0, 0.19, 0)),
+    paint(new THREE.SphereGeometry(0.17, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0x7a5230, (g) => g.scale(1, 0.7, 1).translate(0, 0.3, 0)),
+    paint(new THREE.CylinderGeometry(0.02, 0.02, 0.1, 4), 0x5b3a1e, (g) => g.translate(0, 0.42, 0)),
+  ],
 };
 
 /** All food on the map, drawn as one instanced mesh per kind (six draw calls total). */

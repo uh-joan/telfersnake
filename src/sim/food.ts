@@ -3,7 +3,10 @@ import type { Circle } from './layout';
 import type { Rng } from './rng';
 import type { Stage } from './stage';
 
-export const FOOD_KINDS = ['burger', 'sausage', 'cookie', 'broccoli', 'carrot', 'apple'] as const;
+export const FOOD_KINDS = [
+  'burger', 'sausage', 'cookie', 'broccoli', 'carrot', 'apple',
+  'mushroom', 'tomato', 'berry', 'acorn',
+] as const;
 export type FoodKind = (typeof FOOD_KINDS)[number];
 
 /** Mass gained per bite. Points are mass x 10. Eating your greens pays as well as the chip shop. */
@@ -14,12 +17,18 @@ export const FOOD_VALUE: Record<FoodKind, number> = {
   broccoli: 3,
   carrot: 2,
   apple: 2,
+  mushroom: 3,
+  tomato: 2,
+  berry: 1,
+  acorn: 2,
 };
 
-// Spawn weights, same order as FOOD_KINDS. The school's tables: veg grows on The Green, lunch
-// leftovers everywhere else. A stage decides which table applies where (see Stage.foodKindAt).
+// Spawn weights, same order as FOOD_KINDS. A shorter table simply cannot pick the later kinds, so
+// the school's two tables never yield the Common's forest food. A stage picks a table (Stage.foodKindAt).
 export const WEIGHTS_YARD = [1.5, 2, 3, 1, 1, 1.5];
 export const WEIGHTS_GREEN = [0, 0, 0.5, 4, 4, 2];
+// The Common: a bit of picnic litter, but mostly forest food.
+export const WEIGHTS_COMMON = [1, 1, 1.5, 1, 1, 1.5, 3, 2.5, 3, 2];
 
 /** One food kind drawn from a weight table (same order as FOOD_KINDS). */
 export const pickFoodKind = (rng: Rng, weights: readonly number[]): FoodKind => FOOD_KINDS[weighted(rng, weights)];

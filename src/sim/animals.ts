@@ -6,10 +6,17 @@ import type { World } from './world';
  * run away when it gets close, the ones it is too small for stand their ground and boop it.
  */
 
-export const ANIMAL_KINDS = ['snail', 'ladybird', 'chicken', 'duck', 'rabbit', 'sheep', 'pig', 'goat'] as const;
+export const ANIMAL_KINDS = [
+  'snail', 'ladybird', 'chicken', 'duck', 'rabbit', 'sheep', 'pig', 'goat',
+  'squirrel', 'crow', 'deer', 'hedgehog', 'fox', 'pigeon',
+] as const;
 export type AnimalKind = (typeof ANIMAL_KINDS)[number];
 
-type Home = 'green' | 'yard' | 'lagoon' | 'anywhere';
+/** The petting farm lives at school; the forest animals on the Common (see the *_ANIMALS sets). */
+export const SCHOOL_ANIMALS: readonly AnimalKind[] = ['snail', 'ladybird', 'chicken', 'duck', 'rabbit', 'sheep', 'pig', 'goat'];
+export const COMMON_ANIMALS: readonly AnimalKind[] = ['squirrel', 'crow', 'deer', 'hedgehog', 'fox', 'pigeon', 'rabbit', 'duck'];
+
+type Home = 'green' | 'yard' | 'lagoon' | 'woods' | 'anywhere';
 
 export interface AnimalSpec {
   /** Smallest snake tier (0-based) that can gulp it. */
@@ -36,6 +43,13 @@ export const ANIMALS: Record<AnimalKind, AnimalSpec> = {
   sheep: { tier: 3, value: 18, radius: 0.6, walk: 0.9, flee: 3.2, alert: 6, jitter: 0.3, count: 3, home: 'green' },
   pig: { tier: 3, value: 18, radius: 0.6, walk: 1.1, flee: 3.8, alert: 5.5, jitter: 0.4, count: 1, home: 'yard' },
   goat: { tier: 4, value: 30, radius: 0.65, walk: 1.2, flee: 4.5, alert: 6, jitter: 0.3, count: 1, home: 'yard' },
+  // Forest animals of the Common.
+  squirrel: { tier: 0, value: 4, radius: 0.28, walk: 1.4, flee: 5.5, alert: 6, jitter: 1.6, count: 4, home: 'woods' },
+  crow: { tier: 2, value: 7, radius: 0.35, walk: 1.2, flee: 4.5, alert: 6, jitter: 1.0, count: 3, home: 'anywhere' },
+  deer: { tier: 3, value: 22, radius: 0.6, walk: 1.0, flee: 7.0, alert: 9, jitter: 0.4, count: 2, home: 'anywhere' },
+  hedgehog: { tier: 1, value: 6, radius: 0.3, walk: 0.6, flee: 1.4, alert: 3, jitter: 0.3, count: 3, home: 'woods' },
+  fox: { tier: 2, value: 12, radius: 0.4, walk: 1.5, flee: 4.0, alert: 6, jitter: 0.7, count: 2, home: 'woods' },
+  pigeon: { tier: 0, value: 3, radius: 0.25, walk: 0.9, flee: 3.5, alert: 4, jitter: 1.2, count: 5, home: 'anywhere' },
 };
 
 const TURN_RATE = 6; // rad/s

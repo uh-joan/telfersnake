@@ -5,6 +5,7 @@
  * stage, is assembled from it at the bottom of this file.
  */
 
+import { SCHOOL_ANIMALS } from './animals';
 import { pickFoodKind, WEIGHTS_GREEN, WEIGHTS_YARD } from './food';
 import type { Rng } from './rng';
 import type { Spot, Stage } from './stage';
@@ -127,6 +128,7 @@ export const SCHOOL: Stage = {
   solidCircles: SOLID_CIRCLES,
   snakeSpawn: SNAKE_SPAWN,
   fallbackSpot: COOPER_SPAWN,
+  animals: SCHOOL_ANIMALS,
   // Veg grows on The Green; lunch leftovers everywhere else.
   foodKindAt: (rng, x, z) => pickFoodKind(rng, inBox(GREEN, x, z) ? WEIGHTS_GREEN : WEIGHTS_YARD),
   homePoint: (rng: Rng, home: string): Spot => {

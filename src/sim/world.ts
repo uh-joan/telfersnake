@@ -1,4 +1,4 @@
-import { ANIMAL_KINDS, ANIMALS, type Animal, type AnimalKind, makeAnimal, placeAnimal, updateAnimal } from './animals';
+import { ANIMALS, type Animal, type AnimalKind, makeAnimal, placeAnimal, updateAnimal } from './animals';
 import { Bot, type Personality } from './bot';
 import { botCardChoice, type Rules, rulesFor } from './modes';
 import { isFree, makeHit, resolveCircle, wrapAngle } from './collide';
@@ -161,7 +161,7 @@ export class World {
       placeFood(food, this.rng, stage, -999, player.x, player.z, 2, this.hazards);
       this.foods.push(food);
     }
-    for (const kind of ANIMAL_KINDS) {
+    for (const kind of stage.animals) {
       for (let i = 0; i < ANIMALS[kind].count; i++) {
         const a = makeAnimal(kind);
         placeAnimal(a, this, 6);
