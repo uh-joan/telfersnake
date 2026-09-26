@@ -28,6 +28,7 @@ export class Shop {
   private readonly root = $('shop');
   private readonly grid = $('shop-grid');
   private readonly stars = $('shop-stars-value');
+  private readonly gems = $('shop-gems-value');
   private readonly buy = $('shop-buy');
   private readonly tabs = [...document.querySelectorAll<HTMLElement>('#shop-tabs button')];
   private kind: ItemKind = 'skin';
@@ -68,6 +69,7 @@ export class Shop {
 
   private render(): void {
     this.stars.textContent = String(this.save.stars);
+    this.gems.textContent = String(this.save.gems);
     for (const tab of this.tabs) tab.classList.toggle('on', tab.dataset.kind === this.kind);
 
     this.grid.replaceChildren(

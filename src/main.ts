@@ -307,6 +307,7 @@ function show(next: Screen): void {
   if (next === 'start') {
     refreshModePicker();
     refreshStagePicker();
+    refreshWallet();
   }
   // A shared playground cannot stop for one player, so their snake stands aside, safe, while they are in a menu.
   if (!run.over) connection?.away(next !== null);
@@ -845,6 +846,11 @@ refreshModePicker();
 const COMMON_COST = 100;
 const stageButtons = [...document.querySelectorAll<HTMLButtonElement>('#stage-pick .stage')];
 
+/** The wallet on the start screen's Tuck Shop button: stars earned and blue gems banked. */
+function refreshWallet(): void {
+  $('start-stars').textContent = `⭐${save.stars} 💎${save.gems}`;
+}
+
 /** Mark the chosen place; show the Common's 💎100 lock until it is bought. */
 function refreshStagePicker(): void {
   const commonBtn = stageButtons.find((b) => b.dataset.stage === 'common');
@@ -925,7 +931,7 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------------------------------------------------------------- start up
 
-$('start-stars').textContent = `⭐${save.stars}`;
+refreshWallet();
 $('start-name').textContent = save.name;
 $('best-score').textContent = String(save.bestScore);
 $('build').textContent = __BUILD__;
