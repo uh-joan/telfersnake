@@ -9,6 +9,7 @@ import { asMode, type Mode } from '../src/sim/modes';
 import { asStage, type StageId } from '../src/sim/stage';
 import { STEP } from '../src/sim/world';
 import { Room } from './room';
+import { record, snapshot } from './stats';
 
 /**
  * The Telfersnake game server. One Node process: it serves the built game and runs every room.
@@ -29,6 +30,15 @@ const EMPTY_ROOM_LIFE = 5_000; // ms a room outlives its last player
  * server cannot be borrowed by some other website. Comma separated. Unset in development.
  */
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+/** The secret that unlocks GET /stats. Unset (production key missing) keeps the stats hidden. */
+const STATS_TOKEN = (process.env.STATS_TOKEN ?? '').trim();
+const MAX_BEACON = 2048; // bytes; an analytics beacon is a few numbers, nothing more
+
+/** A browser posting from another site sends that site's Origin, which will not match — so it is
+ * turned away, exactly like the game socket. A missing Origin (some privacy modes) is tolerated. */
+function beaconAllowed(origin: string | undefined): boolean {
+  return ALLOWED_ORIGINS.length === 0 || origin === undefined || ALLOWED_ORIGINS.includes(origin);
+}
 const DIST = join(fileURLToPath(new URL('.', import.meta.url)), '..', 'dist');
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
@@ -78,6 +88,44 @@ function serve(req: IncomingMessage, res: import('node:http').ServerResponse): v
   if (req.url === '/healthz') {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ ok: true, rooms: rooms.size, players: whereIs.size }));
+    return;
+  }
+  // Anonymous, aggregate analytics: the game posts tiny beacons here; nothing per-person is kept.
+  if (req.url === '/a' && req.method === 'POST') {
+    if (!beaconAllowed(req.headers.origin)) {
+      res.writeHead(403).end();
+      return;
+    }
+    let body = '';
+    let tooBig = false;
+    req.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > MAX_BEACON) {
+        tooBig = true;
+        req.destroy();
+      }
+    });
+    req.on('end', () => {
+      if (!tooBig) {
+        try {
+          record(JSON.parse(body));
+        } catch {
+          /* junk body: ignore */
+        }
+      }
+      if (!res.writableEnded) res.writeHead(204).end();
+    });
+    return;
+  }
+  // The aggregate totals, JSON, guarded by a secret key. Hidden (404) unless the key matches.
+  if ((req.url ?? '').split('?')[0] === '/stats') {
+    const key = new URL(req.url ?? '/', 'http://x').searchParams.get('k') ?? req.headers['x-stats-token'];
+    if (!STATS_TOKEN || key !== STATS_TOKEN) {
+      res.writeHead(404).end();
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(snapshot()));
     return;
   }
   // Serve the built game, so one deploy is the whole thing.

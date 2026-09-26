@@ -26,7 +26,7 @@ rsync -az --delete --include='/dist/***' --include='/dist-server/***' --include=
   --include='/Dockerfile' --include='/.dockerignore' --exclude='*' ./ "${BOX}:${DEPLOY_PATH}/"
 
 echo "→ rebuilding and restarting the container…"
-ssh "$BOX" "cd '${DEPLOY_PATH}' && CADDY_NET='${CADDY_NET}' docker compose -f deploy/compose.yml up -d --build && docker image prune -f >/dev/null"
+ssh "$BOX" "cd '${DEPLOY_PATH}' && CADDY_NET='${CADDY_NET}' STATS_TOKEN='${STATS_TOKEN:-}' docker compose -f deploy/compose.yml up -d --build && docker image prune -f >/dev/null"
 
 echo "→ waiting for it to report healthy…"
 for _ in $(seq 1 20); do

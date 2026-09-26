@@ -1,3 +1,4 @@
+import { track } from '../meta/analytics';
 import { CATALOGUE, type Item, type ItemKind, type Skin } from '../meta/catalogue';
 import { type Save, writeSave } from '../meta/save';
 
@@ -130,6 +131,7 @@ export class Shop {
     const refund = this.refundFor(item);
     if (item.gem) this.save.gems += refund;
     else this.save.stars += refund;
+    track('sell', { kind: item.kind, id: item.id, coin: item.gem ? 'g' : 's', refund });
     this.save.owned = this.save.owned.filter((id) => id !== item.id);
     if (this.wearing(item)) {
       this.save[SLOT[item.kind]] = DEFAULT_ITEM[SLOT[item.kind]];
@@ -170,6 +172,7 @@ export class Shop {
       if (item.gem) this.save.gems -= item.price;
       else this.save.stars -= item.price;
       this.save.owned.push(item.id);
+      track('buy', { kind: item.kind, id: item.id, coin: item.gem ? 'g' : 's', price: item.price });
       this.sounds()?.chaChing();
     } else {
       this.sounds()?.pick();

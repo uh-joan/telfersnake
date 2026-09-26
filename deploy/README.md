@@ -1,8 +1,10 @@
 # Deploying Telfersnake → https://telfersnake.joans.cat
 
 One container on a box that already runs a shared Caddy. The container is a single Node process
-that serves the built game **and** runs the playgrounds (WebSocket at `/play`). It stores nothing:
-no volumes, no database, no logs of who played. Rooms live in memory and vanish when empty.
+that serves the built game **and** runs the playgrounds (WebSocket at `/play`). The only thing it
+keeps is **anonymous aggregate counts** — how many games are played, how far players get, what's
+bought — in a small data volume; never anything about *who* played (no names, no ids, no cookies,
+no IP). Rooms live in memory and vanish when empty. See [Checking the numbers](#checking-the-numbers).
 
 Your box's details — host, SSH user, paths, the Caddy network — live in `deploy/deploy.env`, which
 is **gitignored and never committed**. Copy `deploy/deploy.env.example` to `deploy/deploy.env` and
@@ -39,8 +41,9 @@ never `sed -i`.
 
 ## Limits and safety
 
-- Container: 256 MB memory, one CPU, read-only filesystem, all capabilities dropped, no published
-  ports. At idle it uses about 15 MB and 1% CPU.
+- Container: 256 MB memory, one CPU, read-only filesystem (bar the small `telfersnake-data` volume
+  for the anonymous stats), all capabilities dropped, no published ports. At idle it uses about 15 MB
+  and 1% CPU.
 - Server: at most 20 playgrounds (120 players) and 200 sockets; messages over 512 bytes or faster
   than 90 a second close the socket; a phone that stops answering pings loses its seat within
   30 seconds; sockets are only accepted from pages served by `https://telfersnake.joans.cat`
@@ -57,6 +60,21 @@ curl -s https://telfersnake.joans.cat/healthz          # {"ok":true,"rooms":1,"p
 ssh "$DEPLOY_USER@$DEPLOY_HOST" docker logs --tail 50 telfersnake
 ssh "$DEPLOY_USER@$DEPLOY_HOST" docker stats --no-stream telfersnake
 ```
+
+## Checking the numbers
+
+The game keeps **anonymous aggregate counts** — sessions, runs (by stage, difficulty and how they
+ended), score/length/duration averages, size tiers reached, gems and stars earned, and shop buys and
+sells by item. Nothing per-person: no names, ids, cookies or IP. Read them as JSON, guarded by the
+secret `STATS_TOKEN` you set in `deploy/deploy.env` (empty token = the endpoint stays hidden, 404):
+
+```bash
+# with deploy/deploy.env sourced (set -a; . deploy/deploy.env; set +a):
+curl -s "https://telfersnake.joans.cat/stats?k=$STATS_TOKEN" | python3 -m json.tool
+```
+
+The counts live in the `telfersnake-data` volume, so they survive restarts and redeploys. To reset
+them, remove the volume while the stack is down: `docker volume rm deploy_telfersnake-data`.
 
 ## Taking it down
 

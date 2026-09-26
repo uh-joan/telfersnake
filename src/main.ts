@@ -36,6 +36,7 @@ import { CardPicker } from './ui/cards';
 import { Hud } from './ui/hud';
 import { Shop } from './ui/shop';
 import { playCommonUnlock } from './ui/unlockSplash';
+import { track, returningPlayer } from './meta/analytics';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -44,6 +45,7 @@ const BANK_EVERY = 2; // seconds between saving the stars earned so far
 const TRAIL_EVERY = 0.07;
 
 const save = loadSave();
+track('app', { r: returningPlayer() ? 1 : 0 }); // one anonymous "the game opened" beacon per load
 const stage = new Stage($<HTMLCanvasElement>('game'));
 /** A fresh solo world at the chosen difficulty; also the backdrop behind the start screen. */
 const makeSolo = (): World => {
@@ -364,9 +366,36 @@ const cards = new CardPicker((index) => {
   music?.duck(false);
 });
 
-function finishRun(): void {
+/** When the current run began (for its duration), and whether we have already reported it. */
+let runStartedAt = 0;
+let runReported = false;
+
+/** Send one anonymous "a run ended" beacon — from a clean finish, a lost line, or leaving the tab. */
+function reportRun(end: string): void {
+  if (runReported || runStartedAt === 0) return;
+  runReported = true;
+  track('run', {
+    stage: save.stage,
+    mode: save.mode,
+    score: world.snake.score,
+    tier: world.snake.highestTier,
+    len: Math.round(run.longest),
+    dur: Math.round((performance.now() - runStartedAt) / 1000),
+    gulps: run.gulps,
+    bonks: run.rivalBonks,
+    gems: run.gems,
+    banked: run.banked,
+    end,
+  });
+}
+
+// A child often just closes the tab rather than tapping Finish; catch that run too, once.
+window.addEventListener('pagehide', () => reportRun('left'));
+
+function finishRun(end = 'finish'): void {
   if (run.over) return;
   run.over = true;
+  reportRun(end);
   cards.hide();
   bank();
   save.runs++;
@@ -749,7 +778,7 @@ $('play').addEventListener('click', async () => {
       // The line dropped mid-game: keep what was earned and call it home time.
       connection = null;
       hud.toast('😴', 'Connection lost');
-      finishRun();
+      finishRun('lost');
     });
     seatsSeen = connection.replica.seatsVersion;
     mountWorld(connection.replica);
@@ -768,6 +797,7 @@ $('play').addEventListener('click', async () => {
     hud.announce('🌳 The Common!', '✨ new friends & magic');
   }
   hud.say(greeting, world.snake.x, world.snake.z);
+  runStartedAt = performance.now();
   show(null);
 });
 
@@ -879,6 +909,7 @@ function chooseStage(id: StageId): void {
     save.commonUnlocked = true;
     refreshWallet(); // the stars just spent
     wakeAudio()?.chaChing();
+    track('unlock');
     justUnlocked = true;
   }
   if (id !== save.stage) {

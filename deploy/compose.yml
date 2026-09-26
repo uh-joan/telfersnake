@@ -9,18 +9,28 @@ services:
     container_name: telfersnake
     restart: unless-stopped
     environment:
-      # Only pages from this origin may open a game socket.
+      # Only pages from this origin may open a game socket (and post analytics beacons).
       ALLOWED_ORIGINS: https://telfersnake.joans.cat
+      # The secret that unlocks GET /stats. Set STATS_TOKEN in deploy/deploy.env; empty keeps it hidden.
+      STATS_TOKEN: ${STATS_TOKEN:-}
+      # Where the anonymous aggregate counts live (on the data volume below).
+      STATS_FILE: /data/stats.json
     networks:
       - shared-net
-    # It keeps nothing: no volumes, no database, read-only filesystem. Rooms live in memory.
+    # The only thing kept is anonymous aggregate counts (how many games, how far players got — never
+    # who played), in the small data volume below. Rooms still live in memory; the filesystem is read-only.
     read_only: true
+    volumes:
+      - telfersnake-data:/data
     mem_limit: 256m
     cpus: 1.0 # never more than one core: other services may share this box
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+volumes:
+  telfersnake-data:
 
 networks:
   shared-net:
