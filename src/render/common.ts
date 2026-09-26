@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMMON_BOUNDS, COMMON_COPSES, COMMON_EAST_ROAD, COMMON_GREETERS, COMMON_HOUSES, COMMON_WOODS, GLADE } from '../sim/commonLayout';
+import { COMMON_BOUNDS, COMMON_COPSES, COMMON_EAST_ROAD, COMMON_GREETERS, COMMON_WOODS, GLADE } from '../sim/commonLayout';
 import { Rng } from '../sim/rng';
 import type { School } from './school';
 
@@ -127,17 +127,110 @@ function trees(rng: Rng): THREE.Group {
   return g;
 }
 
-/** Terraced houses round the edge: simple blocks with a darker roof cap. Background, not detail. */
-function houses(): THREE.Group {
+/** A tile of brick courses so a wall reads as brick rather than a flat block. */
+let commonBrickTex: THREE.CanvasTexture | null = null;
+function commonBrick(): THREE.CanvasTexture {
+  if (commonBrickTex) return commonBrickTex;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const c = cv.getContext('2d')!;
+  const rng = new Rng(41);
+  c.fillStyle = '#7a5240'; // mortar
+  c.fillRect(0, 0, 128, 128);
+  const bw = 32, bh = 16;
+  for (let r = 0; r < 8; r++) {
+    const off = r % 2 ? bw / 2 : 0;
+    for (let x = -1; x < 5; x++) {
+      const s = 150 + Math.floor(rng.range(0, 45));
+      c.fillStyle = `rgb(${s + 30},${Math.round(s * 0.62)},${Math.round(s * 0.5)})`;
+      c.fillRect(x * bw + off + 1.5, r * bh + 1.5, bw - 3, bh - 3);
+    }
+  }
+  commonBrickTex = new THREE.CanvasTexture(cv);
+  commonBrickTex.wrapS = commonBrickTex.wrapT = THREE.RepeatWrapping;
+  commonBrickTex.colorSpace = THREE.SRGBColorSpace;
+  return commonBrickTex;
+}
+
+/**
+ * The terraced houses either side of Telferscot Road, built to be looked at from the street: each
+ * a brick (or painted) front set back behind a little hedged front garden, with a door, windows,
+ * a pitched roof and a chimney. The block behind stays plain (you never see round the back).
+ */
+function terraceHouses(): THREE.Group {
   const g = new THREE.Group();
-  const wallMat = lambert(0xc79a76);
-  const roofMat = lambert(0x6b5140);
-  for (const b of COMMON_HOUSES) {
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(b.w, 6, b.d), wallMat);
-    wall.position.set(b.x, 3, b.z);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(b.w + 0.6, 0.8, b.d + 0.6), roofMat);
-    roof.position.set(b.x, 6.4, b.z);
-    g.add(wall, roof);
+  const brickMat = new THREE.MeshLambertMaterial({ map: commonBrick() });
+  const renders = [lambert(0xe4d9c4), lambert(0xd7e0e6), lambert(0xe6cfcf)]; // a few painted fronts, London-style
+  const roofMat = lambert(0x5a4038);
+  const doorMats = [lambert(0x2f4a6b), lambert(0x5a3a24), lambert(0x2f6b4a), lambert(0x7a2f2f)];
+  const winMat = lambert(0xbfe3f5);
+  const trimMat = lambert(0xf2efe6);
+  const hedgeMat = lambert(0x3f8f3a);
+  const rng = new Rng(9);
+
+  const SETBACK = 6, HD = 11, HH = 5.4, HW = 6;
+  const terraces = [
+    { roadEdge: -6, into: -1, z0: -97, z1: -45 }, // west terrace, faces east onto the road
+    { roadEdge: 6, into: 1, z0: -97, z1: -45 }, // east terrace, faces west
+  ];
+
+  for (const t of terraces) {
+    const frontX = t.roadEdge + t.into * SETBACK; // the front wall
+    let n = 0;
+    for (let z = t.z0; z <= t.z1; z += HW) {
+      const cx = frontX + t.into * HD / 2;
+      const painted = n % 3 === 2;
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(HD, HH, HW - 0.12), painted ? renders[n % renders.length] : brickMat);
+      wall.position.set(cx, HH / 2, z);
+      g.add(wall);
+
+      // Pitched roof: two slabs meeting at a ridge that runs along the row (z).
+      const pitch = 0.62;
+      const hs = HD / 2;
+      const ridgeY = HH + hs * Math.tan(pitch);
+      const slopeLen = Math.hypot(hs, ridgeY - HH);
+      for (const side of [-1, 1]) {
+        const slope = new THREE.Mesh(new THREE.BoxGeometry(slopeLen, 0.24, HW + 0.25), roofMat);
+        slope.position.set(cx + side * hs / 2, (HH + ridgeY) / 2, z);
+        slope.rotation.z = -side * pitch;
+        g.add(slope);
+      }
+
+      // A chimney on some houses.
+      if (n % 2 === 0) {
+        const chim = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.4, 0.7), brickMat);
+        chim.position.set(cx - t.into * hs * 0.5, ridgeY - 0.2, z + (rng.next() < 0.5 ? 1.4 : -1.4));
+        g.add(chim);
+      }
+
+      // Front wall detail: a door and windows, just proud of the wall.
+      const fx = frontX - t.into * 0.06;
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.4, 1.1), doorMats[n % doorMats.length]);
+      door.position.set(fx, 1.2, z - 1.5);
+      const step = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 1.3), trimMat);
+      step.position.set(frontX - t.into * 0.25, 0.1, z - 1.5);
+      g.add(door, step);
+      for (const [wy, wz] of [[1.5, 1.3], [3.7, 1.3], [3.7, -1.4]] as const) {
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.5, 1.5), trimMat);
+        frame.position.set(fx, wy, z + wz);
+        const glass = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.2, 1.2), winMat);
+        glass.position.set(fx - t.into * 0.03, wy, z + wz);
+        g.add(frame, glass);
+      }
+
+      // A little hedged front garden between the house and the road (a gate gap in the middle).
+      for (let gz = z - HW / 2 + 0.4; gz < z + HW / 2; gz += 0.8) {
+        if (Math.abs(gz - z) < 0.9) continue; // the gate/path to the door
+        const hedge = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.8, 0.75), hedgeMat);
+        hedge.position.set(t.roadEdge + t.into * 0.5, 0.4, gz);
+        g.add(hedge);
+      }
+      // The garden path from the gate to the door.
+      const path = new THREE.Mesh(new THREE.BoxGeometry(SETBACK, 0.05, 0.9), trimMat);
+      path.position.set((t.roadEdge + frontX) / 2, 0.03, z - 1.5);
+      g.add(path);
+      n++;
+    }
   }
   return g;
 }
@@ -396,7 +489,7 @@ export function makeCommon(maxAnisotropy: number): School {
   beyond.position.set((B.minX + B.maxX) / 2, -0.05, (B.minZ + B.maxZ) / 2);
 
   const fireflies = makeFireflies();
-  group.add(beyond, houses(), trees(rng), emmanuelRoad(rng), playground(), picnicBenches(), fallenLog(), schoolBackdrop(), fenceGate(), greeters(), fireflies.mesh);
+  group.add(beyond, terraceHouses(), trees(rng), emmanuelRoad(rng), playground(), picnicBenches(), fallenLog(), schoolBackdrop(), fenceGate(), greeters(), fireflies.mesh);
 
   // reveal runs every frame with the elapsed dt: the Common uses it to drift its fireflies.
   return { group, reveal: (_x, _z, dt) => fireflies.tick(dt) };
