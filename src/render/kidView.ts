@@ -6,6 +6,13 @@ import { model, paint, PAINTED } from './paint';
 type Geo = THREE.BufferGeometry;
 const SKIN = 0xf0c8a0;
 const HAIR = 0x5a3d25;
+// Telferscot uniform: a navy jumper with a yellow polo, over grey trousers/skirt.
+const JUMPER = 0x25305e;
+const POLO = 0xf2c94c;
+const GREY = 0x565b68;
+// PE kit: a white t-shirt and navy shorts.
+const PE_TOP = 0xf2f2f2;
+const PE_LEGS = 0x25305e;
 
 const sphere = (r: number, color: number, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1): Geo =>
   paint(new THREE.SphereGeometry(r, 9, 7), color, (g) => g.scale(sx, sy, sz).translate(x, y, z));
@@ -14,10 +21,12 @@ const limb = (r: number, h: number, color: number, x: number, y: number, z: numb
 const eyes = (x: number, y: number, z: number): Geo[] =>
   [-1, 1].map((s) => sphere(0.028, 0x2a2a2a, s * x, y, z));
 
-/** A little child, ~0.9 m tall, facing +z. `top` is the jumper colour, `hair` the mop on top. */
-function child(top: number, hair: number, legs: number): Geo[] {
+/** A little child, ~0.9 m tall, facing +z. `top` is the shirt/jumper, `legs` the trousers/shorts. */
+function child(top: number, hair: number, legs: number, collar: boolean): Geo[] {
   return [
     limb(0.15, 0.28, top, 0, 0.42, 0, Math.PI / 2), // torso
+    // A white polo collar peeks out of the school jumper.
+    ...(collar ? [paint(new THREE.CylinderGeometry(0.16, 0.16, 0.07, 8), POLO, (g) => g.translate(0, 0.59, 0.02))] : []),
     sphere(0.17, SKIN, 0, 0.74, 0.02), // head
     sphere(0.19, hair, 0, 0.82, -0.02, 1, 0.7, 1), // hair mop
     ...eyes(0.06, 0.74, 0.15),
@@ -31,12 +40,12 @@ function child(top: number, hair: number, legs: number): Geo[] {
 }
 
 const MODELS: Record<KidKind, () => Geo[]> = {
-  // Naughty: a cheeky red-and-cap kid.
-  naughty: () => [...child(0xd6453f, 0x2a2a2a, 0x37506b), paint(new THREE.CylinderGeometry(0.19, 0.19, 0.05, 8), 0x2f6db0, (g) => g.translate(0, 0.94, -0.02)), paint(new THREE.BoxGeometry(0.18, 0.03, 0.16), 0x2f6db0, (g) => g.translate(0, 0.93, 0.16))],
-  // Nice: a soft pink jumper, bunches.
-  nice: () => [...child(0xf07ab0, 0x6a4326, 0x8a5a8a), ...[-1, 1].map((s) => sphere(0.07, 0x6a4326, s * 0.16, 0.86, -0.02))],
-  // Runner: bright yellow, mid-dash.
-  runner: () => child(0xf5c518, HAIR, 0x2f8f5a),
+  // Naughty: school uniform (navy jumper, yellow polo, grey trousers) and a cheeky cap.
+  naughty: () => [...child(JUMPER, 0x2a2a2a, GREY, true), paint(new THREE.CylinderGeometry(0.19, 0.19, 0.05, 8), 0x1a234a, (g) => g.translate(0, 0.94, -0.02)), paint(new THREE.BoxGeometry(0.18, 0.03, 0.16), 0x1a234a, (g) => g.translate(0, 0.93, 0.16))],
+  // Nice: school uniform (navy jumper, yellow polo, grey skirt) with bunches.
+  nice: () => [...child(JUMPER, 0x6a4326, GREY, true), ...[-1, 1].map((s) => sphere(0.07, 0x6a4326, s * 0.16, 0.86, -0.02))],
+  // Runner: PE kit — a white t-shirt and navy shorts, mid-dash.
+  runner: () => child(PE_TOP, HAIR, PE_LEGS, false),
 };
 
 /** How each scampers: [hop height, strides per metre, side-to-side waddle]. */
@@ -81,8 +90,10 @@ export class KidView {
 
       this.e.set(0, Math.PI / 2 - k.heading, Math.sin(phase) * waddle * moving);
       this.q.setFromEuler(this.e);
+      // A touch bigger than life, so they read as a proper crowd of children (~1.2 m tall).
+      const s = 1.35;
       this.pos.set(k.x, Math.abs(Math.sin(phase)) * hop * moving, k.z);
-      this.m.compose(this.pos, this.q, this.scale.set(1, 1, 1));
+      this.m.compose(this.pos, this.q, this.scale.set(s, s, s));
       mesh.setMatrixAt(mesh.count++, this.m);
     }
     for (const mesh of this.meshes.values()) mesh.instanceMatrix.needsUpdate = true;
