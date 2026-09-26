@@ -107,6 +107,36 @@ export const COMMON: Stage = {
   },
   sanctuary: null,
   hazardArea: null, // no rocks here: the Common's dangers move
+  // The park keeper, Mr Bramble: patrols the meadow, and snakes near him drop to a walk.
+  cooper: {
+    spawn: { x: 12, z: 8 },
+    beat: { minX: -38, maxX: 46, minZ: -26, maxZ: 42 },
+    persona: 'keeper',
+    lines: {
+      general: [
+        'No running on the grass, please!',
+        'Mind the flowerbeds!',
+        'Litter in the bin, thank you!',
+        'Keep dogs on their leads, please!',
+        'Lovely day for it. Do slow down.',
+        'Who left this gate open?',
+        'Mind the fresh mowing!',
+        'Bikes off the grass, thank you!',
+        'That is not what the benches are for.',
+        'Respect the wildlife, please. And walking feet.',
+        'Be sure to take your litter home!',
+      ],
+      near: [
+        'Oi! No slithering at speed!',
+        'Steady on — this is a park, not a racetrack.',
+        'Walking pace on the grass, if you please.',
+        'Slow down — there are little ones about.',
+        'Move along, nothing to forage here.',
+      ],
+      big: ['Crikey. You have grown. Still no running!', 'Goodness me. Mind the trees, would you.'],
+      bump: ['I beg your pardon!', 'Watch where you slither!', 'Careful! You nearly had me over.'],
+    },
+  },
   logs: COMMON_LOG_CIRCLES, // the fallen log: solid to snakes, clambered by kids
   predators: [{ kind: 'bear', count: 1 }, { kind: 'wolf', count: 2 }],
   // A crowd of children running the meadow: runners for whimsy, the odd pebble-thrower and kiss-blower.
@@ -115,7 +145,6 @@ export const COMMON: Stage = {
   creatureCount: 4,
   // Miss Sami and a mum, nattering on the grass just off the Telfer Road mouth.
   greeters: COMMON_GREETERS,
-  cooper: null, // Mr Cooper stays at school
   paintMinimap: (c, X, Z, scale) => {
     const box = (b: Box, color: string) => {
       c.fillStyle = color;

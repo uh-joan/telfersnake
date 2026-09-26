@@ -1,4 +1,5 @@
 import type { AnimalKind } from './animals';
+import type { WardenConfig } from './cooper';
 import type { FoodKind } from './food';
 import type { KidKind } from './kids';
 import type { Box, Circle } from './layout';
@@ -65,8 +66,8 @@ export interface Stage extends Terrain {
   creatureCount: number;
   /** Miss Sami and a mum, nattering at the edge of the Common. Null on a stage without them. */
   greeters: { sami: Spot; mum: Spot } | null;
-  /** Mr Cooper's spawn and beat, or null on a stage he never visits. */
-  cooper: { spawn: Spot; beat: Bounds } | null;
+  /** The stage's warden (Mr Cooper at school, the park keeper on the Common), or null if it has none. */
+  cooper: WardenConfig | null;
   /** Paint the fixed features onto the minimap. X/Z map metres to canvas pixels. */
   paintMinimap(c: CanvasRenderingContext2D, X: (x: number) => number, Z: (z: number) => number, scale: number): void;
 }

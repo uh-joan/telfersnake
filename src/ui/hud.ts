@@ -61,6 +61,9 @@ export class Hud {
   private bubbleAge = BUBBLE_LIFE;
   private bubbleHalf = 0;
   private bubbleTall = 0;
+  /** Where the current speech bubble is anchored (the speaker), in world metres. */
+  private bubbleX = 0;
+  private bubbleZ = 0;
   private shownProgress = -1;
   private shownScore = -1;
   private shownTier = -1;
@@ -93,9 +96,11 @@ export class Hud {
     this.popups.push({ el, x, z, age: 0 });
   }
 
-  say(text: string): void {
+  say(text: string, x = 0, z = 0): void {
     this.bubble.textContent = text;
     this.bubbleAge = 0;
+    this.bubbleX = x;
+    this.bubbleZ = z;
     // Measured here, once per line: reading layout every frame forces a reflow every frame.
     this.bubbleHalf = this.bubble.offsetWidth / 2 + 8;
     this.bubbleTall = this.bubble.offsetHeight + 8;
@@ -209,9 +214,8 @@ export class Hud {
     }
 
     this.bubbleAge += dt;
-    // The bubble sits over whoever does the talking here: Mr Cooper at school, Miss Sami on the Common.
-    const talker = this.stage.greeters && !this.stage.cooper ? this.stage.greeters.sami : world.cooper;
-    stage.project(talker.x, COOPER_HEAD_Y + 0.9, talker.z, this.sp);
+    // The bubble sits over whoever last spoke (Cooper, the park keeper or Miss Sami).
+    stage.project(this.bubbleX, COOPER_HEAD_Y + 0.9, this.bubbleZ, this.sp);
     const showBubble = this.bubbleAge < BUBBLE_LIFE && this.sp.visible;
     this.bubble.classList.toggle('show', showBubble);
     if (showBubble) {

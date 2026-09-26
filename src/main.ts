@@ -70,13 +70,22 @@ let kidView = new KidView(world.kids.length);
 let projectileView = new ProjectileView();
 let creatureView = new CreatureView(world.creatures.length);
 let hazardView = new HazardView(world.hazards);
-const cooperView = new CooperView();
+let cooperView = new CooperView(world.stage.cooper?.persona ?? 'cooper');
 const beeView = new BeeView();
 const sparkles = new Sparkles();
 const upgradeFx = new UpgradeFx();
 // The travelling actors (Cooper, bees, upgrade FX, sparkles) stay in the scene; each stage's
 // ground + fixed scenery is swapped in and out (and cached) as you move between school and Common.
 stage.scene.add(cooperView.group, beeView.mesh, upgradeFx.group, sparkles.mesh);
+/** Swap the warden figure (head teacher vs park keeper) when the stage changes. */
+function mountWarden(): void {
+  const persona = world.stage.cooper?.persona ?? 'cooper';
+  if (cooperView.persona === persona) return;
+  stage.scene.remove(cooperView.group);
+  disposeTree(cooperView.group);
+  cooperView = new CooperView(persona);
+  stage.scene.add(cooperView.group);
+}
 const sceneryCache = new Map<StageId, School>();
 let scenery: School | null = null;
 function mountScenery(id: StageId): void {
@@ -139,6 +148,7 @@ function mountWorld(next: WorldView): void {
   creatureView = new CreatureView(world.creatures.length);
   stage.scene.add(hazardView.group, foodView.group, animalView.group, predatorView.group, kidView.group, projectileView.group, creatureView.group);
   mountScenery(world.stage.id);
+  mountWarden();
   hud.setStage(world.stage);
   mountSnakes();
 }
@@ -572,8 +582,8 @@ function handleEvents(): void {
         break;
       }
       case 'say':
-        // A grown-up says something, in a speech bubble over their head (Mr Cooper, Miss Sami…).
-        hud.say(e.text);
+        // A grown-up says something, in a speech bubble over their head (Cooper, the keeper, Miss Sami…).
+        hud.say(e.text, e.x, e.z);
         break;
     }
   }
@@ -752,7 +762,7 @@ $('play').addEventListener('click', async () => {
     writeSave(save);
     hud.announce('🌳 The Common!', '✨ new friends & magic');
   }
-  hud.say(greeting);
+  hud.say(greeting, world.snake.x, world.snake.z);
   show(null);
 });
 

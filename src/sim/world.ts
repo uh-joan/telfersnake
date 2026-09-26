@@ -105,7 +105,7 @@ export type GameEvent =
   | { type: 'power'; who: number; kind: PowerId; x: number; z: number; heading: number; range: number }
   /** A rival was shrunk or frozen by a power (or bonk): puff at the victim; `by` earns the gem. */
   | { type: 'hit'; who: number; by: number; kind: 'shrink' | 'freeze'; x: number; z: number }
-  | { type: 'say'; text: string }
+  | { type: 'say'; text: string; x: number; z: number }
   /** A child let fly: a pebble or a blown kiss leaves their hand — a whoosh at (x, z). */
   | { type: 'lob'; kind: ProjectileKind; x: number; z: number }
   /** A pebble caught a snake: a small shrink, "oops, a pebble!". */
@@ -830,7 +830,8 @@ export class World {
     this.samiSayIn -= dt;
     if (this.samiSayIn > 0) return;
     this.samiSayIn = this.rng.range(7, 13);
-    this.events.push({ type: 'say', text: this.rng.pick(SAMI_LINES) });
+    const sami = this.stage.greeters.sami;
+    this.events.push({ type: 'say', text: this.rng.pick(SAMI_LINES), x: sami.x, z: sami.z });
   }
 
   // ---------------------------------------------------------------- the fantastic creatures (the woods & the Glade)

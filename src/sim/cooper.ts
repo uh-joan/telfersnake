@@ -56,9 +56,31 @@ const LINES_BUMP = [
   'Good heavens. Mind how you go.',
 ];
 
+/** The four line-sets a patrolling grown-up draws from. Same shape for Mr Cooper and the park keeper. */
+export interface CooperLines {
+  general: readonly string[];
+  near: readonly string[];
+  big: readonly string[];
+  bump: readonly string[];
+}
+/** Mr Cooper's own lines (the default for a stage that doesn't name its own). */
+export const COOPER_LINES: CooperLines = { general: LINES_GENERAL, near: LINES_NEAR, big: LINES_BIG, bump: LINES_BUMP };
+
+/** What a stage needs to place its warden: where they start, their beat, and (optionally) their own lines. */
+export interface WardenConfig {
+  spawn: Spot;
+  beat: Bounds;
+  lines?: CooperLines;
+  /** Which figure the renderer draws: the head teacher, or the park keeper. */
+  persona?: 'cooper' | 'keeper';
+}
+
 export class Cooper {
-  /** False on a stage he never visits (the Common): then he does nothing and is not drawn. */
+  /** False on a stage that has no warden: then it does nothing and is not drawn. */
   readonly active: boolean;
+  /** Which figure to draw (head teacher or park keeper). */
+  readonly persona: 'cooper' | 'keeper';
+  private readonly lines: CooperLines;
   private readonly spawn: Spot;
   private readonly beat: Bounds;
   x: number;
@@ -77,9 +99,11 @@ export class Cooper {
   private checkX = 0;
   private checkZ = 0;
 
-  /** `config` is the stage's spawn and beat, or null on a stage he never goes to. */
-  constructor(config: { spawn: Spot; beat: Bounds } | null) {
+  /** `config` is the stage's warden (spawn, beat, optional lines/persona), or null if it has none. */
+  constructor(config: WardenConfig | null) {
     this.active = config !== null;
+    this.persona = config?.persona ?? 'cooper';
+    this.lines = config?.lines ?? COOPER_LINES;
     this.spawn = config?.spawn ?? { x: -9999, z: -9999 };
     this.beat = config?.beat ?? { minX: -9999, maxX: -9999, minZ: -9999, maxZ: -9999 };
     this.x = this.tx = this.checkX = this.spawn.x;
@@ -103,8 +127,8 @@ export class Cooper {
     if (this.sayIn <= 0) {
       this.sayIn = w.rng.range(3.5, 6.5);
       const near = Math.hypot(w.snake.x - this.x, w.snake.z - this.z) < NEAR;
-      let lines = LINES_GENERAL;
-      if (near) lines = w.snake.tier >= 3 && w.rng.next() < 0.5 ? LINES_BIG : LINES_NEAR;
+      let lines = this.lines.general;
+      if (near) lines = w.snake.tier >= 3 && w.rng.next() < 0.5 ? this.lines.big : this.lines.near;
       this.say(w, w.rng.pick(lines));
     }
   }
@@ -114,13 +138,13 @@ export class Cooper {
     if (!this.active || this.bumpCooldown > 0) return false;
     this.bumpCooldown = 2.5;
     this.sayIn = w.rng.range(3.5, 6.5);
-    this.say(w, w.rng.pick(LINES_BUMP));
+    this.say(w, w.rng.pick(this.lines.bump));
     return true;
   }
 
   private say(w: World, text: string): void {
     this.talking = 2.6;
-    w.events.push({ type: 'say', text });
+    w.events.push({ type: 'say', text, x: this.x, z: this.z });
   }
 
   private run(w: World, dt: number): void {
