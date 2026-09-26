@@ -46,6 +46,8 @@ export interface Stage extends Terrain {
   fallbackSpot: Spot;
   /** Which animal kinds live here (and how many, via each kind's `count`). */
   animals: readonly AnimalKind[];
+  /** The HUD's "what the next size can gulp" hint, one emoji string per size tier (stage-specific). */
+  gulpHints: readonly string[];
   /** Which food grows where. */
   foodKindAt(rng: Rng, x: number, z: number): FoodKind;
   /** A random point in an animal's home turf ('green', 'lagoon', 'anywhere'…: names the stage understands). */

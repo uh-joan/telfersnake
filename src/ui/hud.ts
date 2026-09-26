@@ -141,8 +141,8 @@ export class Hud {
     if (tier !== this.shownTier) {
       this.shownTier = tier;
       this.tierName.textContent = TIERS[tier].name;
-      // The carrot at the end of the bar: what the next size up can gulp.
-      this.tierNext.textContent = TIERS[tier + 1]?.gulps ?? '👑';
+      // The carrot at the end of the bar: what the next size up can gulp, in this stage's animals.
+      this.tierNext.textContent = this.stage.gulpHints[tier + 1] ?? '👑';
     }
     const next = TIERS[tier + 1];
     const progress = next ? (s.mass - TIERS[tier].mass) / (next.mass - TIERS[tier].mass) : 1;

@@ -129,6 +129,8 @@ export const SCHOOL: Stage = {
   snakeSpawn: SNAKE_SPAWN,
   fallbackSpot: COOPER_SPAWN,
   animals: SCHOOL_ANIMALS,
+  gulpHints: ['🐌🐞', '🐔🦆', '🐇', '🐑🐷', '🐐'], // the school's petting-farm animals, per tier
+
   // Veg grows on The Green; lunch leftovers everywhere else.
   foodKindAt: (rng, x, z) => pickFoodKind(rng, inBox(GREEN, x, z) ? WEIGHTS_GREEN : WEIGHTS_YARD),
   homePoint: (rng: Rng, home: string): Spot => {
