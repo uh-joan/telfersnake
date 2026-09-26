@@ -110,14 +110,16 @@ function readDisk(): Save {
   }
 }
 
-/** Stars and gems as of the last time this tab and the disk agreed; the rest is this tab's doing. */
+/** Stars, gems and owned items as of the last time this tab and the disk agreed; the rest is this tab's doing. */
 let syncedStars = 0;
 let syncedGems = 0;
+let syncedOwned: string[] = [];
 
 export function loadSave(): Save {
   const save = readDisk();
   syncedStars = save.stars;
   syncedGems = save.gems;
+  syncedOwned = [...save.owned];
   return save;
 }
 
@@ -129,11 +131,16 @@ export function loadSave(): Save {
 export function writeSave(save: Save): void {
   try {
     const disk = readDisk();
+    // Owned as a delta, like stars/gems: keep whatever another tab added, apply this tab's own
+    // buys and sell-backs. Without this, a removal would be undone by unioning with the disk.
+    const added = save.owned.filter((id) => !syncedOwned.includes(id));
+    const removed = syncedOwned.filter((id) => !save.owned.includes(id));
+    const owned = [...new Set([...disk.owned, ...added])].filter((id) => !removed.includes(id));
     const merged: Save = {
       ...save,
       stars: Math.max(0, disk.stars + (save.stars - syncedStars)),
       gems: Math.max(0, disk.gems + (save.gems - syncedGems)),
-      owned: [...new Set([...disk.owned, ...save.owned])],
+      owned,
       bestScore: Math.max(save.bestScore, disk.bestScore),
       bestLength: Math.max(save.bestLength, disk.bestLength),
       runs: Math.max(save.runs, disk.runs),
@@ -149,6 +156,7 @@ export function writeSave(save: Save): void {
     Object.assign(save, merged);
     syncedStars = merged.stars;
     syncedGems = merged.gems;
+    syncedOwned = [...merged.owned];
   } catch {
     // Storage full or blocked: carry on, the run still works.
   }

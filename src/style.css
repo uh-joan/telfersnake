@@ -1234,6 +1234,13 @@ small {
 .mini-snake i.head::before { right: 3px; }
 .mini-snake i.head::after { right: 3px; top: 11px; }
 
+#shop-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
 #shop-buy {
   display: none;
   align-items: center;
@@ -1246,6 +1253,31 @@ small {
   font-weight: 900;
   background: var(--sun);
   box-shadow: 0 6px 0 var(--sun-deep);
+}
+
+/* Sell is the quieter, secondary action: get half your coins back for something you own. */
+#shop-sell {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: min(100%, 260px);
+  height: 44px;
+  border-radius: 99px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #4a5568;
+  background: #e7ebf0;
+  box-shadow: 0 4px 0 #b8c0cb;
+}
+
+#shop-sell.show {
+  display: flex;
+}
+
+#shop-sell:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #b8c0cb;
 }
 
 #shop-buy.show {
