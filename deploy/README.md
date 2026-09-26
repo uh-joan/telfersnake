@@ -74,7 +74,7 @@ curl -s "https://telfersnake.joans.cat/stats?k=$STATS_TOKEN" | python3 -m json.t
 ```
 
 The counts live in the `telfersnake-data` volume, so they survive restarts and redeploys. To reset
-them, remove the volume while the stack is down: `docker volume rm telfersnake_telfersnake-data`.
+them, remove the volume while the stack is down: `docker volume rm deploy_telfersnake-data`.
 
 ## Taking it down
 
