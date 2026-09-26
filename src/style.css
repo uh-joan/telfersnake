@@ -859,12 +859,18 @@ small {
 #shop-stars {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 16px;
   padding: 5px 16px;
   border-radius: 99px;
   background: rgba(255, 255, 255, 0.92);
   font-size: 20px;
   font-weight: 900;
+  white-space: nowrap;
+}
+#shop-stars .coin {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 /* ---------- level-up cards ---------- */
