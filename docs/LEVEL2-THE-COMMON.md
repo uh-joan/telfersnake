@@ -2,6 +2,14 @@
 
 *Brainstorm and phased plan, 2026-09-25. Companion to [BRAINSTORM.md](BRAINSTORM.md).*
 
+> **Status — updated 2026-09-26: shipped & LIVE.** Level 2 (Phases 0–6) plus a post-launch
+> polish/economy/analytics pass are merged to `main` and deployed at
+> [telfersnake.joans.cat](https://telfersnake.joans.cat). Two design details below were retuned
+> after launch and are now **out of date in the prose**: the unlock costs **300 ⭐** (not 100 💎),
+> and the game is **deployed** (the "NOT deployed" notes are historical). The brainstorm/design
+> sections are kept as originally written; the authoritative current state is the
+> **Post-launch** entry at the end of §12 (Progress log).
+
 ## 1. Vision
 
 Level 1 is the school playground: tidy, tarmac, Mr Cooper, rocks and sticks. **Level 2 is the Common** — big, green, wild and a little bit magic. You leave through a gap in the school fence (where Miss Sami is nattering with a mum), slither down Telfer Road, and the world opens out: meadows, woods, a pond, paths, kids everywhere. New food, new animals, and for the first time **dangers that come for you** (bears and wolves instead of rocks), plus — deep in the woods — fantastic creatures that grant magic.
@@ -10,8 +18,8 @@ It is the game's "level up": everything the kids already know (steer, eat, grow,
 
 ## 2. Access and framing
 
-- **Unlock:** pay **100 blue gems**, once. `save.commonUnlocked = true` (sticky, multi-tab-safe like `mega`). This gives gems a big long-term sink beyond 1-gem power picks — exactly the goal the economy was missing.
-- **From the main menu:** a destination picker above Play — **🏫 School** and **🌳 The Common**. Before unlock the Common tile shows **🔒 💎 100** and is tappable: it tells you what it costs, so it's a visible goal from day one ("I need a hundred gems!"). After unlock it's just selectable. Last choice remembered (`save.stage`).
+- **Unlock:** pay once. *(Launched at 100 blue gems; retuned post-launch to **300 ⭐** — gems double as the in-run power-card currency, so a gem price fought the core loop. See the Post-launch log.)* `save.commonUnlocked = true` (sticky, multi-tab-safe like `mega`).
+- **From the main menu:** a destination picker above Play — **🏫 School** and **🌳 The Common**. Before unlock the Common tile shows **🔒 ⭐ 300** (was 💎100) and is tappable: it tells you what it costs, so it's a visible goal from day one. After unlock it's just selectable. Last choice remembered (`save.stage`).
 - **Difficulty modes still apply.** Easy / Normal / God are orthogonal to stage: an Easy Common has dumb wolves, a God Common has bears *and* laser-eyed rivals.
 - **The fence gap is also a live portal.** In the school world, once unlocked, slithering into the opening in the fence takes you to the Common (a short "down Telfer Road" beat), and the Telfer Road end of the Common leads back. Miss Sami stands at the gap chatting to a mum; if you're not unlocked yet she says so ("The Common? That's a hundred gems for the trip, love.").
 
@@ -120,7 +128,7 @@ Each phase is independently shippable, verified headless, reviewed, then deploye
 
 | Phase | Ships | The work |
 |---|---|---|
-| **0 · Groundwork** | The Common appears on the menu as a locked 🔒💎100 goal. | The `Stage` abstraction; the school becomes Stage 1 with zero visible change; stage picker on the start screen; `save.commonUnlocked` + `save.stage`; the 100-gem unlock flow; rooms keyed by stage. |
+| **0 · Groundwork** | The Common appears on the menu as a locked goal (🔒💎100 at launch, now 🔒⭐300). | The `Stage` abstraction; the school becomes Stage 1 with zero visible change; stage picker on the start screen; `save.commonUnlocked` + `save.stage`; the unlock flow; rooms keyed by stage. |
 | **1 · The place** | You can pay 100 gems and *play* a big new map. | The Common's layout from the map (bounds, zones, solids, paths, pond, café, Telfer Road entrance), ground painting, scenery, minimap. Populated with today's food/animals/rivals so it's fun on day one. The fence-gap portal, Miss Sami + mum at the gap. |
 | **2 · Forest life** | It feels like a common. | Squirrels (tree-climb), crows (steal), deer (bolt), hedgehog, fox, pigeons; mushrooms (+golden), tomatoes, berries, acorns; zone spawns. |
 | **3 · Danger** | Something hunts you. | Predator entity: bear (lumber, big bite) and wolf pair (howl, chase, give up); detection/charge/cooldown; they attack rivals too; freeze/zap counterplay; no rocks in the Common; mode-scaled ferocity. |
@@ -259,4 +267,35 @@ Each phase is independently shippable, verified headless, reviewed, then deploye
 
 ---
 
-**🎉 Level 2 — The Common is complete** (Phases 0–6, all on the `level2-phase0` branch, NOT deployed). The school stays byte-identical throughout. What's built: a whole second stage reached by a 100-gem menu ticket, with its own layout, ground, scenery, minimap and warm atmosphere; forest food and animals; active bear & wolf predators with power counterplay; a crowd of kids (pebbles & kisses) and Miss Sami; eight fantastic creatures granting eight magics via a new buff system; and the atmosphere pass. Ready for a play-test whenever you'd like to merge & deploy.
+**🎉 Level 2 — The Common is complete** (Phases 0–6). The school stays byte-identical throughout. What's built: a whole second stage reached by a menu ticket, with its own layout, ground, scenery, minimap and warm atmosphere; forest food and animals; active bear & wolf predators with power counterplay; a crowd of kids (pebbles & kisses) and Miss Sami; eight fantastic creatures granting eight magics via a new buff system; and the atmosphere pass. *(Since superseded — see the Post-launch log below: this all shipped live, with a further polish/economy/analytics pass on top.)*
+
+---
+
+### 🚀 Post-launch 2026-09-26 — retune, polish & analytics (LIVE)
+
+**Level 2 is merged to `main` and deployed** at [telfersnake.joans.cat](https://telfersnake.joans.cat) (PRs #2–#5). The school stays byte-identical throughout — every change below is render/UI/economy/server-only, or scoped to the Common. Shipped in order:
+
+**Setting & cast polish (the Common):**
+- Kids in **navy+yellow school uniform / navy+white PE kit**, a bit bigger.
+- The **school** visible beyond the fence at the top of Telferscot Road; **Miss Sami** enlarged, chatter in a speech bubble.
+- A big **fallen white log** in the top-right — solid to snakes/predators/creatures, but kids clamber over it.
+- Cars rotated to face along the road; the park's **east edge is a road boundary** (no houses); proper **terraced houses** (brick + gardens); the fantastic creatures made bigger; a walled-off SW grass pocket closed (flood-fill: 0 unreachable cells).
+- **Weather** — drifting sun, cloud, rain and thunderstorms (render-only), later given **smaller, daintier clouds**.
+- **Mr Bramble the park keeper** — a Cooper-style warden for the Common (own persona/lines/look).
+- Stage-specific **tier-hint gulp icons** in the HUD (Common animals, not school ones), in both the size-bar hint and the tier-up growth banner.
+
+**New content:**
+- A new top **size tier — "The Dragon"** (after MEGA), with a fierce animated dragon head: scaly crown, swept-back banded horns, glowing slit-pupil eyes, a membrane crest, fangs, and a flame at the jaws.
+- **Common-only cosmetics** — gem-priced skins/hats/trails, hidden until the Common is unlocked; a **distinct shape per trail type** (hearts, bubbles, tumbling flakes, glowing motes).
+- The blue-**gem balance** now shown beside the stars; a **bigger, bolder pause button**.
+
+**Economy retune:**
+- **Common unlock 100 💎 → 300 ⭐.** Gems double as the in-run power-card currency (1 gem/card), so saving 100 fought the core loop; stars are earned in bulk and don't clash.
+- **Sell items back in the Tuck Shop** for half their price, same currency; the free starter kit can't be sold; a worn item reverts to the default. (`writeSave` now reconciles `owned` as a delta so a removal actually sticks while other tabs' buys are still protected.)
+- A wordless **unlock splash** — a golden padlock shatters into shards and sparks, then leaves, petals and butterflies bloom on a burst of sunbeams. Fires once, on unlock.
+
+**Analytics (first-party, anonymous, aggregate):**
+- The game posts tiny beacons to `POST /a` (game opened, run ended with score/tier/stage/mode/duration, Common unlocked, shop buy/sell); the server folds them into **totals & averages only** — no names, ids, cookies or IP. Read as JSON at token-guarded **`GET /stats?k=<STATS_TOKEN>`**.
+- Persisted in a small `/data` volume (rest of the container filesystem stays read-only) so counts survive restarts/redeploys. The "keeps nothing" deploy note is updated: it now keeps **anonymous aggregate counts only**. See [`deploy/README.md`](../deploy/README.md#checking-the-numbers).
+
+**Still deferred** (from the original pitch, unchanged): the in-world fence-gap **portal** (access stays the menu picker); signature animal behaviours (squirrel climb-and-vanish, crow steal, hedgehog curl); the **Wizard-Hat** tie-in (creatures approaching instead of fleeing); a separate gulpable Frog-Prince frog; the Will-o'-the-wisp as a light to follow.
