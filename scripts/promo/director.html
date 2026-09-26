@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Telfersnake · promo director (dev only)</title>
+    <style>
+      /* The film: the game underneath, then the promo's layers stacked over it. */
+      #behind, #fg, #front { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+      #behind { z-index: 1; }
+      #fg { z-index: 2; }
+      #app #labels, #app #hud { z-index: 3; }
+      #front { z-index: 5; }
+      #unlock-splash { z-index: 4 !important; }
+      /* Only the bits of the HUD a shot asks for (body classes), never the buttons, stick or minimap. */
+      #hud > *, #stick, #corner, #dash, #dash-hint { display: none !important; }
+      #hud > #banner { display: block !important; }
+      /* No speech bubbles (the staff's lines) and no rival name tags in the film. */
+      #bubble, .tag { display: none !important; }
+      body.hud-tier #hud > #stats { display: flex !important; }
+      body.hud-tier #stats > #score, body.hud-tier #stats > #chip { display: none !important; }
+      body.hud-tier #xp { display: none !important; }
+      body.hud-xp #hud > #xp { display: block !important; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+      <div id="labels"><div id="bubble"></div></div>
+      <div id="hud">
+        <div id="xp"><i id="xp-fill"></i><span id="xp-level">1</span></div>
+        <div id="stats">
+          <div id="score"><span>🏆</span><b id="score-value">0</b><span class="stars">⭐<b id="stars-value">0</b></span></div>
+          <div id="tier" aria-label="Progress to the next size">
+            <b id="tier-name">Wiggly Worm</b>
+            <div class="tier-row"><div class="bar"><i id="tier-fill"></i></div><span id="tier-next">🐔🦆</span></div>
+          </div>
+          <div id="chip">🚶 Walking feet!</div>
+        </div>
+        <div id="corner">
+          <canvas id="minimap" width="152" height="160"></canvas>
+          <div id="board"></div>
+        </div>
+        <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+        <div id="count"></div>
+        <div id="tray"></div>
+        <div id="toast"></div>
+        <div id="dash-hint"></div>
+        <button id="dash"></button>
+      </div>
+      <div id="stick"><i></i></div>
+    </div>
+    <canvas id="behind"></canvas>
+    <canvas id="fg"></canvas>
+    <canvas id="front"></canvas>
+    <script type="module" src="./director.ts"></script>
+  </body>
+</html>

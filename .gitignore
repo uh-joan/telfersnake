@@ -5,3 +5,5 @@ dist
 .omc
 dist-server
 deploy/deploy.env
+promo-out/
+promo-*.mp4

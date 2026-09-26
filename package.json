@@ -11,7 +11,10 @@
     "server": "tsx watch server/index.ts",
     "build:server": "esbuild server/index.ts --bundle --platform=node --format=esm --outfile=dist-server/index.js --banner:js=\"import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);\"",
     "start": "node dist-server/index.js",
-    "icons": "node scripts/make-icon.mjs && node scripts/bake-icons.mjs"
+    "icons": "node scripts/make-icon.mjs && node scripts/bake-icons.mjs",
+    "promo": "node scripts/promo/record.mjs film",
+    "promo:16x9": "node scripts/promo/record.mjs film --format 16x9",
+    "promo:typecheck": "tsc --noEmit -p scripts/promo/tsconfig.json"
   },
   "dependencies": {
     "three": "^0.186.0",
@@ -22,6 +25,7 @@
     "@types/three": "^0.186.0",
     "@types/ws": "^8.18.1",
     "esbuild": "^0.28.2",
+    "playwright": "^1.63.0",
     "sharp": "^0.35.4",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
