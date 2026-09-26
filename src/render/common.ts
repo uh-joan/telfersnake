@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMMON_BOUNDS, COMMON_COPSES, COMMON_GREETERS, COMMON_HOUSES, COMMON_WOODS, GLADE } from '../sim/commonLayout';
+import { COMMON_BOUNDS, COMMON_COPSES, COMMON_EAST_ROAD, COMMON_GREETERS, COMMON_HOUSES, COMMON_WOODS, GLADE } from '../sim/commonLayout';
 import { Rng } from '../sim/rng';
 import type { School } from './school';
 
@@ -46,10 +46,12 @@ function paintGround(maxAnisotropy: number): THREE.Mesh {
     c.fill();
   }
 
-  // Roads: Emmanuel Road across, Telferscot Road down the middle.
+  // Roads: Emmanuel Road across, Telferscot Road down the middle, and the road down the east edge.
+  const R = COMMON_EAST_ROAD;
   c.fillStyle = '#6b7078';
   c.fillRect(px(-60), pz(-42), W * S, 8 * S);
   c.fillRect(px(-6), pz(-100), 12 * S, 58 * S);
+  c.fillRect(px(R.x - R.w / 2), pz(R.z - R.d / 2), R.w * S, R.d * S);
   c.strokeStyle = 'rgba(255,255,255,0.6)';
   c.lineWidth = 0.18 * S;
   c.setLineDash([2 * S, 3 * S]);
@@ -58,6 +60,8 @@ function paintGround(maxAnisotropy: number): THREE.Mesh {
   c.lineTo(px(60), pz(-38));
   c.moveTo(px(0), pz(-100));
   c.lineTo(px(0), pz(-42));
+  c.moveTo(px(R.x), pz(-38));
+  c.lineTo(px(R.x), pz(R.z + R.d / 2));
   c.stroke();
   c.setLineDash([]);
 

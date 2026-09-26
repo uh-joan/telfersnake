@@ -18,8 +18,9 @@ const BOUNDS = COMMON_BOUNDS;
 export const COMMON_HOUSES: Box[] = [
   { x: -33, z: -71, w: 54, d: 58 }, // west terrace: x -60..-6, z -100..-42
   { x: 33, z: -71, w: 54, d: 58 }, // east terrace: x 6..60
-  { x: 54, z: 4, w: 12, d: 76 }, // Rastell Ave houses down the common's east edge
 ];
+// A road runs down the park's east edge (no houses there): the boundary you cannot cross.
+export const COMMON_EAST_ROAD: Box = { x: 57, z: 9, w: 6, d: 102 }; // x 54..60, z -42..60
 // Woods that wall the meadow in and pinch it to a point in the south.
 export const COMMON_WOODS: Box[] = [
   { x: -52, z: 4, w: 16, d: 76 }, // west woods: x -60..-44, z -34..42
@@ -27,7 +28,7 @@ export const COMMON_WOODS: Box[] = [
   { x: -34, z: 44, w: 20, d: 20 }, // south-west wedge, narrowing the tip
   { x: 40, z: 42, w: 16, d: 24 }, // south-east wedge
 ];
-const SOLID_BOXES: Box[] = [...COMMON_HOUSES, ...COMMON_WOODS];
+const SOLID_BOXES: Box[] = [...COMMON_HOUSES, COMMON_EAST_ROAD, ...COMMON_WOODS];
 
 // Tree copses out in the meadow: things to slither round, like the real common's clumps.
 export const COMMON_COPSES: Circle[] = [
@@ -93,9 +94,10 @@ export const COMMON: Stage = {
     };
     c.fillStyle = '#6fae4a'; // grass
     c.fillRect(0, 0, (BOUNDS.maxX - BOUNDS.minX) * scale, (BOUNDS.maxZ - BOUNDS.minZ) * scale);
-    c.fillStyle = '#8a8f98'; // roads: Emmanuel Road, and the Telferscot Road corridor
+    c.fillStyle = '#8a8f98'; // roads: Emmanuel Road, the Telferscot Road corridor, and the east-edge road
     c.fillRect(X(-60), Z(-42), 120 * scale, 8 * scale);
     c.fillRect(X(-6), Z(-100), 12 * scale, 58 * scale);
+    box(COMMON_EAST_ROAD, '#8a8f98');
     for (const b of HOUSES) box(b, '#6b5a4a');
     for (const b of WOODS) box(b, '#3f7a34');
     c.fillStyle = '#2f6a2a';
