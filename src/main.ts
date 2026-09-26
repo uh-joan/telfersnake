@@ -20,6 +20,7 @@ import { HazardView } from './render/hazardView';
 import { SnakeView } from './render/snakeView';
 import { disposeTree } from './render/paint';
 import { Sparkles } from './render/sparkles';
+import { TrailView } from './render/trailView';
 import { Stage } from './render/stage';
 import { Weather } from './render/weather';
 import { UpgradeFx } from './render/upgradeFx';
@@ -73,10 +74,11 @@ let hazardView = new HazardView(world.hazards);
 let cooperView = new CooperView(world.stage.cooper?.persona ?? 'cooper');
 const beeView = new BeeView();
 const sparkles = new Sparkles();
+const trailView = new TrailView();
 const upgradeFx = new UpgradeFx();
 // The travelling actors (Cooper, bees, upgrade FX, sparkles) stay in the scene; each stage's
 // ground + fixed scenery is swapped in and out (and cached) as you move between school and Common.
-stage.scene.add(cooperView.group, beeView.mesh, upgradeFx.group, sparkles.mesh);
+stage.scene.add(cooperView.group, beeView.mesh, upgradeFx.group, sparkles.mesh, trailView.mesh);
 /** Swap the warden figure (head teacher vs park keeper) when the stage changes. */
 function mountWarden(): void {
   const persona = world.stage.cooper?.persona ?? 'cooper';
@@ -450,7 +452,7 @@ function handleEvents(): void {
         break;
       case 'tier':
         if (!mine) break;
-        hud.announce(`${TIERS[e.tier].name}!`, `😋 ${TIERS[e.tier].gulps}`);
+        hud.announce(`${TIERS[e.tier].name}!`, `😋 ${world.stage.gulpHints[e.tier] ?? TIERS[e.tier].gulps}`);
         sparkles.burst(world.snake.x, world.snake.z, CONFETTI, 30, 1.4);
         sfx?.tierUp();
         music?.setLevel(e.tier);
@@ -692,7 +694,7 @@ function frame(now: number): void {
         const palette = o.hasMagic('rainbow') ? RAINBOW : trailFor(o.id);
         if (palette.length === 0 || !o.alive) continue;
         o.sampleAt(o.length, tail);
-        sparkles.drift(tail.x, tail.z, palette);
+        trailView.add(tail.x, tail.z, palette);
       }
     }
   } else {
@@ -711,6 +713,7 @@ function frame(now: number): void {
   hazardView.update(world, time);
   beeView.update(world, time);
   sparkles.update(dt);
+  trailView.update(dt, time);
   upgradeFx.update(world, playing ? dt : 0, time);
   scenery?.reveal(s.x, s.z, dt);
   cooperView.update(world.cooper, playing ? dt : 0, time);
