@@ -21,6 +21,7 @@ import { SnakeView } from './render/snakeView';
 import { disposeTree } from './render/paint';
 import { Sparkles } from './render/sparkles';
 import { Stage } from './render/stage';
+import { Weather } from './render/weather';
 import { UpgradeFx } from './render/upgradeFx';
 import { CREATURES } from './sim/creatures';
 import { asMode, godUnlocked, type Mode, rulesFor } from './sim/modes';
@@ -57,6 +58,9 @@ const controls = new Controls($('app'), $('stick'), $('dash'));
 const hud = new Hud();
 let sfx: Sfx | null = null;
 let music: Music | null = null;
+// The drifting sky: sun, cloud, rain and the odd storm. Purely visual, so it never touches the sim.
+const weather = new Weather(stage, () => sfx);
+stage.scene.add(weather.group);
 
 let snakeViews: SnakeView[] = [];
 let foodView = new FoodView(world.foods.length);
@@ -700,6 +704,7 @@ function frame(now: number): void {
   scenery?.reveal(s.x, s.z, dt);
   cooperView.update(world.cooper, playing ? dt : 0, time);
   stage.follow(s.x, s.z, s.heading, s.radius, dt);
+  weather.update(dt, s.x, s.z);
   hud.update(world, stage, dt);
   stage.render();
   requestAnimationFrame(frame);

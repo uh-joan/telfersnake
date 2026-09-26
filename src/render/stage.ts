@@ -26,6 +26,10 @@ export class Stage {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly hemi: THREE.HemisphereLight;
   private readonly sun: THREE.DirectionalLight;
+  /** The current stage's clear-weather atmosphere; the weather system dims and greys it from here. */
+  private baseAtmo: { sky: number; fog: readonly [number, number]; hemiSky: number; hemiGround: number; hemi: number; sun: number; sunI: number } = ATMOSPHERE.school;
+  private readonly skyTmp = new THREE.Color();
+  private readonly greyTmp = new THREE.Color(0x8a8f96);
   private readonly focus = new THREE.Vector3();
   private distance = 17;
   private primed = false;
@@ -50,6 +54,7 @@ export class Stage {
   /** Give each stage its own light and haze: the school's bright noon, the Common's warm afternoon. */
   setAtmosphere(id: 'school' | 'common'): void {
     const a = ATMOSPHERE[id];
+    this.baseAtmo = a;
     (this.scene.background as THREE.Color).setHex(a.sky);
     const fog = this.scene.fog as THREE.Fog;
     fog.color.setHex(a.sky);
@@ -60,6 +65,22 @@ export class Stage {
     this.hemi.intensity = a.hemi;
     this.sun.color.setHex(a.sun);
     this.sun.intensity = a.sunI;
+  }
+
+  /**
+   * The weather dims and greys the clear-weather light: `dim` 1 = bright sun, lower = overcast;
+   * `flash` briefly adds brightness for a lightning strike. Recomputed from the stored base.
+   */
+  weatherLight(dim: number, flash: number): void {
+    const a = this.baseAtmo;
+    this.hemi.intensity = a.hemi * dim + flash;
+    this.sun.intensity = a.sunI * dim + flash;
+    // Grey and darken the sky/fog as it clouds over, then brighten on a flash.
+    this.skyTmp.setHex(a.sky).lerp(this.greyTmp, (1 - dim) * 0.85).multiplyScalar(Math.min(1.4, 0.55 + 0.45 * dim + flash * 0.15));
+    (this.scene.background as THREE.Color).copy(this.skyTmp);
+    const fog = this.scene.fog as THREE.Fog;
+    fog.color.copy(this.skyTmp);
+    fog.far = a.fog[1] * (0.6 + 0.4 * dim); // the rain closes the view in
   }
 
   /**
