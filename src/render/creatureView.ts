@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CREATURE_KINDS, type CreatureKind } from '../sim/creatures';
+import { CREATURE_KINDS, CREATURES, type CreatureKind } from '../sim/creatures';
 import type { WorldView } from '../sim/view';
 import { model, paint, PAINTED } from './paint';
 
@@ -83,22 +83,54 @@ const MODELS: Record<CreatureKind, () => Geo[]> = {
     ...eyes(0.03, 0.06, 0.46, 0.32),
     ...[[0.3, -0.26, 0.26], [0.52, -0.28, 0.3], [0.72, -0.2, 0.26]].map(([y, z, r]) => sphere(r, 0xffd76a, 0, y, z, 0.8, 1, 0.6)),
   ],
-  // Will-o'-the-wisp: just a floating orb of light.
+  // Will-o'-the-wisp: just a floating orb of light, a pale violet to match its ring (never a pebble-beige).
   wisp: () => [
-    sphere(0.2, 0xfff6c0, 0, 1.0, 0),
-    sphere(0.32, 0xfff6c0, 0, 1.0, 0, 1, 1, 1),
+    sphere(0.2, 0xffffff, 0, 1.0, 0),
+    sphere(0.32, 0xe2d2ff, 0, 1.0, 0, 1, 1, 1),
   ],
 };
+
+/**
+ * How big each kind is drawn. The little ones get the biggest boost: at the follow camera's height a
+ * true-to-life frog or pixie is no bigger than a snake's head.
+ */
+const SIZE: Record<CreatureKind, number> = {
+  stag: 1.7, unicorn: 1.8, owl: 2.3, frog: 2.5, kitsune: 2.3, pixie: 2.6, squirrel: 2.4, wisp: 2.4,
+};
+/** Radius of the glowing ring on the ground under each one. */
+const RING: Record<CreatureKind, number> = {
+  stag: 2.0, unicorn: 1.9, owl: 1.6, frog: 1.6, kitsune: 1.6, pixie: 1.5, squirrel: 1.6, wisp: 1.7,
+};
+
+/** A soft disc with a brighter rim — a little magic circle — tinted per creature by its instance colour. */
+function ringTexture(): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(255,255,255,0.4)');
+  grad.addColorStop(0.6, 'rgba(255,255,255,0.3)');
+  grad.addColorStop(0.8, 'rgba(255,255,255,0.95)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
 
 /** Faced with a snake they flee, so a bobbing hover reads them as light and unreal. */
 export class CreatureView {
   readonly group = new THREE.Group();
   private readonly meshes = new Map<CreatureKind, THREE.InstancedMesh>();
+  /** A pulsing ring of each creature's own colour on the ground beneath it. */
+  private readonly rings: THREE.InstancedMesh;
   private readonly m = new THREE.Matrix4();
   private readonly q = new THREE.Quaternion();
+  private readonly flat = new THREE.Quaternion();
   private readonly e = new THREE.Euler(0, 0, 0, 'YXZ');
   private readonly pos = new THREE.Vector3();
   private readonly scale = new THREE.Vector3();
+  private readonly col = new THREE.Color();
+  private readonly white = new THREE.Color(0xffffff);
   private readonly hidden = new THREE.Vector3(0, -999, 0);
 
   constructor(capacity: number) {
@@ -108,14 +140,26 @@ export class CreatureView {
       this.meshes.set(kind, mesh);
       this.group.add(mesh);
     }
+    this.rings = new THREE.InstancedMesh(
+      new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2),
+      // Normal blending, not additive: on green grass additive light drifts every hue toward cyan or
+      // yellow, and the whole point of the ring is that each creature's colour is its own.
+      new THREE.MeshBasicMaterial({ map: ringTexture(), transparent: true, depthWrite: false }),
+      Math.max(1, capacity),
+    );
+    this.rings.frustumCulled = false;
+    this.rings.setColorAt(0, this.col.set(0xffffff));
+    this.rings.count = 0;
+    this.group.add(this.rings);
   }
 
   update(world: WorldView, time: number): void {
     for (const mesh of this.meshes.values()) mesh.count = 0;
+    this.rings.count = 0;
     world.creatures.forEach((c, i) => {
       const mesh = this.meshes.get(c.kind)!;
       if (c.respawnIn > 0) {
-        // Faded after a gulp: park the instance far below the ground.
+        // Faded after a gulp: park the instance far below the ground (and draw no ring).
         this.m.compose(this.hidden, this.q, this.scale.set(1, 1, 1));
         mesh.setMatrixAt(mesh.count++, this.m);
         return;
@@ -123,12 +167,22 @@ export class CreatureView {
       const bob = Math.sin(time * 2 + i) * 0.12;
       this.e.set(0, Math.PI / 2 - c.heading, 0);
       this.q.setFromEuler(this.e);
-      // A little grander than life, so these rare things feel worth the chase.
-      const s = 1.35;
+      const s = SIZE[c.kind];
       this.pos.set(c.x, bob, c.z);
       this.m.compose(this.pos, this.q, this.scale.set(s, s, s));
       mesh.setMatrixAt(mesh.count++, this.m);
+
+      // The ring breathes, each out of step with the others.
+      const beat = Math.sin(time * 3 + i * 1.7);
+      const r = RING[c.kind] * (0.92 + 0.08 * beat);
+      this.m.compose(this.pos.set(c.x, 0.05, c.z), this.flat, this.scale.set(r, 1, r));
+      this.rings.setMatrixAt(this.rings.count, this.m);
+      // Pulse toward white (a flash of light) rather than toward dark.
+      this.col.setHex(CREATURES[c.kind].glow).lerp(this.white, 0.3 * (0.5 + 0.5 * beat));
+      this.rings.setColorAt(this.rings.count++, this.col);
     });
     for (const mesh of this.meshes.values()) mesh.instanceMatrix.needsUpdate = true;
+    this.rings.instanceMatrix.needsUpdate = true;
+    if (this.rings.instanceColor) this.rings.instanceColor.needsUpdate = true;
   }
 }

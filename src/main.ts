@@ -712,9 +712,11 @@ function frame(now: number): void {
         if (o.hasMagic('magnet') && Math.random() < 0.3) sparkles.drift(o.x, o.z, PIXIE_FX);
         if (o.hasMagic('owl') && Math.random() < 0.15) sparkles.drift(o.x, o.z, OWL_FX);
       }
-      // The fantastic creatures glimmer with their own aura.
+      // The fantastic creatures glimmer with their own aura, in their own colour, all round them.
       for (const c of world.creatures) {
-        if (c.respawnIn <= 0 && Math.random() < 0.35) sparkles.drift(c.x, c.z, [CREATURES[c.kind].glow, 0xffffff]);
+        if (c.respawnIn > 0 || Math.random() > 0.8) continue;
+        const glow = CREATURES[c.kind].glow;
+        sparkles.drift(c.x + (Math.random() - 0.5) * 1.4, c.z + (Math.random() - 0.5) * 1.4, [glow, glow, 0xffffff]);
       }
     }
     if ((trailIn -= dt) <= 0) {
