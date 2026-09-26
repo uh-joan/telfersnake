@@ -19,19 +19,19 @@ export interface CreatureSpec {
   flee: number;
   alert: number;
   radius: number;
-  /** A glow colour for the renderer's aura. */
+  /** Each one's own bold colour, for the renderer's ground ring and aura: tells them apart at a glance. */
   glow: number;
 }
 
 export const CREATURES: Record<CreatureKind, CreatureSpec> = {
-  stag: { weight: 0.4, flee: 6.5, alert: 16, radius: 0.6, glow: 0xfff2b0 },
-  unicorn: { weight: 0.8, flee: 6.0, alert: 14, radius: 0.55, glow: 0xffd6f2 },
-  owl: { weight: 1.2, flee: 4.5, alert: 12, radius: 0.4, glow: 0xcde6ff },
-  frog: { weight: 1.2, flee: 4.0, alert: 10, radius: 0.35, glow: 0xbff0a0 },
-  kitsune: { weight: 1.2, flee: 6.2, alert: 13, radius: 0.45, glow: 0xffc08a },
-  pixie: { weight: 1.8, flee: 5.0, alert: 12, radius: 0.3, glow: 0xc0ffe6 },
-  squirrel: { weight: 1.8, flee: 5.5, alert: 11, radius: 0.35, glow: 0xffe0a0 },
-  wisp: { weight: 1.6, flee: 3.5, alert: 9, radius: 0.3, glow: 0xfff6c0 },
+  stag: { weight: 0.4, flee: 6.5, alert: 16, radius: 0.78, glow: 0xffffff },
+  unicorn: { weight: 0.8, flee: 6.0, alert: 14, radius: 0.72, glow: 0xff4fd8 },
+  owl: { weight: 1.2, flee: 4.5, alert: 12, radius: 0.52, glow: 0x3f6bff },
+  frog: { weight: 1.2, flee: 4.0, alert: 10, radius: 0.46, glow: 0xb8ff3a },
+  kitsune: { weight: 1.2, flee: 6.2, alert: 13, radius: 0.58, glow: 0xff5a1f },
+  pixie: { weight: 1.8, flee: 5.0, alert: 12, radius: 0.4, glow: 0x3ff0ff },
+  squirrel: { weight: 1.8, flee: 5.5, alert: 11, radius: 0.46, glow: 0xffc21a },
+  wisp: { weight: 1.6, flee: 3.5, alert: 9, radius: 0.4, glow: 0x9b4dff },
 };
 
 export interface Creature {
