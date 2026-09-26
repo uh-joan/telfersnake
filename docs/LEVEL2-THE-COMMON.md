@@ -244,4 +244,19 @@ Each phase is independently shippable, verified headless, reviewed, then deploye
 
 **Simplified vs the pitch:** the **Wizard Hat tie-in** (creatures approaching instead of fleeing) is deferred — the hat is presentation and isn't plumbed into the sim yet. Frog Prince **roots** the predator rather than spawning a separate gulpable frog; the Will-o'-the-wisp **is** the treasure (its cache) rather than a light you follow. Creatures are drawn normally while `hidden` (a shimmer), not truly translucent.
 
-**Level 2 is feature-complete** through Phase 5. Remaining polish (Phase 6, optional): atmosphere — parked cars & scenery on Emmanuel Road, the playground landmark, ambient sound, and the deferred items above if wanted.
+### ✅ Phase 6 complete 2026-09-26 — atmosphere & polish (on branch, NOT deployed)
+
+**Done and verified.** The finishing coat — entirely render / audio / meta, so the **sim is untouched**.
+- **Common atmosphere** — `Stage.setAtmosphere(id)` swaps the light and haze per stage: the school keeps its bright noon; the Common gets a warmer late-afternoon key light, a greener sky and closer fog. Applied on every scenery swap.
+- **Scenery** (`render/common.ts`) — **parked cars** and a **tree line** along Emmanuel Road (the road mouth left clear), the **playground landmark** at (−15, 32) (deck, red roof, slide, swing), and **picnic benches** out toward the edges. Pure scenery (non-colliding).
+- **Fireflies in the Glade** — a drifting, twinkling cloud of ~40 motes over (0, 46), animated each frame through the scenery's `reveal(dt)` hook.
+- **Audio** — a **Common music variation** (mellow triangle lead, rounder bass, softer drums) plus **ambient birdsong & wind** woven into the synth, switched on with `music.setPlace(stage)`; the school's bright chiptune is unchanged.
+- **Economy ×1.25** — the Common pays back the 100-gem ticket: stars earned there are ×1.25, and each gem has a 1-in-4 chance of a bonus gem.
+- **First-visit flourish** — a one-time "🌳 The Common!" fanfare and a Miss-Sami welcome line the very first time you set foot there (`save.commonSeen`, sticky).
+- **Verified:** typecheck + full build clean; **school byte-identical** (`4c82c20d` / `392056d6` / `38d6ad19`) — no sim file changed; browser — the warmer light, the parked cars + tree line, the playground, and the Glade fireflies all render, the game plays without errors.
+
+**Simplified vs the pitch:** the new props are non-colliding scenery (kept toward the edges so snakes rarely clip them); "dusk" is a warm late-afternoon rather than true dark, to stay bright for young players; the Phase-5 deferrals (Wizard-Hat tie-in, a separate gulpable frog, the wisp-as-a-light) remain deferred.
+
+---
+
+**🎉 Level 2 — The Common is complete** (Phases 0–6, all on the `level2-phase0` branch, NOT deployed). The school stays byte-identical throughout. What's built: a whole second stage reached by a 100-gem menu ticket, with its own layout, ground, scenery, minimap and warm atmosphere; forest food and animals; active bear & wolf predators with power counterplay; a crowd of kids (pebbles & kisses) and Miss Sami; eight fantastic creatures granting eight magics via a new buff system; and the atmosphere pass. Ready for a play-test whenever you'd like to merge & deploy.

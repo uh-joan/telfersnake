@@ -85,6 +85,7 @@ function mountScenery(id: StageId): void {
   if (scenery) stage.scene.remove(scenery.group);
   scenery = next;
   stage.scene.add(scenery.group);
+  stage.setAtmosphere(id); // each place its own light and haze
 }
 
 /** Everyone's hat, by seat: yours from the save, other players' as the server tells it. */
@@ -185,10 +186,18 @@ const run = { gulps: 0, rivalBonks: 0, longest: 0, banked: 0, gems: 0, gemsBanke
 /** Easy is the gentle sandbox, not a star farm: it pays half, so Normal is the road to anything dear. */
 const MODE_STARS: Record<Mode, number> = { easy: 0.5, normal: 1, god: 1 };
 
+/** The Common is the premium level: it pays back the 100-gem ticket with richer rewards. */
+const COMMON_BONUS = 1.25;
+
 /** A blue gem earned by shrinking or bonking a rival. Banked with the stars. */
 function earnGem(): void {
   save.gems++;
   run.gems++;
+  // The Common pays ×1.25: a one-in-four chance of a bonus gem on top.
+  if (save.stage === 'common' && Math.random() < COMMON_BONUS - 1) {
+    save.gems++;
+    run.gems++;
+  }
   updateCanBuy();
 }
 
@@ -203,7 +212,8 @@ function updateCanBuy(): void {
 
 function earned(): number {
   const raw = starsFor(world.snake.score, world.snake.highestTier, run.rivalBonks);
-  return Math.floor(raw * MODE_STARS[save.mode]);
+  const stageBonus = save.stage === 'common' ? COMMON_BONUS : 1;
+  return Math.floor(raw * MODE_STARS[save.mode] * stageBonus);
 }
 
 /** Stars go into the save as they are earned, so closing the tab mid-run loses nothing. */
@@ -708,7 +718,10 @@ $('play').addEventListener('click', async () => {
   if (screen !== 'start' || starting) return;
   starting = true;
   wakeAudio()?.bell();
-  const greeting = 'Good morning, everyone. Walking feet, please!';
+  // Miss Sami welcomes you to the Common; Mr Cooper minds the school yard.
+  const greeting = save.stage === 'common'
+    ? 'Welcome to the Common! Mind the woods, and watch for magic.'
+    : 'Good morning, everyone. Walking feet, please!';
   $('start').classList.add('busy'); // every button on the start screen is dead until we are in
 
   try {
@@ -727,6 +740,13 @@ $('play').addEventListener('click', async () => {
   $('start').classList.remove('busy');
   starting = false;
   music?.start();
+  music?.setPlace(save.stage);
+  // A one-time fanfare the very first time you set foot on the Common.
+  if (save.stage === 'common' && !save.commonSeen) {
+    save.commonSeen = true;
+    writeSave(save);
+    hud.announce('🌳 The Common!', '✨ new friends & magic');
+  }
   hud.say(greeting);
   show(null);
 });

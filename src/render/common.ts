@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMMON_BOUNDS, COMMON_COPSES, COMMON_GREETERS, COMMON_HOUSES, COMMON_WOODS } from '../sim/commonLayout';
+import { COMMON_BOUNDS, COMMON_COPSES, COMMON_GREETERS, COMMON_HOUSES, COMMON_WOODS, GLADE } from '../sim/commonLayout';
 import { Rng } from '../sim/rng';
 import type { School } from './school';
 
@@ -171,6 +171,122 @@ function greeters(): THREE.Group {
   return g;
 }
 
+/** A parked car: a coloured body with a dark cabin. */
+function carMesh(x: number, z: number, color: number): THREE.Group {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.75, 4.1), lambert(color));
+  body.position.y = 0.55;
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 2.1), lambert(0x27303c));
+  cabin.position.set(0, 1.15, -0.2);
+  g.add(body, cabin);
+  g.position.set(x, 0, z);
+  return g;
+}
+
+/** Cars parked along Emmanuel Road, and a row of trees behind them — leaving the road mouth clear. */
+function emmanuelRoad(rng: Rng): THREE.Group {
+  const g = new THREE.Group();
+  const colours = [0xd6453f, 0x2f6db0, 0xf2c94c, 0xe8e8e8, 0x3a8a4a, 0x8a5cc0, 0x2a2a2e];
+  let ci = 0;
+  for (let x = -54; x <= 52; x += 8) {
+    if (Math.abs(x) < 9) continue; // keep the Telferscot Road mouth open
+    g.add(carMesh(x + rng.range(-1, 1), -37.5, colours[ci++ % colours.length]));
+  }
+  // A tree line just south of the road (z ≈ −29), with a gap at the road mouth.
+  for (let x = -56; x <= 56; x += 5.5) {
+    if (Math.abs(x) < 8) continue;
+    const s = rng.range(0.9, 1.3);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * s, 0.22 * s, 1.2 * s, 5), lambert(0x6b4a2e));
+    trunk.position.set(x + rng.range(-1, 1), 0.6 * s, -29 + rng.range(-1.5, 1.5));
+    const canopy = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1 * s, 0), lambert(0x3f8f3a));
+    canopy.position.set(trunk.position.x, 1.7 * s, trunk.position.z);
+    g.add(trunk, canopy);
+  }
+  return g;
+}
+
+/** The playground landmark low on the west side: a climbing frame with a little roof and a slide. */
+function playground(): THREE.Group {
+  const g = new THREE.Group();
+  const wood = lambert(0xb9814f);
+  const px = -15, pz = 32;
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(3, 1.2, 3), wood);
+  deck.position.set(px, 0.6, pz);
+  const hat = new THREE.Mesh(new THREE.ConeGeometry(1.7, 1.1, 4), lambert(0xe0524d));
+  hat.position.set(px, 2.9, pz);
+  hat.rotation.y = Math.PI / 4;
+  g.add(deck, hat);
+  for (const [dx, dz] of [[-1.2, -1.2], [1.2, -1.2], [1.2, 1.2], [-1.2, 1.2]]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.4, 0.16), wood);
+    leg.position.set(px + dx, 1.2, pz + dz);
+    g.add(leg);
+  }
+  const slide = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.08, 2.6), lambert(0xf2c94c));
+  slide.position.set(px - 2.1, 0.6, pz);
+  slide.rotation.set(0, Math.PI / 2, 0.5);
+  const swing = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.16, 0.16), wood);
+  swing.position.set(px + 3, 2.2, pz);
+  g.add(slide, swing);
+  return g;
+}
+
+/** A couple of picnic benches out on the grass. */
+function picnicBenches(): THREE.Group {
+  const g = new THREE.Group();
+  const wood = lambert(0xcaa06a);
+  for (const [x, z] of [[-36, 12], [42, 26], [-24, -22]]) {
+    const b = new THREE.Group();
+    const top = new THREE.Mesh(new THREE.BoxGeometry(2, 0.12, 1), wood);
+    top.position.y = 0.7;
+    b.add(top);
+    for (const s of [-1, 1]) {
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(2, 0.1, 0.3), wood);
+      seat.position.set(0, 0.42, s * 0.7);
+      b.add(seat);
+    }
+    b.position.set(x, 0, z);
+    b.rotation.y = (x + z) * 0.3;
+    g.add(b);
+  }
+  return g;
+}
+
+/** Fireflies drifting over the Glade at dusk: a cloud of little glowing motes that bob and weave. */
+function makeFireflies(): { mesh: THREE.InstancedMesh; tick: (dt: number) => void } {
+  const N = 40;
+  const geo = new THREE.SphereGeometry(0.09, 6, 5);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xfff6a0, transparent: true, opacity: 0.9 });
+  const mesh = new THREE.InstancedMesh(geo, mat, N);
+  mesh.frustumCulled = false;
+  const rng = new Rng(77);
+  const seeds = Array.from({ length: N }, () => ({
+    x: rng.range(-14, 14), z: rng.range(-11, 11), y: rng.range(0.4, 2.2),
+    px: rng.range(0, 6.28), pz: rng.range(0, 6.28), py: rng.range(0, 6.28),
+    sx: rng.range(0.3, 0.8), sz: rng.range(0.3, 0.8), sy: rng.range(0.6, 1.4),
+  }));
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const pos = new THREE.Vector3();
+  const one = new THREE.Vector3(1, 1, 1);
+  let t = 0;
+  const tick = (dt: number) => {
+    t += dt;
+    seeds.forEach((s, i) => {
+      pos.set(
+        GLADE.x + s.x + Math.sin(t * s.sx + s.px) * 2.2,
+        s.y + Math.sin(t * s.sy + s.py) * 0.5,
+        GLADE.z + s.z + Math.cos(t * s.sz + s.pz) * 2.2,
+      );
+      const twinkle = 0.6 + 0.4 * Math.sin(t * 3 + i);
+      m.compose(pos, q, one.clone().setScalar(twinkle));
+      mesh.setMatrixAt(i, m);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+  };
+  tick(0);
+  return { mesh, tick };
+}
+
 export function makeCommon(maxAnisotropy: number): School {
   const rng = new Rng(52);
   const group = new THREE.Group();
@@ -180,7 +296,10 @@ export function makeCommon(maxAnisotropy: number): School {
   const beyond = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshLambertMaterial({ color: 0x86a06a }));
   beyond.rotation.x = -Math.PI / 2;
   beyond.position.set((B.minX + B.maxX) / 2, -0.05, (B.minZ + B.maxZ) / 2);
-  group.add(beyond, houses(), trees(rng), greeters());
 
-  return { group, reveal: () => {} };
+  const fireflies = makeFireflies();
+  group.add(beyond, houses(), trees(rng), emmanuelRoad(rng), playground(), picnicBenches(), greeters(), fireflies.mesh);
+
+  // reveal runs every frame with the elapsed dt: the Common uses it to drift its fireflies.
+  return { group, reveal: (_x, _z, dt) => fireflies.tick(dt) };
 }

@@ -37,6 +37,8 @@ export interface Save {
   godRevealed: boolean;
   /** Has ever dashed: until then the dash button teaches itself. */
   dashed: boolean;
+  /** The one-time "Welcome to the Common!" flourish has been shown. */
+  commonSeen: boolean;
 }
 
 const KEY = 'telfersnake.save.v1';
@@ -59,6 +61,7 @@ const FRESH: Save = {
   mega: false,
   godRevealed: false,
   dashed: false,
+  commonSeen: false,
 };
 
 const AUDIO_MODES: readonly AudioMode[] = ['all', 'sfx', 'off'];
@@ -100,6 +103,7 @@ function readDisk(): Save {
       mega,
       godRevealed: data.godRevealed === true,
       dashed: data.dashed === true,
+      commonSeen: data.commonSeen === true,
     };
   } catch {
     return { ...FRESH, owned: [...FRESH.owned], name: randomName() };
@@ -137,6 +141,8 @@ export function writeSave(save: Save): void {
       mega: save.mega || disk.mega,
       commonUnlocked: save.commonUnlocked || disk.commonUnlocked,
       godRevealed: save.godRevealed || disk.godRevealed,
+      commonSeen: save.commonSeen || disk.commonSeen,
+      dashed: save.dashed || disk.dashed,
     };
     localStorage.setItem(KEY, JSON.stringify(merged));
     // Only once it is safely on disk does this tab adopt the merged picture.
