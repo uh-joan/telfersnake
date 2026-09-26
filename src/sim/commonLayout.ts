@@ -23,7 +23,7 @@ export const COMMON_HOUSES: Box[] = [
 export const COMMON_EAST_ROAD: Box = { x: 57, z: 9, w: 6, d: 102 }; // x 54..60, z -42..60
 // Woods that wall the meadow in and pinch it to a point in the south.
 export const COMMON_WOODS: Box[] = [
-  { x: -52, z: 4, w: 16, d: 76 }, // west woods: x -60..-44, z -34..42
+  { x: -52, z: 9, w: 16, d: 86 }, // west woods: x -60..-44, z -34..52 (runs down to the south cap)
   { x: -5, z: 56, w: 110, d: 8 }, // south wood cap: z 52..60
   { x: -34, z: 44, w: 20, d: 20 }, // south-west wedge, narrowing the tip
   { x: 40, z: 42, w: 16, d: 24 }, // south-east wedge
