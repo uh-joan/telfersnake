@@ -253,7 +253,9 @@ function emmanuelRoad(rng: Rng): THREE.Group {
   let ci = 0;
   for (let x = -54; x <= 52; x += 8) {
     if (Math.abs(x) < 9) continue; // keep the Telferscot Road mouth open
-    g.add(carMesh(x + rng.range(-1, 1), -37.5, colours[ci++ % colours.length]));
+    const car = carMesh(x + rng.range(-1, 1), -37.5, colours[ci++ % colours.length]);
+    car.rotation.y = Math.PI / 2; // lie along Emmanuel Road (east–west), not across it
+    g.add(car);
   }
   // A tree line just south of the road (z ≈ −29), with a gap at the road mouth.
   for (let x = -56; x <= 56; x += 5.5) {
