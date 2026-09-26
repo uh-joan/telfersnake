@@ -72,13 +72,17 @@ export class Shop {
     this.gems.textContent = String(this.save.gems);
     for (const tab of this.tabs) tab.classList.toggle('on', tab.dataset.kind === this.kind);
 
+    // Gem (Common-only) items are hidden until the Common is unlocked, and sorted after the star ones.
+    const items = [...CATALOGUE[this.kind]]
+      .filter((i) => !i.gem || this.save.commonUnlocked)
+      .sort((a, b) => (a.gem ? 1 : 0) - (b.gem ? 1 : 0) || a.price - b.price);
     this.grid.replaceChildren(
-      ...[...CATALOGUE[this.kind]].sort((a, b) => a.price - b.price).map((item) => {
+      ...items.map((item) => {
         const owned = this.owns(item);
         const tile = el('button', `item${owned ? '' : ' locked'}${this.wearing(item) ? ' wearing' : ''}${this.picked === item ? ' picked' : ''}`);
         tile.append(item.kind === 'skin' ? this.miniSnake(item as Skin) : el('div', 'item-icon', item.icon));
         tile.append(el('div', 'item-name', item.name));
-        if (!owned) tile.append(el('div', 'price', `⭐ ${item.price}`));
+        if (!owned) tile.append(el('div', 'price', `${item.gem ? '💎' : '⭐'} ${item.price}`));
         tile.addEventListener('click', () => {
           this.picked = item;
           this.sounds()?.pick();
@@ -88,13 +92,14 @@ export class Shop {
       }),
     );
 
-    // The one action button: wear it, buy it, or show how many more stars it needs.
+    // The one action button: wear it, buy it, or show how much more of the right coin it needs.
     const item = this.picked;
     this.buy.classList.toggle('show', !!item && !this.wearing(item));
     if (!item) return;
-    const short = item.price - this.save.stars;
+    const coin = item.gem ? '💎' : '⭐';
+    const short = item.price - (item.gem ? this.save.gems : this.save.stars);
     this.buy.classList.toggle('poor', !this.owns(item) && short > 0);
-    this.buy.textContent = this.owns(item) ? '✔ Wear it' : short > 0 ? `⭐ ${short} more` : `Buy  ⭐ ${item.price}`;
+    this.buy.textContent = this.owns(item) ? '✔ Wear it' : short > 0 ? `${coin} ${short} more` : `Buy  ${coin} ${item.price}`;
   }
 
   /** A skin drawn as a tiny snake: a head and a run of body beads in its colours. */
@@ -115,7 +120,8 @@ export class Shop {
     const item = this.picked;
     if (!item) return;
     if (!this.owns(item)) {
-      if (this.save.stars < item.price) {
+      const balance = item.gem ? this.save.gems : this.save.stars;
+      if (balance < item.price) {
         this.sounds()?.nope();
         const tile = this.grid.querySelector('.picked');
         tile?.classList.remove('shake');
@@ -123,7 +129,8 @@ export class Shop {
         tile?.classList.add('shake');
         return;
       }
-      this.save.stars -= item.price;
+      if (item.gem) this.save.gems -= item.price;
+      else this.save.stars -= item.price;
       this.save.owned.push(item.id);
       this.sounds()?.chaChing();
     } else {
