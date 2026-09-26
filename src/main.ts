@@ -9,6 +9,7 @@ import { Connection, type Outfit } from './net/client';
 import { AnimalView } from './render/animalView';
 import { BeeView } from './render/beeView';
 import { CooperView } from './render/cooperView';
+import { CreatureView } from './render/creatureView';
 import { FoodView } from './render/foodView';
 import { KidView } from './render/kidView';
 import { PredatorView } from './render/predatorView';
@@ -21,6 +22,7 @@ import { disposeTree } from './render/paint';
 import { Sparkles } from './render/sparkles';
 import { Stage } from './render/stage';
 import { UpgradeFx } from './render/upgradeFx';
+import { CREATURES } from './sim/creatures';
 import { asMode, godUnlocked, type Mode, rulesFor } from './sim/modes';
 import { asStage, type StageId } from './sim/stage';
 import { stageFor } from './sim/stages';
@@ -62,6 +64,7 @@ let animalView = new AnimalView(world.animals.length);
 let predatorView = new PredatorView(world.predators.length);
 let kidView = new KidView(world.kids.length);
 let projectileView = new ProjectileView();
+let creatureView = new CreatureView(world.creatures.length);
 let hazardView = new HazardView(world.hazards);
 const cooperView = new CooperView();
 const beeView = new BeeView();
@@ -117,7 +120,7 @@ function wearOutfit(): void {
 
 /** Point the renderer at a different world: its own rocks, food, animals and snakes. */
 function mountWorld(next: WorldView): void {
-  for (const old of [hazardView.group, foodView.group, animalView.group, predatorView.group, kidView.group, projectileView.group]) {
+  for (const old of [hazardView.group, foodView.group, animalView.group, predatorView.group, kidView.group, projectileView.group, creatureView.group]) {
     stage.scene.remove(old);
     disposeTree(old);
   }
@@ -128,7 +131,8 @@ function mountWorld(next: WorldView): void {
   predatorView = new PredatorView(world.predators.length);
   kidView = new KidView(world.kids.length);
   projectileView = new ProjectileView();
-  stage.scene.add(hazardView.group, foodView.group, animalView.group, predatorView.group, kidView.group, projectileView.group);
+  creatureView = new CreatureView(world.creatures.length);
+  stage.scene.add(hazardView.group, foodView.group, animalView.group, predatorView.group, kidView.group, projectileView.group, creatureView.group);
   mountScenery(world.stage.id);
   hud.setStage(world.stage);
   mountSnakes();
@@ -149,6 +153,22 @@ const ZAP = [0xffe066, 0x4dabf7, 0xffffff];
 const ICE = [0xa5d8ff, 0xe7f5ff, 0xffffff];
 const SPARK = [0xffd84a, 0xff6b6b, 0xffffff];
 const KISSES = [0xf0486f, 0xff9fbf, 0xffffff];
+const HALO = [0xffe066, 0xfff3b0, 0xffffff];
+const RAINBOW = [0xff5b5b, 0xffb703, 0xffe066, 0x8be36a, 0x4dabf7, 0xb197fc];
+const PIXIE_FX = [0xc0ffe6, 0x8be3c8, 0xffffff];
+const OWL_FX = [0xcde6ff, 0xa5d8ff, 0xffffff];
+
+/** The fanfare each fantastic creature earns when gulped. */
+const MAGIC_LABEL: Record<string, [string, string]> = {
+  stag: ['✨ Stag’s Blessing', 'Level up!'],
+  unicorn: ['🦄 Rainbow Rush', '🌈 all gold'],
+  owl: ['🦉 Owl Eyes', '🔮 lucky card'],
+  frog: ['🐸 Royal Ribbit', 'danger, be gone!'],
+  kitsune: ['🦊 Fox Trick', '👻 invisible'],
+  pixie: ['🧚 Pixie Dust', '🧲 super magnet'],
+  squirrel: ['🐿️ Acorn Hoard', '🌰 ➕'],
+  wisp: ['🌟 Wisp Cache', '✨ treasure!'],
+};
 
 const outfit = (): Outfit => ({ skin: save.skin, hat: save.hat, trail: save.trail, name: save.name });
 
@@ -524,6 +544,19 @@ function handleEvents(): void {
           sfx?.ouch();
         }
         break;
+      case 'magic': {
+        // A fantastic creature was gulped: a burst of its own colour, and the magic lands.
+        const glow = CREATURES[e.kind].glow;
+        sparkles.burst(e.x, e.z, [glow, 0xffffff, 0xffe066], 34, 1.7);
+        if (e.who === world.me) {
+          for (let i = 0; i < e.gems; i++) earnGem();
+          const [title, sub] = MAGIC_LABEL[e.kind];
+          hud.announce(title, sub);
+          sfx?.golden();
+          if (e.kind === 'stag') sfx?.tierUp();
+        }
+        break;
+      }
       case 'say':
         // Mr Cooper tells people off in a speech bubble only. He had a spoken voice once; it grated.
         hud.say(e.text);
@@ -614,11 +647,24 @@ function frame(now: number): void {
         sparkles.drift(s.x + Math.cos(s.heading) * s.radius * 1.4, s.z + Math.sin(s.heading) * s.radius * 1.4, EMBERS);
       }
       if (s.luck > 0 && Math.random() < 0.08 * s.luck) sparkles.drift(s.x, s.z, LUCKY);
+      // Magic buffs shimmer, so you can see the spell at work — on any snake under one.
+      for (const o of world.snakes) {
+        if (!o.alive) continue;
+        if (o.hasMagic('halo') && Math.random() < 0.5) sparkles.drift(o.x, o.z, HALO);
+        if (o.hasMagic('hidden') && Math.random() < 0.4) sparkles.drift(o.x, o.z, ICE);
+        if (o.hasMagic('magnet') && Math.random() < 0.3) sparkles.drift(o.x, o.z, PIXIE_FX);
+        if (o.hasMagic('owl') && Math.random() < 0.15) sparkles.drift(o.x, o.z, OWL_FX);
+      }
+      // The fantastic creatures glimmer with their own aura.
+      for (const c of world.creatures) {
+        if (c.respawnIn <= 0 && Math.random() < 0.35) sparkles.drift(c.x, c.z, [CREATURES[c.kind].glow, 0xffffff]);
+      }
     }
     if ((trailIn -= dt) <= 0) {
       trailIn = TRAIL_EVERY;
       for (const o of world.snakes) {
-        const palette = trailFor(o.id);
+        // Rainbow Rush overrides the usual trail with a bright ribbon of colour.
+        const palette = o.hasMagic('rainbow') ? RAINBOW : trailFor(o.id);
         if (palette.length === 0 || !o.alive) continue;
         o.sampleAt(o.length, tail);
         sparkles.drift(tail.x, tail.z, palette);
@@ -636,6 +682,7 @@ function frame(now: number): void {
   predatorView.update(world, playing ? dt : 0);
   kidView.update(world, playing ? dt : 0);
   projectileView.update(world, time);
+  creatureView.update(world, time);
   hazardView.update(world, time);
   beeView.update(world, time);
   sparkles.update(dt);

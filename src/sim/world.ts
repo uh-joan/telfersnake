@@ -1,6 +1,7 @@
 import { ANIMALS, type Animal, type AnimalKind, makeAnimal, placeAnimal, updateAnimal } from './animals';
 import { makePredators, type Predator, PREDATORS } from './predators';
 import { KID_RADIUS, KIDS, type Kid, makeKids, type Projectile, type ProjectileKind } from './kids';
+import { type Creature, type CreatureKind, CREATURES, creatureSpot, makeCreatures } from './creatures';
 import { Bot, type Personality } from './bot';
 import { botCardChoice, type Rules, rulesFor } from './modes';
 import { isFree, makeHit, resolveCircle, slideAlong, turnToward, wrapAngle } from './collide';
@@ -10,7 +11,7 @@ import { type Hazard, type HazardKind, makeHazards, type Pellet, PELLET_LIFE_TIC
 import { inBox, SCHOOL } from './layout';
 import { Rng } from './rng';
 import type { Stage } from './stage';
-import { type Input, Snake, type SnakeLook } from './snake';
+import { type Input, Snake, type SnakeLook, TIERS } from './snake';
 import { type CardId, type PowerId, rollCards, type UpgradeId } from './upgrades';
 
 export const STEP = 1 / 60;
@@ -28,6 +29,8 @@ const GOAT_COOLDOWN = 3;
 
 const OUCH_SHARE = 0.12; // of current mass lost per rock...
 const OUCH_MAX = 15; // ...up to this much
+const CREATURE_RESPAWN = 25; // seconds a gulped creature stays faded before it returns elsewhere
+const PIXIE_MAGNET = 22; // Pixie Dust: a huge food-pull radius
 /** Miss Sami, out on the Common with a mum: warm, whimsical, accurate. Bubbles only, like Mr Cooper. */
 const SAMI_LINES = [
   'Morning! Lovely to see you on the Common.',
@@ -109,6 +112,8 @@ export type GameEvent =
   | { type: 'pelt'; who: number; x: number; z: number; lost: number }
   /** A blown kiss reached a snake: a little gift — growth, and sometimes a gem. */
   | { type: 'kiss'; who: number; x: number; z: number; gem: boolean }
+  /** A fantastic creature was gulped: its magic bursts, `gems` are earned by `who`. */
+  | { type: 'magic'; kind: CreatureKind; who: number; x: number; z: number; gems: number }
   | { type: 'bump'; who: number; what: 'wall' | 'cooper' | 'kid' };
 
 /**
@@ -136,6 +141,8 @@ export class World {
   /** The Common's children (empty on the school), and the pebbles/kisses in flight. */
   readonly kids: Kid[] = [];
   readonly projectiles: Projectile[] = [];
+  /** The Common's fantastic creatures (empty on the school). */
+  readonly creatures: Creature[] = [];
   readonly pellets: Pellet[] = [];
   /** Things that happened since the caller last drained this. */
   readonly events: GameEvent[] = [];
@@ -202,6 +209,7 @@ export class World {
     }
     for (const p of makePredators(stage, this.rng)) this.predators.push(p);
     for (const k of makeKids(stage, this.rng)) this.kids.push(k);
+    for (const c of makeCreatures(stage, this.rng)) this.creatures.push(c);
   }
 
   static room(seed: number, rules: Rules = rulesFor('normal'), stage: Stage = SCHOOL): World {
@@ -302,6 +310,7 @@ export class World {
     this.updatePredators(dt);
     this.updateKids(dt);
     this.updateProjectiles(dt);
+    this.updateCreatures(dt);
     this.chatterSami(dt);
 
     for (const s of this.snakes) {
@@ -310,6 +319,7 @@ export class World {
         if (s.respawnIn <= 0) this.respawn(s);
         continue;
       }
+      s.tickMagic(dt);
       const bot = this.bots.get(s);
       if (s.awayFor > 0) {
         s.awayFor -= dt;
@@ -343,6 +353,7 @@ export class World {
       this.bumpCooper(s, dt);
       this.meetAnimals(s, dt);
       this.meetKids(s, dt);
+      this.meetCreatures(s);
       this.pullFood(s, dt);
       this.eat(s);
       this.bees(s);
@@ -554,11 +565,11 @@ export class World {
       p.biteIn -= dt;
       p.wanderIn -= dt;
 
-      // The nearest living snake head within sight.
+      // The nearest living snake head within sight (a hidden snake — Fox Trick — is invisible to it).
       let target: Snake | null = null;
       let bestD = spec.sight;
       for (const s of this.snakes) {
-        if (!s.alive) continue;
+        if (!s.alive || s.hasMagic('hidden')) continue;
         const d = Math.hypot(s.x - p.x, s.z - p.z);
         if (d < bestD) {
           bestD = d;
@@ -618,7 +629,7 @@ export class World {
       // A bite: shrink whoever is in reach, like a big rock, then wait.
       if (p.biteIn <= 0) {
         for (const s of this.snakes) {
-          if (!s.alive || s.immune > 0 || Math.hypot(s.x - p.x, s.z - p.z) > spec.biteReach + s.radius) continue;
+          if (!s.alive || s.immune > 0 || s.hasMagic('hidden') || Math.hypot(s.x - p.x, s.z - p.z) > spec.biteReach + s.radius) continue;
           s.immune = OUCH_GRACE;
           const lost = s.mass < 1 ? 0 : Math.min(spec.biteCap, Math.max(2, s.mass * spec.biteShare * fer));
           if (lost > 0) this.shed(s, lost, PELLET_RETURN, 4);
@@ -818,6 +829,158 @@ export class World {
     this.events.push({ type: 'say', text: this.rng.pick(SAMI_LINES) });
   }
 
+  // ---------------------------------------------------------------- the fantastic creatures (the woods & the Glade)
+
+  /** Shy, ethereal things: they drift near the Glade, and bolt from any snake that comes near. */
+  private updateCreatures(dt: number): void {
+    for (const c of this.creatures) {
+      const spec = CREATURES[c.kind];
+      if (c.respawnIn > 0) {
+        c.respawnIn -= dt;
+        c.speed = 0;
+        if (c.respawnIn <= 0) {
+          const p = creatureSpot(this.stage, this.rng); // fade back somewhere new in the woods
+          c.x = c.wx = p.x;
+          c.z = c.wz = p.z;
+        }
+        continue;
+      }
+      c.wanderIn -= dt;
+      const near = this.nearestSnake(c.x, c.z);
+      const d = near ? Math.hypot(near.x - c.x, near.z - c.z) : Infinity;
+      let speed: number;
+      if (near && d < spec.alert) {
+        c.heading = turnToward(c.heading, Math.atan2(c.z - near.z, c.x - near.x), 5 * dt);
+        speed = spec.flee;
+      } else {
+        if (c.wanderIn <= 0 || Math.hypot(c.x - c.wx, c.z - c.wz) < 1) this.wanderCreature(c);
+        c.heading = turnToward(c.heading, Math.atan2(c.wz - c.z, c.wx - c.x), 2 * dt);
+        speed = spec.flee * 0.3; // an ethereal drift while nothing is near
+      }
+      resolveCircle(this.stage, c.x + Math.cos(c.heading) * speed * dt, c.z + Math.sin(c.heading) * speed * dt, spec.radius, this.hit);
+      c.x = this.hit.x;
+      c.z = this.hit.z;
+      c.speed = speed;
+      if (this.hit.hit) {
+        c.heading = slideAlong(c.heading, this.hit.nx, this.hit.nz);
+        this.wanderCreature(c);
+      }
+    }
+  }
+
+  private wanderCreature(c: Creature): void {
+    for (let tries = 0; tries < 20; tries++) {
+      const x = c.x + this.rng.range(-14, 14);
+      const z = c.z + this.rng.range(-14, 14);
+      if (!isFree(this.stage, x, z, CREATURES[c.kind].radius + 0.5)) continue;
+      c.wx = x;
+      c.wz = z;
+      break;
+    }
+    c.wanderIn = this.rng.range(2, 5);
+  }
+
+  /** A touch at any size catches a creature — no tier gate. It fades, and its magic bursts on the snake. */
+  private meetCreatures(s: Snake): void {
+    for (const c of this.creatures) {
+      if (c.respawnIn > 0) continue;
+      const reach = s.biteReach * GULP_REACH + CREATURES[c.kind].radius;
+      if ((s.x - c.x) ** 2 + (s.z - c.z) ** 2 > reach * reach) continue;
+      this.castMagic(s, c.kind);
+      c.respawnIn = CREATURE_RESPAWN;
+      break; // one blessing per tick
+    }
+  }
+
+  /** Grant a creature's magic: an instant gift, a timed buff, or both. `gems` is credited to the client. */
+  private castMagic(s: Snake, kind: CreatureKind): void {
+    let gems = 0;
+    switch (kind) {
+      case 'stag': {
+        // Stag's Blessing: leap straight to the next size tier, a big score, a halo.
+        const next = TIERS[Math.min(TIERS.length - 1, s.tier + 1)];
+        if (s.mass < next.mass) s.mass = next.mass;
+        s.score += 500;
+        s.giveMagic('halo', 8);
+        gems = 3;
+        break;
+      }
+      case 'unicorn':
+        s.giveMagic('rainbow', 20); // Rainbow Rush: every bite golden for a while
+        s.score += 150;
+        gems = 1;
+        break;
+      case 'owl':
+        s.giveMagic('owl', 30); // Owl Eyes: reveal the creatures on the minimap...
+        s.luckyCards += 1; // ...and the next card is epic-or-better
+        s.score += 120;
+        gems = 1;
+        break;
+      case 'kitsune':
+        s.giveMagic('hidden', 15); // Fox Trick: predators and rivals cannot see you
+        s.score += 120;
+        gems = 1;
+        break;
+      case 'pixie':
+        s.giveMagic('magnet', 20); // Pixie Dust: a huge food magnet
+        s.score += 100;
+        gems = 1;
+        break;
+      case 'squirrel':
+        s.gain(28); // Acorn Hoard: a burst of mass
+        s.score += 80;
+        gems = 2;
+        break;
+      case 'frog': {
+        // Royal Ribbit: the nearest predator is rooted, harmless, for a spell (turned to a frog in spirit).
+        const p = this.nearestPredatorTo(s.x, s.z);
+        if (p) {
+          p.frozenFor = Math.max(p.frozenFor, 10);
+          p.scaredFor = 0;
+        }
+        s.score += 100;
+        gems = 1;
+        break;
+      }
+      case 'wisp':
+        this.wispCache(s); // Will-o'-the-wisp: it leads you to a golden-food cache
+        gems = 2;
+        break;
+    }
+    this.events.push({ type: 'magic', kind, who: s.id, x: s.x, z: s.z, gems });
+  }
+
+  private nearestPredatorTo(x: number, z: number): Predator | null {
+    let best: Predator | null = null;
+    let bestD = Infinity;
+    for (const p of this.predators) {
+      const d = Math.hypot(p.x - x, p.z - z);
+      if (d < bestD) {
+        bestD = d;
+        best = p;
+      }
+    }
+    return best;
+  }
+
+  /** Relocate a handful of food around the snake and turn it golden: the wisp's hidden cache. */
+  private wispCache(s: Snake): void {
+    let n = 0;
+    for (const f of this.foods) {
+      if (n >= 6) break;
+      const a = this.rng.range(0, Math.PI * 2);
+      const r = this.rng.range(2, 6);
+      const x = s.x + Math.cos(a) * r;
+      const z = s.z + Math.sin(a) * r;
+      if (!isFree(this.stage, x, z, 0.5)) continue;
+      f.x = x;
+      f.z = z;
+      f.golden = true;
+      f.born = this.tick;
+      n++;
+    }
+  }
+
   private shed(s: Snake, lost: number, share: number, n: number): void {
     const tail = s.length;
     const spread = Math.min(0.7, tail / n);
@@ -865,9 +1028,11 @@ export class World {
   // ---------------------------------------------------------------- eating
 
   private swallowFood(s: Snake, f: Food, toasted: boolean): void {
-    const value = FOOD_VALUE[f.kind] * (f.golden ? GOLDEN_MULTIPLIER : 1) * (toasted ? 2 : 1);
+    // Rainbow Rush (the Unicorn): every bite counts golden while it lasts.
+    const golden = f.golden || s.hasMagic('rainbow');
+    const value = FOOD_VALUE[f.kind] * (golden ? GOLDEN_MULTIPLIER : 1) * (toasted ? 2 : 1);
     const points = s.gain(value);
-    this.events.push({ type: 'eat', who: s.id, kind: f.kind, x: f.x, z: f.z, points, golden: f.golden, toasted });
+    this.events.push({ type: 'eat', who: s.id, kind: f.kind, x: f.x, z: f.z, points, golden, toasted });
     placeFood(f, this.rng, this.stage, this.tick, s.x, s.z, 8, this.hazards, s.luck);
   }
 
@@ -897,10 +1062,11 @@ export class World {
 
   // ---------------------------------------------------------------- upgrades at work
 
-  /** Magnet Tail: food and pellets inside the pull drift to the head. */
+  /** Magnet Tail: food and pellets inside the pull drift to the head. Pixie Dust widens it hugely. */
   private pullFood(s: Snake, dt: number): void {
-    if (s.magnet <= 0) return;
-    const r2 = s.magnet * s.magnet;
+    const reach = Math.max(s.magnet, s.hasMagic('magnet') ? PIXIE_MAGNET : 0);
+    if (reach <= 0) return;
+    const r2 = reach * reach;
     const pull = (o: { x: number; z: number }) => {
       const dx = s.x - o.x;
       const dz = s.z - o.z;
@@ -991,9 +1157,10 @@ export class World {
    */
   private bonkSnakes(): void {
     for (const a of this.snakes) {
-      if (!a.alive || a.immune > 0 || (this.stage.sanctuary !== null && inBox(this.stage.sanctuary, a.x, a.z))) continue;
+      // A hidden snake (Fox Trick) is seen by no one: it can neither be bonked nor bonk into others.
+      if (!a.alive || a.immune > 0 || a.hasMagic('hidden') || (this.stage.sanctuary !== null && inBox(this.stage.sanctuary, a.x, a.z))) continue;
       for (const b of this.snakes) {
-        if (b === a || !b.alive || b.immune > 0) continue;
+        if (b === a || !b.alive || b.immune > 0 || b.hasMagic('hidden')) continue;
         const gap = Math.hypot(a.x - b.x, a.z - b.z);
         if (gap > b.length + 3) continue;
 

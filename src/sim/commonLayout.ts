@@ -47,6 +47,9 @@ const SNAKE_SPAWN = { x: 0, z: 4, heading: 0 };
 /** Miss Sami and a mum, nattering on the grass just off the Telfer Road mouth (also drawn by the renderer). */
 export const COMMON_GREETERS = { sami: { x: -3, z: -31 }, mum: { x: 0.4, z: -30.4 } };
 
+/** The Glade: a hidden clearing in the south woods where the fantastic creatures gather. */
+export const GLADE = { x: 0, z: 46 };
+
 /** A random point out in the open meadow — where the animals and scattered food live. */
 const meadow = (rng: Rng): Spot => ({ x: rng.range(-40, 46), z: rng.range(-28, 46) });
 
@@ -69,6 +72,8 @@ export const COMMON: Stage = {
       const t = COPSES[rng.int(COPSES.length)];
       return { x: t.x + rng.range(-t.r - 2, t.r + 2), z: t.z + rng.range(-t.r - 2, t.r + 2) };
     }
+    // The Glade: a hidden clearing in the south woods where the fantastic creatures gather.
+    if (home === 'glade') return { x: GLADE.x + rng.range(-6, 6), z: GLADE.z + rng.range(-5, 5) };
     return meadow(rng);
   },
   sanctuary: null,
@@ -76,6 +81,8 @@ export const COMMON: Stage = {
   predators: [{ kind: 'bear', count: 1 }, { kind: 'wolf', count: 2 }],
   // A crowd of children running the meadow: runners for whimsy, the odd pebble-thrower and kiss-blower.
   kids: ['runner', 'naughty', 'nice', 'runner', 'naughty', 'nice', 'runner', 'naughty'],
+  // A few shy fantastic creatures haunt the woods and the Glade (which four is a lucky-day roll).
+  creatureCount: 4,
   // Miss Sami and a mum, nattering on the grass just off the Telfer Road mouth.
   greeters: COMMON_GREETERS,
   cooper: null, // Mr Cooper stays at school

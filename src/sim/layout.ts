@@ -152,6 +152,7 @@ export const SCHOOL: Stage = {
   hazardArea: { rough: { minX: 12, maxX: BOUNDS.maxX, minZ: 8, maxZ: BOUNDS.maxZ }, share: 0.4 },
   predators: [],
   kids: [], // the children are out on the Common, not in the school yard
+  creatureCount: 0, // no magic in the school yard
   greeters: null,
   cooper: { spawn: COOPER_SPAWN, beat: COOPER_BEAT },
   paintMinimap: (c, X, Z, scale) => {

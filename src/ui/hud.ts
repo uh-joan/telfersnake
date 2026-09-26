@@ -308,6 +308,17 @@ export class Hud {
       c.fill();
     }
 
+    // Fantastic creatures are hidden — unless Owl Eyes is active, which reveals them as violet stars.
+    if (world.snake.hasMagic('owl')) {
+      c.fillStyle = '#b197fc';
+      for (const cr of world.creatures) {
+        if (cr.respawnIn > 0) continue;
+        c.beginPath();
+        c.arc(X(cr.x), Z(cr.z), 3, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+
     // Mr Cooper: navy dot, white hair
     c.fillStyle = '#1f2a44';
     c.beginPath();

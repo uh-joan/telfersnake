@@ -2,8 +2,9 @@ import type { WebSocket } from 'ws';
 import { HATS, skinLook, TRAILS } from '../src/meta/catalogue';
 import { cleanName, NAME_MAX, randomName } from '../src/meta/names';
 import {
-  animalKindIndex, animalRow, type ClientMessage, cooperRow, eventIsFor, foodRow, hazardRow, kidKindIndex, kidRow, pelletRow,
-  predatorKindIndex, predatorRow, projectileRow, type Seat, type ServerMessage, SNAPSHOT_EVERY, snakeRow, type Snapshot,
+  animalKindIndex, animalRow, type ClientMessage, cooperRow, creatureKindIndex, creatureRow, eventIsFor, foodRow, hazardRow,
+  kidKindIndex, kidRow, pelletRow, predatorKindIndex, predatorRow, projectileRow, type Seat, type ServerMessage, SNAPSHOT_EVERY,
+  snakeRow, type Snapshot,
 } from '../src/net/protocol';
 import { type Mode, rulesFor } from '../src/sim/modes';
 import type { StageId } from '../src/sim/stage';
@@ -100,6 +101,7 @@ export class Room {
       t: 'welcome', me: snake.id, room: this.code, stage: this.stage, tick: w.tick, seats: this.seats(),
       hazards: w.hazards.map(hazardRow), animalKinds: w.animals.map(animalKindIndex),
       predatorKinds: w.predators.map(predatorKindIndex), kidKinds: w.kids.map(kidKindIndex),
+      creatureKinds: w.creatures.map(creatureKindIndex),
       foods: w.foods.map(foodRow), pellets: w.pellets.map(pelletRow),
     });
     this.broadcast({ t: 'seats', seats: this.seats() });
@@ -181,7 +183,8 @@ export class Room {
 
     const shared = {
       t: 'snap' as const, k: w.tick, s: w.snakes.map(snakeRow), a: w.animals.map(animalRow),
-      pd: w.predators.map(predatorRow), kd: w.kids.map(kidRow), pj: w.projectiles.map(projectileRow),
+      pd: w.predators.map(predatorRow), kd: w.kids.map(kidRow), cr: w.creatures.map(creatureRow),
+      pj: w.projectiles.map(projectileRow),
       f: foods, c: cooperRow(w.cooper), ...(pelletsChanged ? { p: pellets } : {}),
     };
     for (const p of this.players.values()) {

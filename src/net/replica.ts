@@ -1,6 +1,7 @@
 import { ANIMAL_KINDS, type Animal, makeAnimal } from '../sim/animals';
 import { wrapAngle } from '../sim/collide';
 import { FOOD_KINDS, type Food } from '../sim/food';
+import { blankCreature, type Creature, CREATURE_KINDS } from '../sim/creatures';
 import { HAZARD_KINDS, type Hazard, type Pellet } from '../sim/hazards';
 import { blankKid, type Kid, KID_KINDS, type Projectile, PROJECTILE_KINDS } from '../sim/kids';
 import { blankPredator, PREDATOR_KINDS, type Predator } from '../sim/predators';
@@ -58,6 +59,7 @@ export class Replica implements WorldView {
   readonly animals: Animal[];
   readonly predators: Predator[];
   readonly kids: Kid[];
+  readonly creatures: Creature[];
   projectiles: Projectile[] = [];
   pellets: Pellet[];
   readonly events: GameEvent[] = [];
@@ -92,6 +94,7 @@ export class Replica implements WorldView {
     this.animals = welcome.animalKinds.map((k) => makeAnimal(ANIMAL_KINDS[k]));
     this.predators = welcome.predatorKinds.map((k) => blankPredator(PREDATOR_KINDS[k]));
     this.kids = welcome.kidKinds.map((k) => blankKid(KID_KINDS[k]));
+    this.creatures = welcome.creatureKinds.map((k) => blankCreature(CREATURE_KINDS[k]));
     this.pellets = welcome.pellets.map(this.toPellet);
     this.ghost = new Snake(-1, welcome.seats[0].look, false);
     this.setSeats(welcome.seats);
@@ -165,7 +168,7 @@ export class Replica implements WorldView {
     snap.s.forEach((row, id) => {
       const s = this.snakes[id];
       if (!s) return;
-      const [x, z, heading, mass, score, flags, respawnIn, immune, upgrades] = row;
+      const [x, z, heading, mass, score, flags, respawnIn, immune, upgrades, magic] = row;
       s.mass = mass;
       s.score = score;
       s.alive = (flags & ALIVE) !== 0;
@@ -174,6 +177,7 @@ export class Replica implements WorldView {
       s.helmetReady = (flags & HELMET_READY) !== 0;
       s.respawnIn = respawnIn;
       s.immune = immune;
+      s.setMagic(magic);
       s.setUpgrades(unpackUpgrades(upgrades));
       s.helmetReady = (flags & HELMET_READY) !== 0;
       s.highestTier = Math.max(s.highestTier, s.tier);
@@ -325,6 +329,19 @@ export class Replica implements WorldView {
       k.z = lerp(ra[1], rb[1], u);
       k.heading = lerpAngle(ra[2], rb[2], u);
       k.speed = rb[3];
+    });
+
+    this.creatures.forEach((cr, i) => {
+      const ra = a.cr[i];
+      const rb = b.cr[i];
+      if (!ra || !rb) return;
+      const moved = Math.hypot(rb[0] - ra[0], rb[1] - ra[1]) > SNAP_IF_OFF_BY;
+      const u = moved ? 1 : t;
+      cr.x = lerp(ra[0], rb[0], u);
+      cr.z = lerp(ra[1], rb[1], u);
+      cr.heading = lerpAngle(ra[2], rb[2], u);
+      cr.speed = rb[3];
+      cr.respawnIn = rb[4] ? 0 : 1; // faded (gulped) creatures are not drawn
     });
 
     const ca = a.c;

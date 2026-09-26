@@ -11,6 +11,19 @@ export interface Input {
   dash: boolean;
 }
 
+/**
+ * The timed magic buffs a fantastic creature can grant (see creatures.ts / World.castMagic).
+ * Held as seconds-left on the snake and synced to clients as a bitmask, so the renderer can shimmer,
+ * halo or rainbow any snake under a spell.
+ *   rainbow — every bite counts golden, and a rainbow trail (Unicorn)
+ *   hidden  — predators and rivals cannot see you (Kitsune)
+ *   magnet  — a huge food magnet (Pixie)
+ *   owl     — the minimap reveals the shy creatures, and your next card is epic-or-better (Wise Owl)
+ *   halo    — a cosmetic glow after the Stag's Blessing
+ */
+export const MAGIC_IDS = ['rainbow', 'hidden', 'magnet', 'owl', 'halo'] as const;
+export type MagicId = (typeof MAGIC_IDS)[number];
+
 /** `gulps` is what a snake of that size can newly swallow, as pictures: the players are too young to read. */
 export const TIERS = [
   { name: 'Wiggly Worm', mass: 0, gulps: '🐌🐞' },
@@ -103,6 +116,10 @@ export class Snake {
   bees = 0;
   breathLevel = 0;
   breathIn = 0;
+  /** Seconds left of each magic buff, indexed by MAGIC_IDS. All 0 = no magic (the school never sets any). */
+  readonly magic: number[] = MAGIC_IDS.map(() => 0);
+  /** Lucky card draws owed (the Wise Owl): the next rolls are epic-or-better. */
+  luckyCards = 0;
   /** Whether power cards may be offered to this snake (the player has a gem to spend, or it's a God bot). */
   canBuyPowers = false;
   /** Seconds until each power may fire again. */
@@ -152,7 +169,36 @@ export class Snake {
     this.helmetRecharge = 0;
     this.laserIn = this.stinkIn = this.zapIn = this.freezeIn = 0;
     this.frozenFor = 0;
+    for (let i = 0; i < this.magic.length; i++) this.magic[i] = 0;
+    this.luckyCards = 0;
     refreshStats(this);
+  }
+
+  hasMagic(id: MagicId): boolean {
+    return this.magic[MAGIC_IDS.indexOf(id)] > 0;
+  }
+
+  /** Grant (or refresh) a timed magic buff. */
+  giveMagic(id: MagicId, secs: number): void {
+    const i = MAGIC_IDS.indexOf(id);
+    this.magic[i] = Math.max(this.magic[i], secs);
+  }
+
+  /** Count every buff down; called once a tick for a living snake. */
+  tickMagic(dt: number): void {
+    for (let i = 0; i < this.magic.length; i++) if (this.magic[i] > 0) this.magic[i] = Math.max(0, this.magic[i] - dt);
+  }
+
+  /** Which buffs are active, as a bitmask, for the wire and the renderer. */
+  magicMask(): number {
+    let m = 0;
+    for (let i = 0; i < this.magic.length; i++) if (this.magic[i] > 0) m |= 1 << i;
+    return m;
+  }
+
+  /** Set active buffs from a bitmask (client side): the timer value is nominal, only on/off matters. */
+  setMagic(mask: number): void {
+    for (let i = 0; i < this.magic.length; i++) this.magic[i] = mask & (1 << i) ? 1 : 0;
   }
 
   /** Replace the upgrade levels wholesale: how a client mirrors what the server says it owns. */

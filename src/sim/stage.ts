@@ -59,6 +59,8 @@ export interface Stage extends Terrain {
   predators: { kind: PredatorKind; count: number }[];
   /** The children who run about here, one entry per child (their kind is fixed). Empty: no kids. */
   kids: readonly KidKind[];
+  /** How many fantastic creatures haunt the woods here (picked by rarity). 0: none. */
+  creatureCount: number;
   /** Miss Sami and a mum, nattering at the edge of the Common. Null on a stage without them. */
   greeters: { sami: Spot; mum: Spot } | null;
   /** Mr Cooper's spawn and beat, or null on a stage he never visits. */
