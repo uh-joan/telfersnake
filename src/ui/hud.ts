@@ -300,6 +300,14 @@ export class Hud {
       c.fill();
     }
 
+    // The children: small cheerful cyan dots (distinct from food-yellow and danger-red).
+    c.fillStyle = '#3bc9db';
+    for (const k of world.kids) {
+      c.beginPath();
+      c.arc(X(k.x), Z(k.z), 1.6, 0, Math.PI * 2);
+      c.fill();
+    }
+
     // Mr Cooper: navy dot, white hair
     c.fillStyle = '#1f2a44';
     c.beginPath();

@@ -2,6 +2,7 @@ import { ANIMAL_KINDS, type Animal, makeAnimal } from '../sim/animals';
 import { wrapAngle } from '../sim/collide';
 import { FOOD_KINDS, type Food } from '../sim/food';
 import { HAZARD_KINDS, type Hazard, type Pellet } from '../sim/hazards';
+import { blankKid, type Kid, KID_KINDS, type Projectile, PROJECTILE_KINDS } from '../sim/kids';
 import { blankPredator, PREDATOR_KINDS, type Predator } from '../sim/predators';
 import { type Input, Snake } from '../sim/snake';
 import type { Stage } from '../sim/stage';
@@ -56,6 +57,8 @@ export class Replica implements WorldView {
   readonly foods: Food[];
   readonly animals: Animal[];
   readonly predators: Predator[];
+  readonly kids: Kid[];
+  projectiles: Projectile[] = [];
   pellets: Pellet[];
   readonly events: GameEvent[] = [];
   cards: CardId[] | null = null;
@@ -88,6 +91,7 @@ export class Replica implements WorldView {
     for (const row of welcome.foods) this.setFood(row);
     this.animals = welcome.animalKinds.map((k) => makeAnimal(ANIMAL_KINDS[k]));
     this.predators = welcome.predatorKinds.map((k) => blankPredator(PREDATOR_KINDS[k]));
+    this.kids = welcome.kidKinds.map((k) => blankKid(KID_KINDS[k]));
     this.pellets = welcome.pellets.map(this.toPellet);
     this.ghost = new Snake(-1, welcome.seats[0].look, false);
     this.setSeats(welcome.seats);
@@ -141,6 +145,8 @@ export class Replica implements WorldView {
     if (this.snaps.length > KEEP_SNAPSHOTS) this.snaps.shift();
     for (const row of snap.f) this.setFood(row);
     if (snap.p) this.pellets = snap.p.map(this.toPellet);
+    // Pebbles and kisses are brief: take the newest list straight, arc height from the flight progress.
+    this.projectiles = snap.pj.map(([x, z, kind, t]) => ({ kind: PROJECTILE_KINDS[kind], x, z, dx: 0, dz: 0, speed: 0, left: 1 - t, total: 1 }));
     for (const e of snap.e) {
       if (e.type === 'rock') {
         const h = this.hazards[e.i];
@@ -307,6 +313,18 @@ export class Replica implements WorldView {
       pr.z = lerp(ra[1], rb[1], u);
       pr.heading = lerpAngle(ra[2], rb[2], u);
       pr.speed = rb[3];
+    });
+
+    this.kids.forEach((k, i) => {
+      const ra = a.kd[i];
+      const rb = b.kd[i];
+      if (!ra || !rb) return;
+      const moved = Math.hypot(rb[0] - ra[0], rb[1] - ra[1]) > SNAP_IF_OFF_BY;
+      const u = moved ? 1 : t;
+      k.x = lerp(ra[0], rb[0], u);
+      k.z = lerp(ra[1], rb[1], u);
+      k.heading = lerpAngle(ra[2], rb[2], u);
+      k.speed = rb[3];
     });
 
     const ca = a.c;

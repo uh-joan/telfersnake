@@ -1,6 +1,7 @@
 import type { Animal } from './animals';
 import type { Food } from './food';
 import type { Hazard, Pellet } from './hazards';
+import type { Kid, Projectile } from './kids';
 import type { Predator } from './predators';
 import type { Snake } from './snake';
 import type { Stage } from './stage';
@@ -35,6 +36,8 @@ export interface WorldView {
   readonly foods: readonly Food[];
   readonly animals: readonly Animal[];
   readonly predators: readonly Predator[];
+  readonly kids: readonly Kid[];
+  readonly projectiles: readonly Projectile[];
   readonly pellets: readonly Pellet[];
   /** Things that happened since whoever is drawing last emptied this. */
   readonly events: GameEvent[];

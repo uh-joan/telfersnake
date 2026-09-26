@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMMON_BOUNDS, COMMON_COPSES, COMMON_HOUSES, COMMON_WOODS } from '../sim/commonLayout';
+import { COMMON_BOUNDS, COMMON_COPSES, COMMON_GREETERS, COMMON_HOUSES, COMMON_WOODS } from '../sim/commonLayout';
 import { Rng } from '../sim/rng';
 import type { School } from './school';
 
@@ -138,6 +138,39 @@ function houses(): THREE.Group {
   return g;
 }
 
+/** A grown-up standing on the grass, facing `heading`: a coat, a head, a mop of hair, two legs. */
+function adult(top: number, hair: number, x: number, z: number, heading: number): THREE.Group {
+  const g = new THREE.Group();
+  const skin = lambert(0xf0c8a0);
+  const coat = lambert(top);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.55, 4, 8), coat);
+  body.position.y = 0.78;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), skin);
+  head.position.y = 1.32;
+  const mop = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), lambert(hair));
+  mop.scale.set(1, 0.7, 1);
+  mop.position.y = 1.4;
+  g.add(body, head, mop);
+  for (const s of [-1, 1]) {
+    const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.4, 3, 6), lambert(0x3a3540));
+    leg.position.set(s * 0.1, 0.28, 0);
+    g.add(leg);
+  }
+  g.position.set(x, 0, z);
+  g.rotation.y = Math.PI / 2 - heading;
+  return g;
+}
+
+/** Miss Sami and a mum, standing on the grass having a natter (they face each other). */
+function greeters(): THREE.Group {
+  const g = new THREE.Group();
+  const { sami, mum } = COMMON_GREETERS;
+  const toMum = Math.atan2(mum.z - sami.z, mum.x - sami.x);
+  g.add(adult(0x2f8f8a, 0x4a2f1c, sami.x, sami.z, toMum)); // Miss Sami, teal coat
+  g.add(adult(0x8a5cc0, 0x7a5230, mum.x, mum.z, toMum + Math.PI)); // the mum, purple coat, facing her
+  return g;
+}
+
 export function makeCommon(maxAnisotropy: number): School {
   const rng = new Rng(52);
   const group = new THREE.Group();
@@ -147,7 +180,7 @@ export function makeCommon(maxAnisotropy: number): School {
   const beyond = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshLambertMaterial({ color: 0x86a06a }));
   beyond.rotation.x = -Math.PI / 2;
   beyond.position.set((B.minX + B.maxX) / 2, -0.05, (B.minZ + B.maxZ) / 2);
-  group.add(beyond, houses(), trees(rng));
+  group.add(beyond, houses(), trees(rng), greeters());
 
   return { group, reveal: () => {} };
 }

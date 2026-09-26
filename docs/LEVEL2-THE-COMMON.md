@@ -215,4 +215,20 @@ Each phase is independently shippable, verified headless, reviewed, then deploye
 - **Multiplayer** — `PredatorRow [x,z,heading,speed]` in snapshots, `welcome.predatorKinds` fixes each index's kind once; the `Replica` reconstructs blanks and blends them like animals. Positions are server-authoritative; the flee/freeze state lives sim-side only.
 - **Verified:** typecheck + full build clean; headless — predators bite & howl, **0 in-solid / 0 out-of-bounds** over 200 s in all three modes, ferocity scales as designed; counterplay — freeze roots, breath scares; **school byte-identical** to the Phase 2 baseline (`4c82c20d` / `392056d6` / `38d6ad19`); browser — bear + wolf models render (2 instanced meshes, 1 + 2 instances), road/meadow scenery, 3 red minimap dots.
 
-**Next — Phase 4 (kids + Miss Sami):** the NPC framework — children running the Common (some naughty throwing stones, some nice sending kisses), and Miss Sami chatting with a mum by the fence gap.
+### ✅ Phase 4 complete 2026-09-26 — the kids + Miss Sami (on branch, NOT deployed)
+
+**Done and verified.** The Common is *alive*: a crowd of children running about, and a friendly grown-up.
+- **`src/sim/kids.ts`** — `KID_KINDS = ['naughty', 'nice', 'runner']`, the `Kid` runtime state, `makeKids(stage, rng)`, `blankKid()`, and the `Projectile` (pebble / kiss) type. Untouchable, deterministic, and a no-op on the school (empty roster ⇒ no RNG drawn there).
+  - **runner** — tears about, roaming wild and sometimes freezing mid-dash to stare: the whimsy.
+  - **naughty** — lobs a **pebble** at a snake within reach (a small capped shrink, "oops! a pebble", the school's stones reborn as mischief).
+  - **nice** — blows a **kiss** (a floating ❤️): a little gift — growth, and a 1-in-4 chance of a gem.
+- **Aiming** — kids lead the target a little (70%), and a pebble/kiss can strike anywhere along its flight, so throws connect ~30% of the time: dodgeable but real (measured ~20–30 pelts + ~8–11 kisses per 200 s from ~70–90 throws).
+- **Bumping a kid** is a gentle nudge — the snake is deflected, the child scatters, an "oops!" popup; nobody is ever hurt.
+- **Miss Sami + a mum** — two figures nattering on the grass just off the Telfer Road mouth (`Stage.greeters`, drawn from `COMMON_GREETERS`). Miss Sami drops a warm, whimsical line now and then through the same speech-bubble as Mr Cooper.
+- **Render** — `kidView` (instanced naughty/nice/runner children with a scampering gait), `projectileView` (a tumbling grey pebble and a bobbing heart, arced by flight progress), Miss Sami (teal coat) + mum (purple coat) built into the Common scenery. Cyan kid dots on the minimap (distinct from food-yellow and danger-red).
+- **Multiplayer** — `KidRow [x,z,heading,speed]` + `welcome.kidKinds` (kind fixed per index, blended like animals); `ProjectileRow [x,z,kind,t]` sent every snapshot (short list, arc height from `t`). New `lob` / `pelt` / `kiss` events (per-player where they land) drive the FX, popups and the gem on a lucky kiss.
+- **Verified:** typecheck + full build clean; headless — 8 kids, pebbles & kisses land, Miss Sami chatters, gentle kid-bumps, **0 in-solid / 0 out-of-bounds** over 200 s in all three modes, projectiles bounded (≤4 in flight); **school byte-identical** to the earlier baseline (`4c82c20d` / `392056d6` / `38d6ad19`); browser — naughty/nice/runner kids scamper the meadow, Miss Sami + mum stand and chat, the heart projectile arcs, minimap shows cyan kid dots, no console errors.
+
+**Simplified vs the pitch:** the fence-gap *portal* stays deferred (access is the menu picker), so Miss Sami greets you from the Common's road mouth rather than the school fence; her "100 gems" gate is moot (the menu handles it). Kid roster is fixed (8) rather than a living crowd that grows/shrinks.
+
+**Next — Phase 5 (magic creatures & the Glade):** shy, fleeing creatures deep in the woods (White Stag, Unicorn, Wise Owl, Frog Prince, Kitsune, Pixie, Golden Squirrel, Will-o'-the-wisp) that grant timed magic buffs — a new status system on the snake, with the Wizard Hat making them less shy.

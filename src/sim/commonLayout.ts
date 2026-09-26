@@ -44,6 +44,9 @@ const WOODS = COMMON_WOODS;
 
 const SNAKE_SPAWN = { x: 0, z: 4, heading: 0 };
 
+/** Miss Sami and a mum, nattering on the grass just off the Telfer Road mouth (also drawn by the renderer). */
+export const COMMON_GREETERS = { sami: { x: -3, z: -31 }, mum: { x: 0.4, z: -30.4 } };
+
 /** A random point out in the open meadow — where the animals and scattered food live. */
 const meadow = (rng: Rng): Spot => ({ x: rng.range(-40, 46), z: rng.range(-28, 46) });
 
@@ -71,6 +74,10 @@ export const COMMON: Stage = {
   sanctuary: null,
   hazardArea: null, // no rocks here: the Common's dangers move
   predators: [{ kind: 'bear', count: 1 }, { kind: 'wolf', count: 2 }],
+  // A crowd of children running the meadow: runners for whimsy, the odd pebble-thrower and kiss-blower.
+  kids: ['runner', 'naughty', 'nice', 'runner', 'naughty', 'nice', 'runner', 'naughty'],
+  // Miss Sami and a mum, nattering on the grass just off the Telfer Road mouth.
+  greeters: COMMON_GREETERS,
   cooper: null, // Mr Cooper stays at school
   paintMinimap: (c, X, Z, scale) => {
     const box = (b: Box, color: string) => {

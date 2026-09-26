@@ -10,7 +10,9 @@ import { AnimalView } from './render/animalView';
 import { BeeView } from './render/beeView';
 import { CooperView } from './render/cooperView';
 import { FoodView } from './render/foodView';
+import { KidView } from './render/kidView';
 import { PredatorView } from './render/predatorView';
+import { ProjectileView } from './render/projectileView';
 import { type School } from './render/school';
 import { makeStageScene } from './render/scenery';
 import { HazardView } from './render/hazardView';
@@ -58,6 +60,8 @@ let snakeViews: SnakeView[] = [];
 let foodView = new FoodView(world.foods.length);
 let animalView = new AnimalView(world.animals.length);
 let predatorView = new PredatorView(world.predators.length);
+let kidView = new KidView(world.kids.length);
+let projectileView = new ProjectileView();
 let hazardView = new HazardView(world.hazards);
 const cooperView = new CooperView();
 const beeView = new BeeView();
@@ -113,7 +117,7 @@ function wearOutfit(): void {
 
 /** Point the renderer at a different world: its own rocks, food, animals and snakes. */
 function mountWorld(next: WorldView): void {
-  for (const old of [hazardView.group, foodView.group, animalView.group, predatorView.group]) {
+  for (const old of [hazardView.group, foodView.group, animalView.group, predatorView.group, kidView.group, projectileView.group]) {
     stage.scene.remove(old);
     disposeTree(old);
   }
@@ -122,7 +126,9 @@ function mountWorld(next: WorldView): void {
   foodView = new FoodView(world.foods.length);
   animalView = new AnimalView(world.animals.length);
   predatorView = new PredatorView(world.predators.length);
-  stage.scene.add(hazardView.group, foodView.group, animalView.group, predatorView.group);
+  kidView = new KidView(world.kids.length);
+  projectileView = new ProjectileView();
+  stage.scene.add(hazardView.group, foodView.group, animalView.group, predatorView.group, kidView.group, projectileView.group);
   mountScenery(world.stage.id);
   hud.setStage(world.stage);
   mountSnakes();
@@ -142,6 +148,7 @@ const STINK = [0x8bd450, 0x5a9e2f, 0xcfe8a0];
 const ZAP = [0xffe066, 0x4dabf7, 0xffffff];
 const ICE = [0xa5d8ff, 0xe7f5ff, 0xffffff];
 const SPARK = [0xffd84a, 0xff6b6b, 0xffffff];
+const KISSES = [0xf0486f, 0xff9fbf, 0xffffff];
 
 const outfit = (): Outfit => ({ skin: save.skin, hat: save.hat, trail: save.trail, name: save.name });
 
@@ -474,7 +481,35 @@ function handleEvents(): void {
         }
         break;
       case 'bump':
-        if (mine) sfx?.bump();
+        if (mine) {
+          sfx?.bump();
+          if (e.what === 'kid') hud.popup('oops!', world.snake.x, world.snake.z, 'fun');
+        }
+        break;
+      case 'lob':
+        // A child let fly: a little puff where it left their hand.
+        sparkles.burst(e.x, e.z, e.kind === 'kiss' ? KISSES : DUST, 5, 0.5);
+        break;
+      case 'pelt':
+        // A pebble caught a snake: a small shrink, mischief not malice.
+        sparkles.burst(e.x, e.z, DUST, 8, 0.6);
+        if (e.who === world.me) {
+          hud.popup(e.lost > 0 ? 'oops! a pebble' : 'missed!', e.x, e.z, 'bad');
+          sfx?.ouch();
+        }
+        break;
+      case 'kiss':
+        // A blown kiss reached a snake: a little gift.
+        sparkles.burst(e.x, e.z, KISSES, 12, 0.9);
+        if (e.who === world.me) {
+          if (e.gem) {
+            earnGem();
+            hud.popup('💕 💎', e.x, e.z, 'fun');
+          } else {
+            hud.popup('💕 +', e.x, e.z, 'fun');
+          }
+          sfx?.golden();
+        }
         break;
       case 'howl':
         // A wolf about to charge: a puff of dust and a snarl so you feel it coming.
@@ -599,6 +634,8 @@ function frame(now: number): void {
   foodView.update(world, time);
   animalView.update(world, time);
   predatorView.update(world, playing ? dt : 0);
+  kidView.update(world, playing ? dt : 0);
+  projectileView.update(world, time);
   hazardView.update(world, time);
   beeView.update(world, time);
   sparkles.update(dt);

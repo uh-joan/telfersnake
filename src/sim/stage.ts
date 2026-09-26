@@ -1,5 +1,6 @@
 import type { AnimalKind } from './animals';
 import type { FoodKind } from './food';
+import type { KidKind } from './kids';
 import type { Box, Circle } from './layout';
 import type { PredatorKind } from './predators';
 import type { Rng } from './rng';
@@ -56,6 +57,10 @@ export interface Stage extends Terrain {
   hazardArea: { rough: Bounds; share: number } | null;
   /** Active predators (bears, wolves) and how many of each. Empty on a stage with none. */
   predators: { kind: PredatorKind; count: number }[];
+  /** The children who run about here, one entry per child (their kind is fixed). Empty: no kids. */
+  kids: readonly KidKind[];
+  /** Miss Sami and a mum, nattering at the edge of the Common. Null on a stage without them. */
+  greeters: { sami: Spot; mum: Spot } | null;
   /** Mr Cooper's spawn and beat, or null on a stage he never visits. */
   cooper: { spawn: Spot; beat: Bounds } | null;
   /** Paint the fixed features onto the minimap. X/Z map metres to canvas pixels. */

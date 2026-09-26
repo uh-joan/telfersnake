@@ -1,5 +1,6 @@
 import { ANIMALS, type Animal, type AnimalKind, makeAnimal, placeAnimal, updateAnimal } from './animals';
 import { makePredators, type Predator, PREDATORS } from './predators';
+import { KID_RADIUS, KIDS, type Kid, makeKids, type Projectile, type ProjectileKind } from './kids';
 import { Bot, type Personality } from './bot';
 import { botCardChoice, type Rules, rulesFor } from './modes';
 import { isFree, makeHit, resolveCircle, slideAlong, turnToward, wrapAngle } from './collide';
@@ -27,6 +28,19 @@ const GOAT_COOLDOWN = 3;
 
 const OUCH_SHARE = 0.12; // of current mass lost per rock...
 const OUCH_MAX = 15; // ...up to this much
+/** Miss Sami, out on the Common with a mum: warm, whimsical, accurate. Bubbles only, like Mr Cooper. */
+const SAMI_LINES = [
+  'Morning! Lovely to see you on the Common.',
+  'Mind the bears, poppet — give them a wide berth.',
+  'Ooh, someone has grown! Well done, you.',
+  'Have you seen a white stag? They say one lives in the woods.',
+  'Stay on the grass, away from the road, there’s a love.',
+  'Kind hands and kind hearts, everyone!',
+  '…and I said to her, well, he’s not had his tea yet!',
+  'The mushrooms are out — the spotted ones are the best.',
+  'No throwing pebbles! …Oh. It’s only a little one.',
+  'Wave to the kiddies, they do love a friendly snake.',
+];
 const OUCH_GRACE = 1.5; // seconds before the next rock can hurt
 const PELLET_RETURN = 0.7; // share of the lost mass that lands on the ground as pellets
 const PELLET_MAX = 5;
@@ -89,7 +103,13 @@ export type GameEvent =
   /** A rival was shrunk or frozen by a power (or bonk): puff at the victim; `by` earns the gem. */
   | { type: 'hit'; who: number; by: number; kind: 'shrink' | 'freeze'; x: number; z: number }
   | { type: 'say'; text: string }
-  | { type: 'bump'; who: number; what: 'wall' | 'cooper' };
+  /** A child let fly: a pebble or a blown kiss leaves their hand — a whoosh at (x, z). */
+  | { type: 'lob'; kind: ProjectileKind; x: number; z: number }
+  /** A pebble caught a snake: a small shrink, "oops, a pebble!". */
+  | { type: 'pelt'; who: number; x: number; z: number; lost: number }
+  /** A blown kiss reached a snake: a little gift — growth, and sometimes a gem. */
+  | { type: 'kiss'; who: number; x: number; z: number; gem: boolean }
+  | { type: 'bump'; who: number; what: 'wall' | 'cooper' | 'kid' };
 
 /**
  * The whole game state. Advances in fixed steps from inputs alone: no rendering, no DOM,
@@ -113,6 +133,9 @@ export class World {
   readonly foods: Food[] = [];
   readonly animals: Animal[] = [];
   readonly predators: Predator[] = [];
+  /** The Common's children (empty on the school), and the pebbles/kisses in flight. */
+  readonly kids: Kid[] = [];
+  readonly projectiles: Projectile[] = [];
   readonly pellets: Pellet[] = [];
   /** Things that happened since the caller last drained this. */
   readonly events: GameEvent[] = [];
@@ -128,6 +151,8 @@ export class World {
 
   private readonly bots = new Map<Snake, Bot>();
   private readonly p = { x: 0, z: 0 };
+  /** Miss Sami's little natter with the mum: when she next says something, if the stage has her. */
+  private samiSayIn = 3;
   /** Which difficulty this world runs at: rival personalities, food count, whether bots get upgrades. */
   readonly rules: Rules;
 
@@ -176,6 +201,7 @@ export class World {
       }
     }
     for (const p of makePredators(stage, this.rng)) this.predators.push(p);
+    for (const k of makeKids(stage, this.rng)) this.kids.push(k);
   }
 
   static room(seed: number, rules: Rules = rulesFor('normal'), stage: Stage = SCHOOL): World {
@@ -274,6 +300,9 @@ export class World {
     c.update(this, dt);
     for (const a of this.animals) updateAnimal(a, this, dt);
     this.updatePredators(dt);
+    this.updateKids(dt);
+    this.updateProjectiles(dt);
+    this.chatterSami(dt);
 
     for (const s of this.snakes) {
       if (!s.alive) {
@@ -313,6 +342,7 @@ export class World {
 
       this.bumpCooper(s, dt);
       this.meetAnimals(s, dt);
+      this.meetKids(s, dt);
       this.pullFood(s, dt);
       this.eat(s);
       this.bees(s);
@@ -656,6 +686,136 @@ export class World {
         p.biteIn = Math.max(p.biteIn, 1);
       }
     }
+  }
+
+  // ---------------------------------------------------------------- the kids (the Common's crowd)
+
+  /** Children scampering the meadow: runners for whimsy, the odd pebble-thrower and kiss-blower. */
+  private updateKids(dt: number): void {
+    for (const k of this.kids) {
+      const spec = KIDS[k.kind];
+      k.wanderIn -= dt;
+      k.throwIn -= dt;
+
+      if (k.pauseFor > 0) {
+        k.pauseFor -= dt;
+        k.speed = 0;
+      } else {
+        if (k.wanderIn <= 0 || Math.hypot(k.x - k.tx, k.z - k.tz) < 0.8) this.wanderKid(k);
+        k.heading = turnToward(k.heading, Math.atan2(k.tz - k.z, k.tx - k.x), 6 * dt);
+        const speed = spec.roam;
+        resolveCircle(this.stage, k.x + Math.cos(k.heading) * speed * dt, k.z + Math.sin(k.heading) * speed * dt, KID_RADIUS, this.hit);
+        k.x = this.hit.x;
+        k.z = this.hit.z;
+        k.speed = speed;
+        if (this.hit.hit) {
+          k.heading = slideAlong(k.heading, this.hit.nx, this.hit.nz);
+          this.wanderKid(k);
+        }
+      }
+
+      // Naughty kids lob a pebble, nice kids blow a kiss — at a snake within reach, on a cooldown.
+      if (spec.throwEvery > 0 && k.throwIn <= 0) {
+        const target = this.nearestSnake(k.x, k.z);
+        if (target && Math.hypot(target.x - k.x, target.z - k.z) <= spec.reach && this.projectiles.length < 24) {
+          k.throwIn = spec.throwEvery;
+          this.lob(k, target, k.kind === 'naughty' ? 'pebble' : 'kiss');
+        } else {
+          k.throwIn = 0.6; // nobody in range: glance again shortly
+        }
+      }
+    }
+  }
+
+  /** Pick a fresh spot for a child to scamper to; runners roam wild and sometimes freeze to stare. */
+  private wanderKid(k: Kid): void {
+    const spread = k.kind === 'runner' ? 30 : 14;
+    for (let tries = 0; tries < 20; tries++) {
+      const x = k.x + this.rng.range(-spread, spread);
+      const z = k.z + this.rng.range(-spread, spread);
+      if (!isFree(this.stage, x, z, KID_RADIUS + 0.5)) continue;
+      k.tx = x;
+      k.tz = z;
+      break;
+    }
+    k.wanderIn = this.rng.range(1.5, 4);
+    if (k.kind === 'runner' && this.rng.next() < 0.3) k.pauseFor = this.rng.range(0.4, 1.2);
+  }
+
+  /** A child throws: aimed a little ahead of the snake, so it stands a chance but is still dodgeable. */
+  private lob(k: Kid, target: Snake, kind: ProjectileKind): void {
+    const speed = kind === 'pebble' ? 11 : 7;
+    const flight = Math.hypot(target.x - k.x, target.z - k.z) / speed;
+    const vel = target.baseSpeed * target.speedFactor;
+    const aimX = target.x + Math.cos(target.heading) * vel * flight * 0.7;
+    const aimZ = target.z + Math.sin(target.heading) * vel * flight * 0.7;
+    const dx = aimX - k.x;
+    const dz = aimZ - k.z;
+    const d = Math.hypot(dx, dz) || 1;
+    k.heading = Math.atan2(dz, dx);
+    this.projectiles.push({ kind, x: k.x, z: k.z, dx: dx / d, dz: dz / d, speed, left: d, total: d });
+    this.events.push({ type: 'lob', kind, x: k.x, z: k.z });
+  }
+
+  /** Fly the pebbles and kisses; a head that comes within reach anywhere along the flight cops it. */
+  private updateProjectiles(dt: number): void {
+    const B = this.stage.bounds;
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const pj = this.projectiles[i];
+      const step = pj.speed * dt;
+      pj.x += pj.dx * step;
+      pj.z += pj.dz * step;
+      pj.left -= step;
+      const hitR = pj.kind === 'pebble' ? 1.2 : 1.5;
+      const best = this.nearestSnake(pj.x, pj.z);
+      if (best && Math.hypot(best.x - pj.x, best.z - pj.z) <= hitR) {
+        this.strikeProjectile(pj, best);
+        this.projectiles.splice(i, 1);
+        continue;
+      }
+      const out = pj.x < B.minX || pj.x > B.maxX || pj.z < B.minZ || pj.z > B.maxZ;
+      if (pj.left <= 0 || out) this.projectiles.splice(i, 1);
+    }
+  }
+
+  private strikeProjectile(pj: Projectile, best: Snake): void {
+    if (pj.kind === 'pebble') {
+      if (best.immune > 0) return; // a graze while already blinking: no double dip
+      best.immune = OUCH_GRACE * 0.5;
+      const lost = best.mass < 1 ? 0 : Math.min(6, Math.max(1, best.mass * 0.05)) * (1 - best.rockGuard);
+      if (lost > 0) this.shed(best, lost, PELLET_RETURN, 2);
+      this.events.push({ type: 'pelt', who: best.id, x: best.x, z: best.z, lost });
+    } else {
+      const gem = this.rng.next() < 0.25;
+      best.gain(4);
+      this.events.push({ type: 'kiss', who: best.id, x: best.x, z: best.z, gem });
+    }
+  }
+
+  /** A snake ran into a child: the child is never hurt — the snake is nudged, the child scatters. */
+  private meetKids(s: Snake, dt: number): void {
+    for (const k of this.kids) {
+      const reach = s.radius + KID_RADIUS;
+      if ((s.x - k.x) ** 2 + (s.z - k.z) ** 2 >= reach * reach) continue;
+      this.shove(s, k.x, k.z, reach, dt);
+      // Send the child scampering out of the way.
+      k.tx = k.x + (k.x - s.x);
+      k.tz = k.z + (k.z - s.z);
+      k.pauseFor = 0;
+      if (s.bumpQuiet <= 0) {
+        s.bumpQuiet = BUMP_QUIET;
+        this.events.push({ type: 'bump', who: s.id, what: 'kid' });
+      }
+    }
+  }
+
+  /** Miss Sami natters with the mum by the road mouth: an occasional warm line, if the stage has her. */
+  private chatterSami(dt: number): void {
+    if (!this.stage.greeters) return;
+    this.samiSayIn -= dt;
+    if (this.samiSayIn > 0) return;
+    this.samiSayIn = this.rng.range(7, 13);
+    this.events.push({ type: 'say', text: this.rng.pick(SAMI_LINES) });
   }
 
   private shed(s: Snake, lost: number, share: number, n: number): void {

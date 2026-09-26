@@ -2,6 +2,7 @@ import { ANIMAL_KINDS, type Animal } from '../sim/animals';
 import type { CooperState } from '../sim/view';
 import { FOOD_KINDS, type Food } from '../sim/food';
 import { HAZARD_KINDS, type Hazard, type Pellet } from '../sim/hazards';
+import { KID_KINDS, type Kid, PROJECTILE_KINDS, type Projectile } from '../sim/kids';
 import { PREDATOR_KINDS, type Predator } from '../sim/predators';
 import type { Mode } from '../sim/modes';
 import type { StageId } from '../sim/stage';
@@ -49,6 +50,10 @@ export type SnakeRow = [number, number, number, number, number, number, number, 
 export type AnimalRow = [number, number, number, number, number, number, number];
 /** x, z, heading, speed (kind is fixed per index, sent once in welcome) */
 export type PredatorRow = [number, number, number, number];
+/** x, z, heading, speed (kind is fixed per index, sent once in welcome) */
+export type KidRow = [number, number, number, number];
+/** x, z, kind, t (flight progress 0..1, for the client's arc) */
+export type ProjectileRow = [number, number, number, number];
 /** index, kind, golden, x, z, born */
 export type FoodRow = [number, number, 0 | 1, number, number, number];
 /** x, z, value, born */
@@ -75,6 +80,9 @@ export interface Snapshot {
   s: SnakeRow[];
   a: AnimalRow[];
   pd: PredatorRow[];
+  kd: KidRow[];
+  /** Pebbles and kisses in flight: the whole (usually short) list, every snapshot. */
+  pj: ProjectileRow[];
   /** Only the foods that changed since the last snapshot. */
   f: FoodRow[];
   /** The whole list, and only when it changed. */
@@ -87,7 +95,7 @@ export interface Snapshot {
 export type ServerMessage =
   | {
       t: 'welcome'; me: number; room: string; stage: StageId; tick: number; seats: Seat[];
-      hazards: HazardRow[]; animalKinds: number[]; predatorKinds: number[]; foods: FoodRow[]; pellets: PelletRow[];
+      hazards: HazardRow[]; animalKinds: number[]; predatorKinds: number[]; kidKinds: number[]; foods: FoodRow[]; pellets: PelletRow[];
     }
   | { t: 'seats'; seats: Seat[] }
   | Snapshot
@@ -131,6 +139,9 @@ export function snakeRow(s: Snake): SnakeRow {
 export const animalRow = (a: Animal): AnimalRow => [r2(a.x), r2(a.z), r3(a.heading), r2(a.speed), r2(a.travel), r2(Math.max(0, a.dazed)), a.born];
 export const predatorRow = (p: Predator): PredatorRow => [r2(p.x), r2(p.z), r3(p.heading), r2(p.speed)];
 export const predatorKindIndex = (p: Predator) => PREDATOR_KINDS.indexOf(p.kind);
+export const kidRow = (k: Kid): KidRow => [r2(k.x), r2(k.z), r3(k.heading), r2(k.speed)];
+export const kidKindIndex = (k: Kid) => KID_KINDS.indexOf(k.kind);
+export const projectileRow = (pj: Projectile): ProjectileRow => [r2(pj.x), r2(pj.z), PROJECTILE_KINDS.indexOf(pj.kind), r2(pj.total > 0 ? 1 - pj.left / pj.total : 1)];
 export const foodRow = (f: Food, i: number): FoodRow => [i, FOOD_KINDS.indexOf(f.kind), f.golden ? 1 : 0, r2(f.x), r2(f.z), f.born];
 export const pelletRow = (p: Pellet): PelletRow => [r2(p.x), r2(p.z), r2(p.value), p.born];
 export const hazardRow = (h: Hazard): HazardRow => [HAZARD_KINDS.indexOf(h.kind), r2(h.x), r2(h.z), h.r, r3(h.turn)];
@@ -140,7 +151,7 @@ export const animalKindIndex = (a: Animal) => ANIMAL_KINDS.indexOf(a.kind);
 /** Events that are only about one player go only to that player; the rest everyone sees. */
 export function eventIsFor(e: GameEvent, seat: number): boolean {
   switch (e.type) {
-    case 'cards': case 'bump': case 'boop': case 'ouch': case 'pellet': case 'tier': case 'helmet':
+    case 'cards': case 'bump': case 'boop': case 'ouch': case 'pellet': case 'tier': case 'helmet': case 'pelt': case 'kiss':
       return e.who === seat;
     default:
       return true;
