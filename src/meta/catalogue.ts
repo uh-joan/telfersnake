@@ -11,8 +11,11 @@ export interface Item {
   id: string;
   kind: ItemKind;
   name: string;
+  /** In stars, or in blue gems when `gem` is set. */
   price: number;
   icon: string;
+  /** Common-only: bought with blue gems, and only shown in the shop once the Common is unlocked. */
+  gem?: boolean;
 }
 
 export interface Skin extends Item {
@@ -55,6 +58,10 @@ export const SKINS: Skin[] = [
   { id: 'galaxy', kind: 'skin', name: 'Galaxy', price: 280, icon: '🌌', head: 0x3b1d6e, pattern: [0x1b1340, 0x3b1d6e, 0x5f3dc4, 0x22b8cf, 0x3b1d6e] },
   { id: 'nessie', kind: 'skin', name: 'Loch Ness', price: 300, icon: '🦕', head: 0x0b7285, pattern: [0x0b7285, 0x0b7285, 0x15aabf] },
   { id: 'gold', kind: 'skin', name: 'Golden Snake', price: 500, icon: '🏆', head: 0xffe066, pattern: [0xffd43b, 0xfab005, 0xffe066] },
+  // Common-only, bought with blue gems: forest and magic looks.
+  { id: 'fox', kind: 'skin', name: 'Sly Fox', price: 30, gem: true, icon: '🦊', head: 0xd9662a, pattern: [0xd9662a, 0xd9662a, 0xf3ead3] },
+  { id: 'toadstool', kind: 'skin', name: 'Toadstool', price: 25, gem: true, icon: '🍄', head: 0xd23b32, pattern: [0xd23b32, 0xffffff, 0xd23b32, 0xd23b32] },
+  { id: 'stag', kind: 'skin', name: 'White Stag', price: 45, gem: true, icon: '🦌', head: 0xf3efe6, pattern: [0xe9e4d8, 0xe6c766, 0xe9e4d8] },
 ];
 
 export const HATS: Item[] = [
@@ -74,6 +81,10 @@ export const HATS: Item[] = [
   { id: 'viking', kind: 'hat', name: 'Viking Helmet', price: 140, icon: '🪓' },
   { id: 'halo', kind: 'hat', name: 'Halo', price: 160, icon: '😇' },
   { id: 'crown', kind: 'hat', name: 'Crown', price: 150, icon: '👑' },
+  // Common-only, bought with blue gems.
+  { id: 'acorn', kind: 'hat', name: 'Acorn Cap', price: 20, gem: true, icon: '🌰' },
+  { id: 'flower-crown', kind: 'hat', name: 'Flower Crown', price: 25, gem: true, icon: '🌸' },
+  { id: 'antlers', kind: 'hat', name: 'Antlers', price: 30, gem: true, icon: '🦌' },
 ];
 
 export const TRAILS: Trail[] = [
@@ -89,6 +100,10 @@ export const TRAILS: Trail[] = [
   { id: 'confetti', kind: 'trail', name: 'Confetti', price: 120, icon: '🎉', palette: [0xffd84a, 0xff6b6b, 0x4dabf7, 0x8be36a, 0xf783ac, 0xffffff] },
   { id: 'stardust', kind: 'trail', name: 'Stardust', price: 140, icon: '🌟', palette: [0xfff3bf, 0xffd43b, 0x748ffc, 0xffffff] },
   { id: 'rainbow-trail', kind: 'trail', name: 'Rainbow Dust', price: 150, icon: '🌈', palette: [0xff6b6b, 0xffa94d, 0xffd43b, 0x69db7c, 0x4dabf7, 0x9775fa] },
+  // Common-only, bought with blue gems.
+  { id: 'petals', kind: 'trail', name: 'Petals', price: 25, gem: true, icon: '🌸', palette: [0xffc9de, 0xff8fab, 0xffffff] },
+  { id: 'fireflies', kind: 'trail', name: 'Fireflies', price: 30, gem: true, icon: '💫', palette: [0xfff6a0, 0xc0eb75, 0xffffff] },
+  { id: 'magic-dust', kind: 'trail', name: 'Magic Dust', price: 40, gem: true, icon: '🔮', palette: [0x9775fa, 0xc0ffe6, 0xffd43b, 0xffffff] },
 ];
 
 export const CATALOGUE: Record<ItemKind, Item[]> = { skin: SKINS, hat: HATS, trail: TRAILS };

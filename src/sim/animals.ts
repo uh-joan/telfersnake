@@ -1,5 +1,4 @@
 import { isFree, resolveCircle, slideAlong, turnToward } from './collide';
-import { BOUNDS, COOPER_SPAWN, GREEN, LAGOON, LANES, SNAKE_SPAWN } from './layout';
 import type { World } from './world';
 
 /**
@@ -7,10 +6,17 @@ import type { World } from './world';
  * run away when it gets close, the ones it is too small for stand their ground and boop it.
  */
 
-export const ANIMAL_KINDS = ['snail', 'ladybird', 'chicken', 'duck', 'rabbit', 'sheep', 'pig', 'goat'] as const;
+export const ANIMAL_KINDS = [
+  'snail', 'ladybird', 'chicken', 'duck', 'rabbit', 'sheep', 'pig', 'goat',
+  'squirrel', 'crow', 'deer', 'hedgehog', 'fox', 'pigeon',
+] as const;
 export type AnimalKind = (typeof ANIMAL_KINDS)[number];
 
-type Home = 'green' | 'yard' | 'lagoon' | 'anywhere';
+/** The petting farm lives at school; the forest animals on the Common (see the *_ANIMALS sets). */
+export const SCHOOL_ANIMALS: readonly AnimalKind[] = ['snail', 'ladybird', 'chicken', 'duck', 'rabbit', 'sheep', 'pig', 'goat'];
+export const COMMON_ANIMALS: readonly AnimalKind[] = ['squirrel', 'crow', 'deer', 'hedgehog', 'fox', 'pigeon', 'rabbit', 'duck'];
+
+type Home = 'green' | 'yard' | 'lagoon' | 'woods' | 'anywhere';
 
 export interface AnimalSpec {
   /** Smallest snake tier (0-based) that can gulp it. */
@@ -37,6 +43,13 @@ export const ANIMALS: Record<AnimalKind, AnimalSpec> = {
   sheep: { tier: 3, value: 18, radius: 0.6, walk: 0.9, flee: 3.2, alert: 6, jitter: 0.3, count: 3, home: 'green' },
   pig: { tier: 3, value: 18, radius: 0.6, walk: 1.1, flee: 3.8, alert: 5.5, jitter: 0.4, count: 1, home: 'yard' },
   goat: { tier: 4, value: 30, radius: 0.65, walk: 1.2, flee: 4.5, alert: 6, jitter: 0.3, count: 1, home: 'yard' },
+  // Forest animals of the Common.
+  squirrel: { tier: 0, value: 4, radius: 0.28, walk: 1.4, flee: 5.5, alert: 6, jitter: 1.6, count: 4, home: 'woods' },
+  crow: { tier: 2, value: 7, radius: 0.35, walk: 1.2, flee: 4.5, alert: 6, jitter: 1.0, count: 3, home: 'anywhere' },
+  deer: { tier: 3, value: 22, radius: 0.6, walk: 1.0, flee: 7.0, alert: 9, jitter: 0.4, count: 2, home: 'anywhere' },
+  hedgehog: { tier: 1, value: 6, radius: 0.3, walk: 0.6, flee: 1.4, alert: 3, jitter: 0.3, count: 3, home: 'woods' },
+  fox: { tier: 2, value: 12, radius: 0.4, walk: 1.5, flee: 4.0, alert: 6, jitter: 0.7, count: 2, home: 'woods' },
+  pigeon: { tier: 0, value: 3, radius: 0.25, walk: 0.9, flee: 3.5, alert: 4, jitter: 1.2, count: 5, home: 'anywhere' },
 };
 
 const TURN_RATE = 6; // rad/s
@@ -75,22 +88,8 @@ export interface Animal {
   chargeFor: number;
 }
 
-function homePoint(w: World, home: Home): { x: number; z: number } {
-  const r = w.rng;
-  switch (home) {
-    case 'green':
-      return { x: r.range(GREEN.x - GREEN.w / 2, GREEN.x + GREEN.w / 2), z: r.range(GREEN.z - GREEN.d / 2, GREEN.z + GREEN.d / 2) };
-    case 'lagoon': {
-      const a = r.range(0, Math.PI * 2);
-      const d = r.range(0, LAGOON.rx + 2);
-      return { x: LAGOON.x + Math.cos(a) * d, z: LAGOON.z + Math.sin(a) * d * 0.8 };
-    }
-    case 'yard':
-      return { x: r.range(LANES.x0 - 2, LANES.x1 + 2), z: r.range(LANES.z0 - 6, LANES.z1 + 3) };
-    case 'anywhere':
-      return { x: r.range(BOUNDS.minX, BOUNDS.maxX), z: r.range(BOUNDS.minZ, BOUNDS.maxZ) };
-  }
-}
+/** A random point in an animal's home turf: the stage knows where its green, lagoon and yard are. */
+const homePoint = (w: World, home: Home): { x: number; z: number } => w.stage.homePoint(w.rng, home);
 
 /** Put `a` down somewhere free near its home, at least `clear` metres from the snake. */
 export function placeAnimal(a: Animal, w: World, clear: number): void {
@@ -99,7 +98,7 @@ export function placeAnimal(a: Animal, w: World, clear: number): void {
   for (let tries = 0; tries < 120 && !placed; tries++) {
     // Home turf first; if a snake is camping there, anywhere will do, then with less elbow room.
     const p = homePoint(w, tries < 30 ? spec.home : 'anywhere');
-    if (!isFree(p.x, p.z, spec.radius + 0.3, w.hazards)) continue;
+    if (!isFree(w.stage, p.x, p.z, spec.radius + 0.3, w.hazards)) continue;
     if (!w.clearOfSnakes(p.x, p.z, tries < 60 ? clear : Math.min(clear, 6))) continue;
     a.x = p.x;
     a.z = p.z;
@@ -107,7 +106,8 @@ export function placeAnimal(a: Animal, w: World, clear: number): void {
   }
   if (!placed) {
     // Never leave it where it was eaten: it would be gulped again every tick.
-    const spot = w.clearOfSnakes(SNAKE_SPAWN.x, SNAKE_SPAWN.z, 6) ? SNAKE_SPAWN : COOPER_SPAWN;
+    const s = w.stage.snakeSpawn;
+    const spot = w.clearOfSnakes(s.x, s.z, 6) ? s : w.stage.fallbackSpot;
     a.x = spot.x;
     a.z = spot.z;
   }
@@ -221,7 +221,7 @@ export function updateAnimal(a: Animal, w: World, dt: number): void {
   if (a.speed === 0) return;
   a.heading = turnToward(a.heading, a.want, TURN_RATE * dt);
   const step = a.speed * dt;
-  const hit = resolveCircle(a.x + Math.cos(a.heading) * step, a.z + Math.sin(a.heading) * step, spec.radius, w.hit, w.hazards);
+  const hit = resolveCircle(w.stage, a.x + Math.cos(a.heading) * step, a.z + Math.sin(a.heading) * step, spec.radius, w.hit, w.hazards);
   a.travel += Math.hypot(hit.x - a.x, hit.z - a.z);
   a.x = hit.x;
   a.z = hit.z;

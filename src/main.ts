@@ -2,24 +2,33 @@ import './style.css';
 import { Music } from './audio/music';
 import { Sfx } from './audio/sfx';
 import { Controls } from './input/controls';
-import { skinLook, starsFor, trailPalette } from './meta/catalogue';
+import { skinLook, starsFor } from './meta/catalogue';
 import { type AudioMode, loadSave, writeSave } from './meta/save';
 import { cleanName, randomName } from './meta/names';
 import { Connection, type Outfit } from './net/client';
 import { AnimalView } from './render/animalView';
 import { BeeView } from './render/beeView';
 import { CooperView } from './render/cooperView';
+import { CreatureView } from './render/creatureView';
 import { FoodView } from './render/foodView';
-import { makeGround } from './render/ground';
+import { KidView } from './render/kidView';
+import { PredatorView } from './render/predatorView';
+import { ProjectileView } from './render/projectileView';
+import { type School } from './render/school';
+import { makeStageScene } from './render/scenery';
 import { HazardView } from './render/hazardView';
-import { makeSchool } from './render/school';
 import { SnakeView } from './render/snakeView';
 import { disposeTree } from './render/paint';
 import { Sparkles } from './render/sparkles';
+import { TrailView } from './render/trailView';
 import { Stage } from './render/stage';
+import { Weather } from './render/weather';
 import { UpgradeFx } from './render/upgradeFx';
+import { CREATURES } from './sim/creatures';
 import { asMode, godUnlocked, type Mode, rulesFor } from './sim/modes';
-import { TIERS } from './sim/snake';
+import { asStage, type StageId } from './sim/stage';
+import { stageFor } from './sim/stages';
+import { MEGA_TIER, TIERS } from './sim/snake';
 import { POWER_GEM_COST, POWER_IDS, UPGRADES } from './sim/upgrades';
 import type { WorldView } from './sim/view';
 import { STEP, World } from './sim/world';
@@ -37,7 +46,7 @@ const save = loadSave();
 const stage = new Stage($<HTMLCanvasElement>('game'));
 /** A fresh solo world at the chosen difficulty; also the backdrop behind the start screen. */
 const makeSolo = (): World => {
-  const w = new World((Date.now() & 0x7fffffff) || 1, skinLook(save.skin, save.name), rulesFor(save.mode));
+  const w = new World((Date.now() & 0x7fffffff) || 1, skinLook(save.skin, save.name), rulesFor(save.mode), stageFor(save.stage));
   w.snake.canBuyPowers = save.gems > 0;
   return w;
 };
@@ -50,17 +59,49 @@ const controls = new Controls($('app'), $('stick'), $('dash'));
 const hud = new Hud();
 let sfx: Sfx | null = null;
 let music: Music | null = null;
+// The drifting sky: sun, cloud, rain and the odd storm. Purely visual, so it never touches the sim.
+const weather = new Weather(stage, () => sfx);
+stage.scene.add(weather.group);
 
 let snakeViews: SnakeView[] = [];
 let foodView = new FoodView(world.foods.length);
 let animalView = new AnimalView(world.animals.length);
+let predatorView = new PredatorView(world.predators.length);
+let kidView = new KidView(world.kids.length);
+let projectileView = new ProjectileView();
+let creatureView = new CreatureView(world.creatures.length);
 let hazardView = new HazardView(world.hazards);
-const cooperView = new CooperView();
+let cooperView = new CooperView(world.stage.cooper?.persona ?? 'cooper');
 const beeView = new BeeView();
 const sparkles = new Sparkles();
+const trailView = new TrailView();
 const upgradeFx = new UpgradeFx();
-const school = makeSchool();
-stage.scene.add(makeGround(stage.maxAnisotropy), school.group, cooperView.group, beeView.mesh, upgradeFx.group, sparkles.mesh);
+// The travelling actors (Cooper, bees, upgrade FX, sparkles) stay in the scene; each stage's
+// ground + fixed scenery is swapped in and out (and cached) as you move between school and Common.
+stage.scene.add(cooperView.group, beeView.mesh, upgradeFx.group, sparkles.mesh, trailView.group);
+/** Swap the warden figure (head teacher vs park keeper) when the stage changes. */
+function mountWarden(): void {
+  const persona = world.stage.cooper?.persona ?? 'cooper';
+  if (cooperView.persona === persona) return;
+  stage.scene.remove(cooperView.group);
+  disposeTree(cooperView.group);
+  cooperView = new CooperView(persona);
+  stage.scene.add(cooperView.group);
+}
+const sceneryCache = new Map<StageId, School>();
+let scenery: School | null = null;
+function mountScenery(id: StageId): void {
+  let next = sceneryCache.get(id);
+  if (!next) {
+    next = makeStageScene(id, stage.maxAnisotropy);
+    sceneryCache.set(id, next);
+  }
+  if (scenery === next) return;
+  if (scenery) stage.scene.remove(scenery.group);
+  scenery = next;
+  stage.scene.add(scenery.group);
+  stage.setAtmosphere(id); // each place its own light and haze
+}
 
 /** Everyone's hat, by seat: yours from the save, other players' as the server tells it. */
 function hatFor(id: number): string {
@@ -95,7 +136,7 @@ function wearOutfit(): void {
 
 /** Point the renderer at a different world: its own rocks, food, animals and snakes. */
 function mountWorld(next: WorldView): void {
-  for (const old of [hazardView.group, foodView.group, animalView.group]) {
+  for (const old of [hazardView.group, foodView.group, animalView.group, predatorView.group, kidView.group, projectileView.group, creatureView.group]) {
     stage.scene.remove(old);
     disposeTree(old);
   }
@@ -103,7 +144,14 @@ function mountWorld(next: WorldView): void {
   hazardView = new HazardView(world.hazards);
   foodView = new FoodView(world.foods.length);
   animalView = new AnimalView(world.animals.length);
-  stage.scene.add(hazardView.group, foodView.group, animalView.group);
+  predatorView = new PredatorView(world.predators.length);
+  kidView = new KidView(world.kids.length);
+  projectileView = new ProjectileView();
+  creatureView = new CreatureView(world.creatures.length);
+  stage.scene.add(hazardView.group, foodView.group, animalView.group, predatorView.group, kidView.group, projectileView.group, creatureView.group);
+  mountScenery(world.stage.id);
+  mountWarden();
+  hud.setStage(world.stage);
   mountSnakes();
 }
 mountWorld(solo);
@@ -121,12 +169,29 @@ const STINK = [0x8bd450, 0x5a9e2f, 0xcfe8a0];
 const ZAP = [0xffe066, 0x4dabf7, 0xffffff];
 const ICE = [0xa5d8ff, 0xe7f5ff, 0xffffff];
 const SPARK = [0xffd84a, 0xff6b6b, 0xffffff];
+const KISSES = [0xf0486f, 0xff9fbf, 0xffffff];
+const HALO = [0xffe066, 0xfff3b0, 0xffffff];
+const PIXIE_FX = [0xc0ffe6, 0x8be3c8, 0xffffff];
+const OWL_FX = [0xcde6ff, 0xa5d8ff, 0xffffff];
+
+/** The fanfare each fantastic creature earns when gulped. */
+const MAGIC_LABEL: Record<string, [string, string]> = {
+  stag: ['✨ Stag’s Blessing', 'Level up!'],
+  unicorn: ['🦄 Rainbow Rush', '🌈 all gold'],
+  owl: ['🦉 Owl Eyes', '🔮 lucky card'],
+  frog: ['🐸 Royal Ribbit', 'danger, be gone!'],
+  kitsune: ['🦊 Fox Trick', '👻 invisible'],
+  pixie: ['🧚 Pixie Dust', '🧲 super magnet'],
+  squirrel: ['🐿️ Acorn Hoard', '🌰 ➕'],
+  wisp: ['🌟 Wisp Cache', '✨ treasure!'],
+};
 
 const outfit = (): Outfit => ({ skin: save.skin, hat: save.hat, trail: save.trail, name: save.name });
 
 /** Trail colours by seat: mine from the save, other players' as the server tells it. */
-function trailFor(id: number): number[] {
-  return trailPalette(connection ? connection.replica.trails[id] : id === world.me ? save.trail : 'no-trail');
+/** The trail item a snake is wearing ('no-trail' if none): the TrailView resolves its look and colours. */
+function trailIdFor(id: number): string {
+  return connection ? connection.replica.trails[id] : id === world.me ? save.trail : 'no-trail';
 }
 
 // ---------------------------------------------------------------- this run
@@ -137,10 +202,18 @@ const run = { gulps: 0, rivalBonks: 0, longest: 0, banked: 0, gems: 0, gemsBanke
 /** Easy is the gentle sandbox, not a star farm: it pays half, so Normal is the road to anything dear. */
 const MODE_STARS: Record<Mode, number> = { easy: 0.5, normal: 1, god: 1 };
 
+/** The Common is the premium level: it pays back the 100-gem ticket with richer rewards. */
+const COMMON_BONUS = 1.25;
+
 /** A blue gem earned by shrinking or bonking a rival. Banked with the stars. */
 function earnGem(): void {
   save.gems++;
   run.gems++;
+  // The Common pays ×1.25: a one-in-four chance of a bonus gem on top.
+  if (save.stage === 'common' && Math.random() < COMMON_BONUS - 1) {
+    save.gems++;
+    run.gems++;
+  }
   updateCanBuy();
 }
 
@@ -155,7 +228,8 @@ function updateCanBuy(): void {
 
 function earned(): number {
   const raw = starsFor(world.snake.score, world.snake.highestTier, run.rivalBonks);
-  return Math.floor(raw * MODE_STARS[save.mode]);
+  const stageBonus = save.stage === 'common' ? COMMON_BONUS : 1;
+  return Math.floor(raw * MODE_STARS[save.mode] * stageBonus);
 }
 
 /** Stars go into the save as they are earned, so closing the tab mid-run loses nothing. */
@@ -232,7 +306,11 @@ function show(next: Screen): void {
   for (const id of ['start', 'pause', 'results', 'name'] as const) $(id).classList.toggle('show', id === next);
   $('app').classList.toggle('menu', next !== null);
   // Coming back to the start screen may be the moment God mode's two items were just bought.
-  if (next === 'start') refreshModePicker();
+  if (next === 'start') {
+    refreshModePicker();
+    refreshStagePicker();
+    refreshWallet();
+  }
   // A shared playground cannot stop for one player, so their snake stands aside, safe, while they are in a menu.
   if (!run.over) connection?.away(next !== null);
   screen = next;
@@ -374,12 +452,12 @@ function handleEvents(): void {
         break;
       case 'tier':
         if (!mine) break;
-        hud.announce(`${TIERS[e.tier].name}!`, `😋 ${TIERS[e.tier].gulps}`);
+        hud.announce(`${TIERS[e.tier].name}!`, `😋 ${world.stage.gulpHints[e.tier] ?? TIERS[e.tier].gulps}`);
         sparkles.burst(world.snake.x, world.snake.z, CONFETTI, 30, 1.4);
         sfx?.tierUp();
         music?.setLevel(e.tier);
-        // Going MEGA (the top tier) in a Normal game is the proof God mode asks for.
-        if (e.tier >= TIERS.length - 1 && save.mode === 'normal' && !save.mega) {
+        // Going MEGA in a Normal game is the proof God mode asks for (the Dragon is above it now).
+        if (e.tier >= MEGA_TIER && save.mode === 'normal' && !save.mega) {
           save.mega = true;
           writeSave(save);
         }
@@ -450,11 +528,65 @@ function handleEvents(): void {
         }
         break;
       case 'bump':
-        if (mine) sfx?.bump();
+        if (mine) {
+          sfx?.bump();
+          if (e.what === 'kid') hud.popup('oops!', world.snake.x, world.snake.z, 'fun');
+        }
         break;
+      case 'lob':
+        // A child let fly: a little puff where it left their hand.
+        sparkles.burst(e.x, e.z, e.kind === 'kiss' ? KISSES : DUST, 5, 0.5);
+        break;
+      case 'pelt':
+        // A pebble caught a snake: a small shrink, mischief not malice.
+        sparkles.burst(e.x, e.z, DUST, 8, 0.6);
+        if (e.who === world.me) {
+          hud.popup(e.lost > 0 ? 'oops! a pebble' : 'missed!', e.x, e.z, 'bad');
+          sfx?.ouch();
+        }
+        break;
+      case 'kiss':
+        // A blown kiss reached a snake: a little gift.
+        sparkles.burst(e.x, e.z, KISSES, 12, 0.9);
+        if (e.who === world.me) {
+          if (e.gem) {
+            earnGem();
+            hud.popup('💕 💎', e.x, e.z, 'fun');
+          } else {
+            hud.popup('💕 +', e.x, e.z, 'fun');
+          }
+          sfx?.golden();
+        }
+        break;
+      case 'howl':
+        // A wolf about to charge: a puff of dust and a snarl so you feel it coming.
+        sparkles.burst(e.x, e.z, DUST, 8, 0.7);
+        sfx?.growl();
+        break;
+      case 'chomp':
+        // A bear or wolf bit someone: dust cloud like a rock bonk.
+        sparkles.burst(e.x, e.z, DUST, e.kind === 'bear' ? 22 : 14, e.kind === 'bear' ? 1.2 : 0.9);
+        if (e.who === world.me) {
+          hud.popup(e.kind === 'bear' ? '🐻 OUCH!' : '🐺 OUCH!', e.x, e.z, 'bad');
+          sfx?.ouch();
+        }
+        break;
+      case 'magic': {
+        // A fantastic creature was gulped: a burst of its own colour, and the magic lands.
+        const glow = CREATURES[e.kind].glow;
+        sparkles.burst(e.x, e.z, [glow, 0xffffff, 0xffe066], 34, 1.7);
+        if (e.who === world.me) {
+          for (let i = 0; i < e.gems; i++) earnGem();
+          const [title, sub] = MAGIC_LABEL[e.kind];
+          hud.announce(title, sub);
+          sfx?.golden();
+          if (e.kind === 'stag') sfx?.tierUp();
+        }
+        break;
+      }
       case 'say':
-        // Mr Cooper tells people off in a speech bubble only. He had a spoken voice once; it grated.
-        hud.say(e.text);
+        // A grown-up says something, in a speech bubble over their head (Cooper, the keeper, Miss Sami…).
+        hud.say(e.text, e.x, e.z);
         break;
     }
   }
@@ -542,14 +674,27 @@ function frame(now: number): void {
         sparkles.drift(s.x + Math.cos(s.heading) * s.radius * 1.4, s.z + Math.sin(s.heading) * s.radius * 1.4, EMBERS);
       }
       if (s.luck > 0 && Math.random() < 0.08 * s.luck) sparkles.drift(s.x, s.z, LUCKY);
+      // Magic buffs shimmer, so you can see the spell at work — on any snake under one.
+      for (const o of world.snakes) {
+        if (!o.alive) continue;
+        if (o.hasMagic('halo') && Math.random() < 0.5) sparkles.drift(o.x, o.z, HALO);
+        if (o.hasMagic('hidden') && Math.random() < 0.4) sparkles.drift(o.x, o.z, ICE);
+        if (o.hasMagic('magnet') && Math.random() < 0.3) sparkles.drift(o.x, o.z, PIXIE_FX);
+        if (o.hasMagic('owl') && Math.random() < 0.15) sparkles.drift(o.x, o.z, OWL_FX);
+      }
+      // The fantastic creatures glimmer with their own aura.
+      for (const c of world.creatures) {
+        if (c.respawnIn <= 0 && Math.random() < 0.35) sparkles.drift(c.x, c.z, [CREATURES[c.kind].glow, 0xffffff]);
+      }
     }
     if ((trailIn -= dt) <= 0) {
       trailIn = TRAIL_EVERY;
       for (const o of world.snakes) {
-        const palette = trailFor(o.id);
-        if (palette.length === 0 || !o.alive) continue;
+        // Rainbow Rush overrides the usual trail with a bright rainbow ribbon.
+        const trailId = o.hasMagic('rainbow') ? 'rainbow-trail' : trailIdFor(o.id);
+        if (trailId === 'no-trail' || !o.alive) continue;
         o.sampleAt(o.length, tail);
-        sparkles.drift(tail.x, tail.z, palette);
+        trailView.add(tail.x, tail.z, trailId);
       }
     }
   } else {
@@ -561,13 +706,19 @@ function frame(now: number): void {
   for (const v of snakeViews) v.update(playing ? dt : 0, time);
   foodView.update(world, time);
   animalView.update(world, time);
+  predatorView.update(world, playing ? dt : 0);
+  kidView.update(world, playing ? dt : 0);
+  projectileView.update(world, time);
+  creatureView.update(world, time);
   hazardView.update(world, time);
   beeView.update(world, time);
   sparkles.update(dt);
+  trailView.update(dt, time);
   upgradeFx.update(world, playing ? dt : 0, time);
-  school.reveal(s.x, s.z, dt);
+  scenery?.reveal(s.x, s.z, dt);
   cooperView.update(world.cooper, playing ? dt : 0, time);
   stage.follow(s.x, s.z, s.heading, s.radius, dt);
+  weather.update(dt, s.x, s.z);
   hud.update(world, stage, dt);
   stage.render();
   requestAnimationFrame(frame);
@@ -586,11 +737,14 @@ $('play').addEventListener('click', async () => {
   if (screen !== 'start' || starting) return;
   starting = true;
   wakeAudio()?.bell();
-  const greeting = 'Good morning, everyone. Walking feet, please!';
+  // Miss Sami welcomes you to the Common; Mr Cooper minds the school yard.
+  const greeting = save.stage === 'common'
+    ? 'Welcome to the Common! Mind the woods, and watch for magic.'
+    : 'Good morning, everyone. Walking feet, please!';
   $('start').classList.add('busy'); // every button on the start screen is dead until we are in
 
   try {
-    connection = await Connection.join(outfit(), save.mode, save.gems > 0, () => {
+    connection = await Connection.join(outfit(), save.mode, save.gems > 0, save.stage, () => {
       // The line dropped mid-game: keep what was earned and call it home time.
       connection = null;
       hud.toast('😴', 'Connection lost');
@@ -605,7 +759,14 @@ $('play').addEventListener('click', async () => {
   $('start').classList.remove('busy');
   starting = false;
   music?.start();
-  hud.say(greeting);
+  music?.setPlace(save.stage);
+  // A one-time fanfare the very first time you set foot on the Common.
+  if (save.stage === 'common' && !save.commonSeen) {
+    save.commonSeen = true;
+    writeSave(save);
+    hud.announce('🌳 The Common!', '✨ new friends & magic');
+  }
+  hud.say(greeting, world.snake.x, world.snake.z);
   show(null);
 });
 
@@ -682,6 +843,54 @@ function setMode(mode: Mode): void {
 for (const b of modeButtons) b.addEventListener('click', () => setMode(asMode(b.dataset.mode)));
 refreshModePicker();
 
+// ---------------------------------------------------------------- where to play: School · The Common
+
+/** The one-off blue-gem ticket to the Common (Level 2). */
+const COMMON_COST = 100;
+const stageButtons = [...document.querySelectorAll<HTMLButtonElement>('#stage-pick .stage')];
+
+/** The wallet on the start screen's Tuck Shop button: stars earned and blue gems banked. */
+function refreshWallet(): void {
+  $('start-stars').textContent = `⭐${save.stars} 💎${save.gems}`;
+}
+
+/** Mark the chosen place; show the Common's 💎100 lock until it is bought. */
+function refreshStagePicker(): void {
+  const commonBtn = stageButtons.find((b) => b.dataset.stage === 'common');
+  if (commonBtn) commonBtn.classList.toggle('locked', !save.commonUnlocked);
+  for (const b of stageButtons) b.classList.toggle('on', b.dataset.stage === save.stage);
+}
+
+/** Tapping the Common pays the 100 gems the first time (if you can), then selects the place. */
+function chooseStage(id: StageId): void {
+  if (id === 'common' && !save.commonUnlocked) {
+    if (save.gems < COMMON_COST) {
+      wakeAudio()?.nope();
+      const t = stageButtons.find((b) => b.dataset.stage === 'common');
+      t?.classList.remove('shake');
+      void t?.offsetWidth;
+      t?.classList.add('shake');
+      return;
+    }
+    save.gems -= COMMON_COST;
+    save.commonUnlocked = true;
+    updateCanBuy(); // spending gems may drop the "can pick a power card" flag
+    wakeAudio()?.chaChing();
+  }
+  if (id !== save.stage) {
+    save.stage = id;
+    solo = makeSolo();
+    if (!connection && screen === 'start') mountWorld(solo);
+  } else {
+    wakeAudio()?.pick();
+  }
+  writeSave(save);
+  refreshStagePicker();
+}
+
+for (const b of stageButtons) b.addEventListener('click', () => chooseStage(asStage(b.dataset.stage)));
+refreshStagePicker();
+
 // ---------------------------------------------------------------- the rest of the buttons
 
 $('start-shop').addEventListener('click', openShop);
@@ -725,7 +934,7 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------------------------------------------------------------- start up
 
-$('start-stars').textContent = `⭐${save.stars}`;
+refreshWallet();
 $('start-name').textContent = save.name;
 $('best-score').textContent = String(save.bestScore);
 $('build').textContent = __BUILD__;

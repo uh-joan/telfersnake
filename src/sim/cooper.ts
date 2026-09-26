@@ -1,5 +1,5 @@
 import { isFree, resolveCircle, slideAlong, turnToward } from './collide';
-import { COOPER_BEAT, COOPER_SPAWN } from './layout';
+import type { Bounds, Spot } from './stage';
 import type { World } from './world';
 
 /**
@@ -56,24 +56,62 @@ const LINES_BUMP = [
   'Good heavens. Mind how you go.',
 ];
 
+/** The four line-sets a patrolling grown-up draws from. Same shape for Mr Cooper and the park keeper. */
+export interface CooperLines {
+  general: readonly string[];
+  near: readonly string[];
+  big: readonly string[];
+  bump: readonly string[];
+}
+/** Mr Cooper's own lines (the default for a stage that doesn't name its own). */
+export const COOPER_LINES: CooperLines = { general: LINES_GENERAL, near: LINES_NEAR, big: LINES_BIG, bump: LINES_BUMP };
+
+/** What a stage needs to place its warden: where they start, their beat, and (optionally) their own lines. */
+export interface WardenConfig {
+  spawn: Spot;
+  beat: Bounds;
+  lines?: CooperLines;
+  /** Which figure the renderer draws: the head teacher, or the park keeper. */
+  persona?: 'cooper' | 'keeper';
+}
+
 export class Cooper {
-  x = COOPER_SPAWN.x;
-  z = COOPER_SPAWN.z;
+  /** False on a stage that has no warden: then it does nothing and is not drawn. */
+  readonly active: boolean;
+  /** Which figure to draw (head teacher or park keeper). */
+  readonly persona: 'cooper' | 'keeper';
+  private readonly lines: CooperLines;
+  private readonly spawn: Spot;
+  private readonly beat: Bounds;
+  x: number;
+  z: number;
   heading = Math.PI / 2;
   speed = 0;
   /** Seconds left of the current telling-off; the renderer wags his finger while > 0. */
   talking = 0;
 
-  private tx = this.x;
-  private tz = this.z;
+  private tx = 0;
+  private tz = 0;
   private pause = 1;
   private sayIn = 2;
   private bumpCooldown = 0;
   private checkIn = 1;
-  private checkX = this.x;
-  private checkZ = this.z;
+  private checkX = 0;
+  private checkZ = 0;
+
+  /** `config` is the stage's warden (spawn, beat, optional lines/persona), or null if it has none. */
+  constructor(config: WardenConfig | null) {
+    this.active = config !== null;
+    this.persona = config?.persona ?? 'cooper';
+    this.lines = config?.lines ?? COOPER_LINES;
+    this.spawn = config?.spawn ?? { x: -9999, z: -9999 };
+    this.beat = config?.beat ?? { minX: -9999, maxX: -9999, minZ: -9999, maxZ: -9999 };
+    this.x = this.tx = this.checkX = this.spawn.x;
+    this.z = this.tz = this.checkZ = this.spawn.z;
+  }
 
   update(w: World, dt: number): void {
+    if (!this.active) return;
     this.talking = Math.max(0, this.talking - dt);
     this.bumpCooldown = Math.max(0, this.bumpCooldown - dt);
 
@@ -89,24 +127,24 @@ export class Cooper {
     if (this.sayIn <= 0) {
       this.sayIn = w.rng.range(3.5, 6.5);
       const near = Math.hypot(w.snake.x - this.x, w.snake.z - this.z) < NEAR;
-      let lines = LINES_GENERAL;
-      if (near) lines = w.snake.tier >= 3 && w.rng.next() < 0.5 ? LINES_BIG : LINES_NEAR;
+      let lines = this.lines.general;
+      if (near) lines = w.snake.tier >= 3 && w.rng.next() < 0.5 ? this.lines.big : this.lines.near;
       this.say(w, w.rng.pick(lines));
     }
   }
 
   /** The snake ran into him. Returns false while he is still recovering from the last bump. */
   bumped(w: World): boolean {
-    if (this.bumpCooldown > 0) return false;
+    if (!this.active || this.bumpCooldown > 0) return false;
     this.bumpCooldown = 2.5;
     this.sayIn = w.rng.range(3.5, 6.5);
-    this.say(w, w.rng.pick(LINES_BUMP));
+    this.say(w, w.rng.pick(this.lines.bump));
     return true;
   }
 
   private say(w: World, text: string): void {
     this.talking = 2.6;
-    w.events.push({ type: 'say', text });
+    w.events.push({ type: 'say', text, x: this.x, z: this.z });
   }
 
   private run(w: World, dt: number): void {
@@ -119,6 +157,7 @@ export class Cooper {
     this.heading = turnToward(this.heading, Math.atan2(dz, dx), TURN_RATE * dt);
     this.speed = RUN_SPEED;
     const hit = resolveCircle(
+      w.stage,
       this.x + Math.cos(this.heading) * this.speed * dt,
       this.z + Math.sin(this.heading) * this.speed * dt,
       COOPER_RADIUS,
@@ -141,25 +180,26 @@ export class Cooper {
   }
 
   private pickTarget(w: World): void {
+    const beat = this.beat;
     if (w.rng.next() < SEEK_SNAKE_CHANCE) {
       // Only as far as his beat goes: he will not follow the snake behind the Old School.
-      const x = Math.min(Math.max(w.snake.x + w.rng.range(-3, 3), COOPER_BEAT.minX), COOPER_BEAT.maxX);
-      const z = Math.min(Math.max(w.snake.z + w.rng.range(-3, 3), COOPER_BEAT.minZ), COOPER_BEAT.maxZ);
-      if (isFree(x, z, 1, w.hazards)) {
+      const x = Math.min(Math.max(w.snake.x + w.rng.range(-3, 3), beat.minX), beat.maxX);
+      const z = Math.min(Math.max(w.snake.z + w.rng.range(-3, 3), beat.minZ), beat.maxZ);
+      if (isFree(w.stage, x, z, 1, w.hazards)) {
         this.tx = x;
         this.tz = z;
         return;
       }
     }
     for (let tries = 0; tries < 30; tries++) {
-      const x = w.rng.range(COOPER_BEAT.minX, COOPER_BEAT.maxX);
-      const z = w.rng.range(COOPER_BEAT.minZ, COOPER_BEAT.maxZ);
-      if (!isFree(x, z, 1, w.hazards)) continue;
+      const x = w.rng.range(beat.minX, beat.maxX);
+      const z = w.rng.range(beat.minZ, beat.maxZ);
+      if (!isFree(w.stage, x, z, 1, w.hazards)) continue;
       this.tx = x;
       this.tz = z;
       return;
     }
-    this.tx = COOPER_SPAWN.x;
-    this.tz = COOPER_SPAWN.z;
+    this.tx = this.spawn.x;
+    this.tz = this.spawn.z;
   }
 }

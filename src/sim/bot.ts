@@ -1,7 +1,6 @@
 import { ANIMALS } from './animals';
 import { isFree } from './collide';
 import { FOOD_VALUE, GOLDEN_MULTIPLIER } from './food';
-import { BOUNDS } from './layout';
 import type { Input, Snake, SnakeLook } from './snake';
 import type { World } from './world';
 
@@ -38,6 +37,14 @@ export const RIVALS: Personality[] = [
 
 /** The four you meet playing on your own; a shared room seats all six. */
 export const SOLO_RIVALS = RIVALS.filter((r) => ['Noodle', 'Sir Hiss-a-lot', 'Danger Noodle', 'Spaghetti'].includes(r.name));
+
+/** Extra, forest-flavoured rivals a bigger stage can seat on top of the six, so the Common isn't sparse. */
+export const MORE_RIVALS: Personality[] = [
+  { name: 'Twiggy', body: 0x8a9a5b, stripe: 0xc7d59f, head: 0x9aab6a, startMass: 2, speedMul: 0.9, growthMul: 0.7, caution: 0.7, aggression: 0.25, dashy: 0.35, timid: false, massCap: 190 },
+  { name: 'Mossy', body: 0x4b7f52, stripe: 0x9fd8a0, head: 0x5c9063, startMass: 0, speedMul: 0.88, growthMul: 0.72, caution: 0.9, aggression: 0.05, dashy: 0.2, timid: true, massCap: 150 },
+  { name: 'Copper', body: 0xc06a3a, stripe: 0xf0b48a, head: 0xcf7a4a, startMass: 6, speedMul: 0.95, growthMul: 0.66, caution: 0.5, aggression: 0.55, dashy: 0.75, timid: false, massCap: 200 },
+  { name: 'Willow', body: 0x6a8fbf, stripe: 0xbcd3ef, head: 0x7a9ccf, startMass: 4, speedMul: 0.9, growthMul: 0.7, caution: 0.75, aggression: 0.3, dashy: 0.4, timid: false, massCap: 210 },
+];
 
 const RETHINK = 0.4; // seconds between choosing what to go for
 const SWERVE = 0.5; // seconds a swerve lasts once started
@@ -112,9 +119,10 @@ export class Bot {
 
   private wander(w: World, seconds: number): void {
     for (let tries = 0; tries < 20; tries++) {
-      const x = w.rng.range(BOUNDS.minX, BOUNDS.maxX);
-      const z = w.rng.range(BOUNDS.minZ, BOUNDS.maxZ);
-      if (!isFree(x, z, 1.5, w.hazards)) continue;
+      const B = w.stage.bounds;
+      const x = w.rng.range(B.minX, B.maxX);
+      const z = w.rng.range(B.minZ, B.maxZ);
+      if (!isFree(w.stage, x, z, 1.5, w.hazards)) continue;
       this.tx = x;
       this.tz = z;
       break;

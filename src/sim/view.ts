@@ -1,7 +1,11 @@
 import type { Animal } from './animals';
 import type { Food } from './food';
+import type { Creature } from './creatures';
 import type { Hazard, Pellet } from './hazards';
+import type { Kid, Projectile } from './kids';
+import type { Predator } from './predators';
 import type { Snake } from './snake';
+import type { Stage } from './stage';
 import type { CardId } from './upgrades';
 import type { GameEvent } from './world';
 
@@ -22,6 +26,8 @@ export interface CooperState {
  */
 export interface WorldView {
   readonly tick: number;
+  /** The place being played: the HUD reads it to paint the right minimap. */
+  readonly stage: Stage;
   /** Which snake belongs to the person looking at this screen. */
   readonly me: number;
   readonly snakes: readonly Snake[];
@@ -30,6 +36,10 @@ export interface WorldView {
   readonly hazards: readonly Hazard[];
   readonly foods: readonly Food[];
   readonly animals: readonly Animal[];
+  readonly predators: readonly Predator[];
+  readonly kids: readonly Kid[];
+  readonly projectiles: readonly Projectile[];
+  readonly creatures: readonly Creature[];
   readonly pellets: readonly Pellet[];
   /** Things that happened since whoever is drawing last emptied this. */
   readonly events: GameEvent[];

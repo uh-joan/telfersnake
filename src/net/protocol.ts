@@ -1,8 +1,12 @@
 import { ANIMAL_KINDS, type Animal } from '../sim/animals';
 import type { CooperState } from '../sim/view';
 import { FOOD_KINDS, type Food } from '../sim/food';
+import { CREATURE_KINDS, type Creature } from '../sim/creatures';
 import { HAZARD_KINDS, type Hazard, type Pellet } from '../sim/hazards';
+import { KID_KINDS, type Kid, PROJECTILE_KINDS, type Projectile } from '../sim/kids';
+import { PREDATOR_KINDS, type Predator } from '../sim/predators';
 import type { Mode } from '../sim/modes';
+import type { StageId } from '../sim/stage';
 import type { Snake, SnakeLook } from '../sim/snake';
 import { type CardId, UPGRADE_IDS, type UpgradeId } from '../sim/upgrades';
 import type { GameEvent } from '../sim/world';
@@ -22,7 +26,7 @@ export const SNAPSHOT_EVERY = 4;
 
 export type ClientMessage =
   /** "Seat me anywhere": there is one way in, the shared playgrounds. `mode` picks which pool. */
-  | { t: 'hello'; v: number; mode?: Mode; buy?: 0 | 1; skin: string; hat: string; trail: string; name: string }
+  | { t: 'hello'; v: number; mode?: Mode; stage?: StageId; buy?: 0 | 1; skin: string; hat: string; trail: string; name: string }
   /** Changed clothes (or name) in the Tuck Shop, mid-game. */
   | { t: 'look'; skin: string; hat: string; trail: string; name: string }
   /** Whether I now have a gem to spend, so the server knows whether to offer me power cards. */
@@ -41,10 +45,18 @@ export interface Seat {
   trail: string;
 }
 
-/** x, z, heading, mass, score, flags, respawnIn, immune, packed upgrade levels */
-export type SnakeRow = [number, number, number, number, number, number, number, number, number];
+/** x, z, heading, mass, score, flags, respawnIn, immune, packed upgrade levels, magic bitmask */
+export type SnakeRow = [number, number, number, number, number, number, number, number, number, number];
 /** x, z, heading, speed, travel, dazed, born */
 export type AnimalRow = [number, number, number, number, number, number, number];
+/** x, z, heading, speed (kind is fixed per index, sent once in welcome) */
+export type PredatorRow = [number, number, number, number];
+/** x, z, heading, speed (kind is fixed per index, sent once in welcome) */
+export type KidRow = [number, number, number, number];
+/** x, z, kind, t (flight progress 0..1, for the client's arc) */
+export type ProjectileRow = [number, number, number, number];
+/** x, z, heading, speed, present (0 while faded after a gulp). Kind is fixed per index (welcome). */
+export type CreatureRow = [number, number, number, number, 0 | 1];
 /** index, kind, golden, x, z, born */
 export type FoodRow = [number, number, 0 | 1, number, number, number];
 /** x, z, value, born */
@@ -70,6 +82,11 @@ export interface Snapshot {
   k: number;
   s: SnakeRow[];
   a: AnimalRow[];
+  pd: PredatorRow[];
+  kd: KidRow[];
+  cr: CreatureRow[];
+  /** Pebbles and kisses in flight: the whole (usually short) list, every snapshot. */
+  pj: ProjectileRow[];
   /** Only the foods that changed since the last snapshot. */
   f: FoodRow[];
   /** The whole list, and only when it changed. */
@@ -81,8 +98,8 @@ export interface Snapshot {
 
 export type ServerMessage =
   | {
-      t: 'welcome'; me: number; room: string; tick: number; seats: Seat[];
-      hazards: HazardRow[]; animalKinds: number[]; foods: FoodRow[]; pellets: PelletRow[];
+      t: 'welcome'; me: number; room: string; stage: StageId; tick: number; seats: Seat[];
+      hazards: HazardRow[]; animalKinds: number[]; predatorKinds: number[]; kidKinds: number[]; creatureKinds: number[]; foods: FoodRow[]; pellets: PelletRow[];
     }
   | { t: 'seats'; seats: Seat[] }
   | Snapshot
@@ -120,10 +137,17 @@ export function unpackUpgrades(n: number): Partial<Record<UpgradeId, number>> {
 export function snakeRow(s: Snake): SnakeRow {
   const flags =
     (s.alive ? ALIVE : 0) | (s.slowed ? SLOWED : 0) | (s.dashing ? DASHING : 0) | (s.helmetReady ? HELMET_READY : 0) | (s.cards ? CHOOSING : 0) | (s.awayFor > 0 ? AWAY : 0) | (s.frozenFor > 0 ? FROZEN : 0);
-  return [r2(s.x), r2(s.z), r3(s.heading), r2(s.mass), s.score, flags, r2(Math.max(0, s.respawnIn)), r2(s.immune), packUpgrades(s)];
+  return [r2(s.x), r2(s.z), r3(s.heading), r2(s.mass), s.score, flags, r2(Math.max(0, s.respawnIn)), r2(s.immune), packUpgrades(s), s.magicMask()];
 }
 
 export const animalRow = (a: Animal): AnimalRow => [r2(a.x), r2(a.z), r3(a.heading), r2(a.speed), r2(a.travel), r2(Math.max(0, a.dazed)), a.born];
+export const predatorRow = (p: Predator): PredatorRow => [r2(p.x), r2(p.z), r3(p.heading), r2(p.speed)];
+export const predatorKindIndex = (p: Predator) => PREDATOR_KINDS.indexOf(p.kind);
+export const kidRow = (k: Kid): KidRow => [r2(k.x), r2(k.z), r3(k.heading), r2(k.speed)];
+export const kidKindIndex = (k: Kid) => KID_KINDS.indexOf(k.kind);
+export const creatureRow = (c: Creature): CreatureRow => [r2(c.x), r2(c.z), r3(c.heading), r2(c.speed), c.respawnIn > 0 ? 0 : 1];
+export const creatureKindIndex = (c: Creature) => CREATURE_KINDS.indexOf(c.kind);
+export const projectileRow = (pj: Projectile): ProjectileRow => [r2(pj.x), r2(pj.z), PROJECTILE_KINDS.indexOf(pj.kind), r2(pj.total > 0 ? 1 - pj.left / pj.total : 1)];
 export const foodRow = (f: Food, i: number): FoodRow => [i, FOOD_KINDS.indexOf(f.kind), f.golden ? 1 : 0, r2(f.x), r2(f.z), f.born];
 export const pelletRow = (p: Pellet): PelletRow => [r2(p.x), r2(p.z), r2(p.value), p.born];
 export const hazardRow = (h: Hazard): HazardRow => [HAZARD_KINDS.indexOf(h.kind), r2(h.x), r2(h.z), h.r, r3(h.turn)];
@@ -133,7 +157,7 @@ export const animalKindIndex = (a: Animal) => ANIMAL_KINDS.indexOf(a.kind);
 /** Events that are only about one player go only to that player; the rest everyone sees. */
 export function eventIsFor(e: GameEvent, seat: number): boolean {
   switch (e.type) {
-    case 'cards': case 'bump': case 'boop': case 'ouch': case 'pellet': case 'tier': case 'helmet':
+    case 'cards': case 'bump': case 'boop': case 'ouch': case 'pellet': case 'tier': case 'helmet': case 'pelt': case 'kiss': case 'magic':
       return e.who === seat;
     default:
       return true;

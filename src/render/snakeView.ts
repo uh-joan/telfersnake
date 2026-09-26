@@ -16,6 +16,13 @@ export class SnakeView {
   private readonly spikes: THREE.InstancedMesh;
   private readonly head = new THREE.Group();
   private readonly helmet = new THREE.Group();
+  /** The Dragon (top size tier): a fierce red dragon head — horns, crest, fangs, glowing eyes, flame. */
+  private readonly dragon = new THREE.Group();
+  private readonly dragonEyeMat = new THREE.MeshBasicMaterial({ color: 0xffd21a });
+  private readonly dragonFlames: THREE.Mesh[] = [];
+  private dragonGlow: THREE.Mesh | null = null;
+  /** The plain googly eyes, hidden while the dragon head is on. */
+  private readonly faceEyes: THREE.Object3D[] = [];
   private readonly tongue: THREE.Mesh;
   private readonly hat: THREE.Group | null;
   private readonly hatSpin: THREE.Object3D | null;
@@ -68,6 +75,7 @@ export class SnakeView {
       const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), black);
       pupil.position.set(side * 0.6, 0.7, 0.86);
       this.head.add(eye, pupil);
+      this.faceEyes.push(eye, pupil);
     }
     this.tongue = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, 1), new THREE.MeshLambertMaterial({ color: 0xe0524d }));
     this.tongue.geometry.translate(0, 0, 0.5);
@@ -88,6 +96,99 @@ export class SnakeView {
     this.helmet.position.set(0, 0.2, -0.42);
     this.helmet.visible = false;
     this.head.add(this.helmet);
+
+    // ── The Dragon ─────────────────────────────────────────────────────────
+    // A fierce red dragon head that takes over at the very top size tier: a
+    // scaly crown, swept-back banded horns, a fanged muzzle, glowing slit eyes,
+    // a membrane crest and a lick of flame that flickers at its jaws (animated
+    // in update). Built once and hidden until the size is earned.
+    const scaleRed = new THREE.MeshLambertMaterial({ color: 0xb01c14 });
+    const deepRed = new THREE.MeshLambertMaterial({ color: 0x7c1009 });
+    const finRed = new THREE.MeshLambertMaterial({ color: 0xd8331f });
+    const bone = new THREE.MeshLambertMaterial({ color: 0xf3e6c8 });
+    const boneDark = new THREE.MeshLambertMaterial({ color: 0xd8c49a });
+
+    // Crown, upper muzzle and a jaw held a touch open.
+    const crown = new THREE.Mesh(new THREE.SphereGeometry(1.02, 18, 14), scaleRed);
+    crown.scale.set(1.28, 1.12, 1.42);
+    crown.position.set(0, 0.16, -0.1);
+    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.72, 16, 12), scaleRed);
+    muzzle.scale.set(1.04, 0.72, 1.55);
+    muzzle.position.set(0, -0.16, 0.92);
+    const jaw = new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 10), deepRed);
+    jaw.scale.set(0.92, 0.42, 1.3);
+    jaw.position.set(0, -0.62, 0.72);
+    this.dragon.add(crown, muzzle, jaw);
+
+    // Angry brow ridges, glowing slit-pupil eyes with a soft additive halo.
+    const slit = new THREE.MeshBasicMaterial({ color: 0x120400 });
+    const halo = new THREE.MeshBasicMaterial({ color: 0xffb020, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
+    for (const side of [-1, 1]) {
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.24, 0.62), deepRed);
+      brow.position.set(side * 0.5, 0.72, 0.42);
+      brow.rotation.set(-0.28, 0, side * 0.38);
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 10), halo);
+      glow.position.set(side * 0.6, 0.5, 0.5);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), this.dragonEyeMat);
+      eye.position.set(side * 0.6, 0.5, 0.62);
+      eye.scale.set(1, 1.25, 0.7);
+      const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.44, 0.1), slit);
+      pupil.position.set(side * 0.62, 0.5, 0.88);
+      this.dragon.add(brow, glow, eye, pupil);
+    }
+
+    // Two big swept-back horns with a darker band, plus a smaller pair, and fangs.
+    for (const side of [-1, 1]) {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.26, 2.1, 8), bone);
+      horn.position.set(side * 0.55, 1.02, -0.35);
+      horn.rotation.set(-1.12, 0, side * 0.32);
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.06, 6, 10), boneDark);
+      band.position.copy(horn.position);
+      band.rotation.copy(horn.rotation);
+      band.translateY(0.2);
+      const horn2 = new THREE.Mesh(new THREE.ConeGeometry(0.15, 1.1, 7), bone);
+      horn2.position.set(side * 0.92, 0.62, -0.12);
+      horn2.rotation.set(-0.7, 0, side * 0.72);
+      const upper = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.5, 6), bone);
+      upper.rotation.x = Math.PI;
+      upper.position.set(side * 0.36, -0.5, 1.28);
+      const lower = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.36, 6), boneDark);
+      lower.position.set(side * 0.3, -0.62, 1.18);
+      const nostril = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), deepRed);
+      nostril.position.set(side * 0.2, 0.02, 1.55);
+      this.dragon.add(horn, band, horn2, upper, lower, nostril);
+    }
+
+    // A membrane crest of fins running back over the crown.
+    for (let i = 0; i < 5; i++) {
+      const fin = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.7 - i * 0.06, 4), finRed);
+      fin.scale.set(0.45, 1, 1);
+      fin.position.set(0, 1.18 - i * 0.05, -0.2 - i * 0.42);
+      fin.rotation.x = -0.15;
+      this.dragon.add(fin);
+    }
+
+    // A flicker of flame at the jaws — three nested additive cones, animated later.
+    const flameCols = [0xff5a12, 0xff9a1e, 0xffe06a];
+    for (let i = 0; i < 3; i++) {
+      const mat = new THREE.MeshBasicMaterial({ color: flameCols[i], transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.3 - i * 0.06, 1.3 - i * 0.25, 8), mat);
+      flame.rotation.x = Math.PI / 2; // point forward, out of the mouth
+      flame.position.set(0, -0.36, 1.5 + i * 0.12);
+      this.dragonFlames.push(flame);
+      this.dragon.add(flame);
+    }
+
+    // A warm halo behind the whole head.
+    this.dragonGlow = new THREE.Mesh(
+      new THREE.SphereGeometry(1.5, 16, 12),
+      new THREE.MeshBasicMaterial({ color: 0xff5a1e, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide }),
+    );
+    this.dragonGlow.position.set(0, 0.1, 0.2);
+    this.dragon.add(this.dragonGlow);
+
+    this.dragon.visible = false;
+    this.head.add(this.dragon);
 
     const red = new THREE.MeshLambertMaterial({ color: 0xe03131 });
     const horseshoe = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.2, 8, 14, Math.PI), red);
@@ -217,7 +318,26 @@ export class SnakeView {
     if (spikeCount > 0 || this.spikes.count > 0) this.spikes.instanceMatrix.needsUpdate = true;
     this.spikes.count = spikeCount;
 
-    const hs = r * 1.18;
+    // The Dragon (top tier): the red dragon head takes over, and the hat comes off for it.
+    const isDragon = snake.tier >= 5;
+    this.dragon.visible = isDragon;
+    if (this.hat) this.hat.visible = !isDragon;
+    this.tongue.visible = !isDragon; // the flame stands in for the tongue
+    for (const o of this.faceEyes) o.visible = !isDragon;
+    if (isDragon) {
+      // Eyes pulse, halo breathes, and the flame flickers and licks outward.
+      const pulse = 0.72 + 0.28 * Math.sin(time * 5.5);
+      this.dragonEyeMat.color.setRGB(pulse, pulse * 0.82, pulse * 0.12);
+      if (this.dragonGlow) (this.dragonGlow.material as THREE.MeshBasicMaterial).opacity = 0.12 + 0.08 * (0.5 + 0.5 * Math.sin(time * 4));
+      for (let i = 0; i < this.dragonFlames.length; i++) {
+        const f = this.dragonFlames[i];
+        const flick = 0.6 + 0.5 * Math.abs(Math.sin(time * (14 + i * 5) + i));
+        f.scale.set(0.8 + 0.3 * Math.sin(time * 20 + i * 2), flick, 0.8 + 0.3 * Math.cos(time * 17 + i));
+        (f.material as THREE.MeshBasicMaterial).opacity = 0.5 + 0.4 * flick;
+        f.position.z = 1.5 + i * 0.12 + 0.1 * flick;
+      }
+    }
+    const hs = r * 1.18 * (isDragon ? 1.15 : 1);
     this.head.scale.setScalar(hs);
     this.head.position.set(snake.x, hs, snake.z);
     this.head.rotation.y = Math.PI / 2 - snake.heading;

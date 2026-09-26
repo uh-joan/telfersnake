@@ -1,5 +1,6 @@
 import { ANIMALS } from '../sim/animals';
-import { BOUNDS, BUILDINGS, COURT, GREEN, LAGOON } from '../sim/layout';
+import { SCHOOL } from '../sim/layout';
+import type { Stage as PlayStage } from '../sim/stage';
 import { TIERS } from '../sim/snake';
 import { UPGRADES, xpForLevel } from '../sim/upgrades';
 import type { WorldView } from '../sim/view';
@@ -52,42 +53,38 @@ export class Hud {
   private shownBoard = '';
   private boardIn = 0;
   private readonly map = $<HTMLCanvasElement>('minimap').getContext('2d')!;
-  private readonly mapBase: HTMLCanvasElement;
+  private stage: PlayStage = SCHOOL;
+  private mapBase!: HTMLCanvasElement;
   private readonly popups: Popup[] = [];
   private readonly sp: ScreenPoint = { x: 0, y: 0, visible: false };
   private readonly mapPoint = { x: 0, z: 0 };
   private bubbleAge = BUBBLE_LIFE;
   private bubbleHalf = 0;
   private bubbleTall = 0;
+  /** Where the current speech bubble is anchored (the speaker), in world metres. */
+  private bubbleX = 0;
+  private bubbleZ = 0;
   private shownProgress = -1;
   private shownScore = -1;
   private shownTier = -1;
 
   constructor() {
-    this.mapBase = this.paintMapBase();
+    this.setStage(SCHOOL);
   }
 
-  private paintMapBase(): HTMLCanvasElement {
-    const cv = document.createElement('canvas');
-    cv.width = (BOUNDS.maxX - BOUNDS.minX) * MAP_SCALE;
-    cv.height = (BOUNDS.maxZ - BOUNDS.minZ) * MAP_SCALE;
-    const c = cv.getContext('2d')!;
-    const X = (x: number) => (x - BOUNDS.minX) * MAP_SCALE;
-    const Z = (z: number) => (z - BOUNDS.minZ) * MAP_SCALE;
-    const fillBox = (b: { x: number; z: number; w: number; d: number }, color: string) => {
-      c.fillStyle = color;
-      c.fillRect(X(b.x - b.w / 2), Z(b.z - b.d / 2), b.w * MAP_SCALE, b.d * MAP_SCALE);
-    };
-    c.fillStyle = '#7c818b';
-    c.fillRect(0, 0, cv.width, cv.height);
-    fillBox(COURT, '#55c8d6');
-    fillBox(GREEN, '#4cc04a');
-    c.fillStyle = '#3d8fe6';
-    c.beginPath();
-    c.ellipse(X(LAGOON.x), Z(LAGOON.z), LAGOON.rx * MAP_SCALE, LAGOON.rz * MAP_SCALE, LAGOON.rot, 0, Math.PI * 2);
-    c.fill();
-    for (const b of BUILDINGS) fillBox(b, b.id === 'redHut' ? '#e9633b' : '#4a3b36');
-    return cv;
+  /** Point the minimap at a stage: size it to that stage's bounds and paint its fixed base once. */
+  setStage(stage: PlayStage): void {
+    this.stage = stage;
+    const B = stage.bounds;
+    const w = (B.maxX - B.minX) * MAP_SCALE;
+    const h = (B.maxZ - B.minZ) * MAP_SCALE;
+    this.map.canvas.width = w;
+    this.map.canvas.height = h;
+    const base = document.createElement('canvas');
+    base.width = w;
+    base.height = h;
+    stage.paintMinimap(base.getContext('2d')!, (x) => (x - B.minX) * MAP_SCALE, (z) => (z - B.minZ) * MAP_SCALE, MAP_SCALE);
+    this.mapBase = base;
   }
 
   /** `tone` picks the colour: good (points), bad (ouch) or fun (boing). */
@@ -99,9 +96,11 @@ export class Hud {
     this.popups.push({ el, x, z, age: 0 });
   }
 
-  say(text: string): void {
+  say(text: string, x = 0, z = 0): void {
     this.bubble.textContent = text;
     this.bubbleAge = 0;
+    this.bubbleX = x;
+    this.bubbleZ = z;
     // Measured here, once per line: reading layout every frame forces a reflow every frame.
     this.bubbleHalf = this.bubble.offsetWidth / 2 + 8;
     this.bubbleTall = this.bubble.offsetHeight + 8;
@@ -142,8 +141,8 @@ export class Hud {
     if (tier !== this.shownTier) {
       this.shownTier = tier;
       this.tierName.textContent = TIERS[tier].name;
-      // The carrot at the end of the bar: what the next size up can gulp.
-      this.tierNext.textContent = TIERS[tier + 1]?.gulps ?? '👑';
+      // The carrot at the end of the bar: what the next size up can gulp, in this stage's animals.
+      this.tierNext.textContent = this.stage.gulpHints[tier + 1] ?? '👑';
     }
     const next = TIERS[tier + 1];
     const progress = next ? (s.mass - TIERS[tier].mass) / (next.mass - TIERS[tier].mass) : 1;
@@ -215,7 +214,8 @@ export class Hud {
     }
 
     this.bubbleAge += dt;
-    stage.project(world.cooper.x, COOPER_HEAD_Y + 0.5, world.cooper.z, this.sp);
+    // The bubble sits over whoever last spoke (Cooper, the park keeper or Miss Sami).
+    stage.project(this.bubbleX, COOPER_HEAD_Y + 0.9, this.bubbleZ, this.sp);
     const showBubble = this.bubbleAge < BUBBLE_LIFE && this.sp.visible;
     this.bubble.classList.toggle('show', showBubble);
     if (showBubble) {
@@ -278,8 +278,9 @@ export class Hud {
 
   private drawMap(world: WorldView): void {
     const c = this.map;
-    const X = (x: number) => (x - BOUNDS.minX) * MAP_SCALE;
-    const Z = (z: number) => (z - BOUNDS.minZ) * MAP_SCALE;
+    const B = this.stage.bounds;
+    const X = (x: number) => (x - B.minX) * MAP_SCALE;
+    const Z = (z: number) => (z - B.minZ) * MAP_SCALE;
     c.drawImage(this.mapBase, 0, 0);
 
     c.fillStyle = 'rgba(255,255,255,0.75)';
@@ -295,6 +296,33 @@ export class Hud {
       c.beginPath();
       c.arc(X(a.x), Z(a.z), 2.4, 0, Math.PI * 2);
       c.fill();
+    }
+
+    // Predators: red danger dots, a touch bigger for the bear.
+    for (const pr of world.predators) {
+      c.fillStyle = '#e03131';
+      c.beginPath();
+      c.arc(X(pr.x), Z(pr.z), pr.kind === 'bear' ? 3.4 : 2.6, 0, Math.PI * 2);
+      c.fill();
+    }
+
+    // The children: small cheerful cyan dots (distinct from food-yellow and danger-red).
+    c.fillStyle = '#3bc9db';
+    for (const k of world.kids) {
+      c.beginPath();
+      c.arc(X(k.x), Z(k.z), 1.6, 0, Math.PI * 2);
+      c.fill();
+    }
+
+    // Fantastic creatures are hidden — unless Owl Eyes is active, which reveals them as violet stars.
+    if (world.snake.hasMagic('owl')) {
+      c.fillStyle = '#b197fc';
+      for (const cr of world.creatures) {
+        if (cr.respawnIn > 0) continue;
+        c.beginPath();
+        c.arc(X(cr.x), Z(cr.z), 3, 0, Math.PI * 2);
+        c.fill();
+      }
     }
 
     // Mr Cooper: navy dot, white hair

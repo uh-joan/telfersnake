@@ -1,8 +1,12 @@
 import { ANIMAL_KINDS, type Animal, makeAnimal } from '../sim/animals';
 import { wrapAngle } from '../sim/collide';
 import { FOOD_KINDS, type Food } from '../sim/food';
+import { blankCreature, type Creature, CREATURE_KINDS } from '../sim/creatures';
 import { HAZARD_KINDS, type Hazard, type Pellet } from '../sim/hazards';
+import { blankKid, type Kid, KID_KINDS, type Projectile, PROJECTILE_KINDS } from '../sim/kids';
+import { blankPredator, PREDATOR_KINDS, type Predator } from '../sim/predators';
 import { type Input, Snake } from '../sim/snake';
+import type { Stage } from '../sim/stage';
 import type { CardId } from '../sim/upgrades';
 import type { CooperState, WorldView } from '../sim/view';
 import { beePosition, type GameEvent, STEP } from '../sim/world';
@@ -53,6 +57,10 @@ export class Replica implements WorldView {
   readonly hazards: Hazard[];
   readonly foods: Food[];
   readonly animals: Animal[];
+  readonly predators: Predator[];
+  readonly kids: Kid[];
+  readonly creatures: Creature[];
+  projectiles: Projectile[] = [];
   pellets: Pellet[];
   readonly events: GameEvent[] = [];
   cards: CardId[] | null = null;
@@ -76,7 +84,7 @@ export class Replica implements WorldView {
   private shownHeading = 0;
   private wasAlive: boolean[] = [];
 
-  constructor(welcome: Welcome, private readonly sendInput: (q: number, input: Input) => void) {
+  constructor(welcome: Welcome, readonly stage: Stage, private readonly sendInput: (q: number, input: Input) => void) {
     this.me = welcome.me;
     this.room = welcome.room;
     this.tick = this.renderTick = welcome.tick;
@@ -84,6 +92,9 @@ export class Replica implements WorldView {
     this.foods = welcome.foods.map(() => ({ kind: FOOD_KINDS[0], golden: false, x: 0, z: 0, born: -999 }));
     for (const row of welcome.foods) this.setFood(row);
     this.animals = welcome.animalKinds.map((k) => makeAnimal(ANIMAL_KINDS[k]));
+    this.predators = welcome.predatorKinds.map((k) => blankPredator(PREDATOR_KINDS[k]));
+    this.kids = welcome.kidKinds.map((k) => blankKid(KID_KINDS[k]));
+    this.creatures = welcome.creatureKinds.map((k) => blankCreature(CREATURE_KINDS[k]));
     this.pellets = welcome.pellets.map(this.toPellet);
     this.ghost = new Snake(-1, welcome.seats[0].look, false);
     this.setSeats(welcome.seats);
@@ -137,6 +148,8 @@ export class Replica implements WorldView {
     if (this.snaps.length > KEEP_SNAPSHOTS) this.snaps.shift();
     for (const row of snap.f) this.setFood(row);
     if (snap.p) this.pellets = snap.p.map(this.toPellet);
+    // Pebbles and kisses are brief: take the newest list straight, arc height from the flight progress.
+    this.projectiles = snap.pj.map(([x, z, kind, t]) => ({ kind: PROJECTILE_KINDS[kind], x, z, dx: 0, dz: 0, speed: 0, left: 1 - t, total: 1 }));
     for (const e of snap.e) {
       if (e.type === 'rock') {
         const h = this.hazards[e.i];
@@ -155,7 +168,7 @@ export class Replica implements WorldView {
     snap.s.forEach((row, id) => {
       const s = this.snakes[id];
       if (!s) return;
-      const [x, z, heading, mass, score, flags, respawnIn, immune, upgrades] = row;
+      const [x, z, heading, mass, score, flags, respawnIn, immune, upgrades, magic] = row;
       s.mass = mass;
       s.score = score;
       s.alive = (flags & ALIVE) !== 0;
@@ -164,6 +177,7 @@ export class Replica implements WorldView {
       s.helmetReady = (flags & HELMET_READY) !== 0;
       s.respawnIn = respawnIn;
       s.immune = immune;
+      s.setMagic(magic);
       s.setUpgrades(unpackUpgrades(upgrades));
       s.helmetReady = (flags & HELMET_READY) !== 0;
       s.highestTier = Math.max(s.highestTier, s.tier);
@@ -202,7 +216,7 @@ export class Replica implements WorldView {
     g.speedMul = this.snake.speedMul;
     // Its wall memory belongs to the previous replay, not to this starting point; steer() must not act on it.
     g.touchingWall = false;
-    for (const p of this.pending) g.move(p.input, STEP, !this.snake.slowed, this.hazards);
+    for (const p of this.pending) g.move(p.input, STEP, !this.snake.slowed, this.stage, this.hazards);
     if (Math.hypot(g.x - this.shownX, g.z - this.shownZ) > SNAP_IF_OFF_BY) this.resetPrediction(g.x, g.z, g.heading);
   }
 
@@ -222,7 +236,7 @@ export class Replica implements WorldView {
       if (free) {
         this.pending.push({ q: this.q, input: copy });
         if (this.pending.length > 120) this.pending.shift();
-        this.ghost.move(copy, STEP, !mine.slowed, this.hazards);
+        this.ghost.move(copy, STEP, !mine.slowed, this.stage, this.hazards);
       }
     }
 
@@ -291,6 +305,43 @@ export class Replica implements WorldView {
       an.travel = lerp(ra[4], rb[4], u);
       an.dazed = rb[5];
       an.born = rb[6];
+    });
+
+    this.predators.forEach((pr, i) => {
+      const ra = a.pd[i];
+      const rb = b.pd[i];
+      if (!ra || !rb) return;
+      const moved = Math.hypot(rb[0] - ra[0], rb[1] - ra[1]) > SNAP_IF_OFF_BY;
+      const u = moved ? 1 : t;
+      pr.x = lerp(ra[0], rb[0], u);
+      pr.z = lerp(ra[1], rb[1], u);
+      pr.heading = lerpAngle(ra[2], rb[2], u);
+      pr.speed = rb[3];
+    });
+
+    this.kids.forEach((k, i) => {
+      const ra = a.kd[i];
+      const rb = b.kd[i];
+      if (!ra || !rb) return;
+      const moved = Math.hypot(rb[0] - ra[0], rb[1] - ra[1]) > SNAP_IF_OFF_BY;
+      const u = moved ? 1 : t;
+      k.x = lerp(ra[0], rb[0], u);
+      k.z = lerp(ra[1], rb[1], u);
+      k.heading = lerpAngle(ra[2], rb[2], u);
+      k.speed = rb[3];
+    });
+
+    this.creatures.forEach((cr, i) => {
+      const ra = a.cr[i];
+      const rb = b.cr[i];
+      if (!ra || !rb) return;
+      const moved = Math.hypot(rb[0] - ra[0], rb[1] - ra[1]) > SNAP_IF_OFF_BY;
+      const u = moved ? 1 : t;
+      cr.x = lerp(ra[0], rb[0], u);
+      cr.z = lerp(ra[1], rb[1], u);
+      cr.heading = lerpAngle(ra[2], rb[2], u);
+      cr.speed = rb[3];
+      cr.respawnIn = rb[4] ? 0 : 1; // faded (gulped) creatures are not drawn
     });
 
     const ca = a.c;

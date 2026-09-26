@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 
 const SKY = 0x9fd8f5;
+/** Each stage's own light: the school's bright noon, the Common's warmer late-afternoon haze. */
+const ATMOSPHERE = {
+  school: { sky: 0x9fd8f5, fog: [70, 170] as const, hemiSky: 0xffffff, hemiGround: 0x8a8f7a, hemi: 1.9, sun: 0xfff2d6, sunI: 2.2 },
+  common: { sky: 0xcfe6c0, fog: [55, 150] as const, hemiSky: 0xf6e9c8, hemiGround: 0x6f7a52, hemi: 1.75, sun: 0xffe6b0, sunI: 2.35 },
+};
 const TILT = (58 * Math.PI) / 180;
 const FOV_LANDSCAPE = 42;
 const FOV_PORTRAIT = 54; // a tall screen needs a wider lens, but not so wide the school looks tiny
@@ -19,6 +24,12 @@ export class Stage {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(FOV_LANDSCAPE, 1, 0.5, 400);
   private readonly renderer: THREE.WebGLRenderer;
+  private readonly hemi: THREE.HemisphereLight;
+  private readonly sun: THREE.DirectionalLight;
+  /** The current stage's clear-weather atmosphere; the weather system dims and greys it from here. */
+  private baseAtmo: { sky: number; fog: readonly [number, number]; hemiSky: number; hemiGround: number; hemi: number; sun: number; sunI: number } = ATMOSPHERE.school;
+  private readonly skyTmp = new THREE.Color();
+  private readonly greyTmp = new THREE.Color(0x8a8f96);
   private readonly focus = new THREE.Vector3();
   private distance = 17;
   private primed = false;
@@ -31,12 +42,45 @@ export class Stage {
     this.scene.background = new THREE.Color(SKY);
     this.scene.fog = new THREE.Fog(SKY, 70, 170);
 
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f7a, 1.9));
-    const sun = new THREE.DirectionalLight(0xfff2d6, 2.2);
-    sun.position.set(-30, 60, 25);
-    this.scene.add(sun);
+    this.hemi = new THREE.HemisphereLight(0xffffff, 0x8a8f7a, 1.9);
+    this.scene.add(this.hemi);
+    this.sun = new THREE.DirectionalLight(0xfff2d6, 2.2);
+    this.sun.position.set(-30, 60, 25);
+    this.scene.add(this.sun);
 
     this.resize();
+  }
+
+  /** Give each stage its own light and haze: the school's bright noon, the Common's warm afternoon. */
+  setAtmosphere(id: 'school' | 'common'): void {
+    const a = ATMOSPHERE[id];
+    this.baseAtmo = a;
+    (this.scene.background as THREE.Color).setHex(a.sky);
+    const fog = this.scene.fog as THREE.Fog;
+    fog.color.setHex(a.sky);
+    fog.near = a.fog[0];
+    fog.far = a.fog[1];
+    this.hemi.color.setHex(a.hemiSky);
+    this.hemi.groundColor.setHex(a.hemiGround);
+    this.hemi.intensity = a.hemi;
+    this.sun.color.setHex(a.sun);
+    this.sun.intensity = a.sunI;
+  }
+
+  /**
+   * The weather dims and greys the clear-weather light: `dim` 1 = bright sun, lower = overcast;
+   * `flash` briefly adds brightness for a lightning strike. Recomputed from the stored base.
+   */
+  weatherLight(dim: number, flash: number): void {
+    const a = this.baseAtmo;
+    this.hemi.intensity = a.hemi * dim + flash;
+    this.sun.intensity = a.sunI * dim + flash;
+    // Grey and darken the sky/fog as it clouds over, then brighten on a flash.
+    this.skyTmp.setHex(a.sky).lerp(this.greyTmp, (1 - dim) * 0.85).multiplyScalar(Math.min(1.4, 0.55 + 0.45 * dim + flash * 0.15));
+    (this.scene.background as THREE.Color).copy(this.skyTmp);
+    const fog = this.scene.fog as THREE.Fog;
+    fog.color.copy(this.skyTmp);
+    fog.far = a.fog[1] * (0.6 + 0.4 * dim); // the rain closes the view in
   }
 
   /**

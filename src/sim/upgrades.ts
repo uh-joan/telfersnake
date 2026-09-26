@@ -75,7 +75,15 @@ export function xpForLevel(level: number): number {
 export function rollCards(rng: Rng, snake: Snake): CardId[] {
   // Base upgrades always; powers too, but only when this snake can pay a gem for one.
   const available = snake.canBuyPowers ? UPGRADE_IDS : BASE_IDS;
-  const pool = available.filter((id) => snake.levelOf(id) < UPGRADES[id].max);
+  let pool = available.filter((id) => snake.levelOf(id) < UPGRADES[id].max);
+  // Owl Eyes (the Wise Owl): the next draw is epic-or-better, if enough of those are still on offer.
+  if (snake.luckyCards > 0) {
+    const posh = pool.filter((id) => UPGRADES[id].rarity === 'epic' || UPGRADES[id].rarity === 'legendary');
+    if (posh.length >= 3) {
+      pool = posh;
+      snake.luckyCards--;
+    }
+  }
   const cards: CardId[] = [];
   while (cards.length < 3 && pool.length > 0) {
     const weights = pool.map((id) => RARITY_WEIGHT[UPGRADES[id].rarity] + snake.luck * LUCK_BONUS[UPGRADES[id].rarity]);

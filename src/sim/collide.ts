@@ -1,4 +1,5 @@
-import { BOUNDS, SOLID_BOXES, SOLID_CIRCLES, type Circle } from './layout';
+import type { Circle } from './layout';
+import type { Terrain } from './stage';
 
 export interface Hit {
   x: number;
@@ -15,11 +16,11 @@ export function makeHit(): Hit {
 const NO_CIRCLES: readonly Circle[] = [];
 
 /**
- * Push a circle out of every solid and back inside the fence.
+ * Push a circle out of every solid and back inside the fence of terrain `t`.
  * `out` carries the corrected position and the combined normal of the surfaces touched.
- * `extra` adds per-world solids (rocks and the like) on top of the fixed school layout.
+ * `extra` adds per-world solids (rocks and the like) on top of the stage's fixed layout.
  */
-export function resolveCircle(px: number, pz: number, r: number, out: Hit, extra: readonly Circle[] = NO_CIRCLES): Hit {
+export function resolveCircle(t: Terrain, px: number, pz: number, r: number, out: Hit, extra: readonly Circle[] = NO_CIRCLES): Hit {
   out.hit = false;
   out.nx = 0;
   out.nz = 0;
@@ -31,7 +32,7 @@ export function resolveCircle(px: number, pz: number, r: number, out: Hit, extra
   // its neighbour. Normals are only collected on the first pass so no wall counts twice.
   for (let sweep = 0; sweep < 2; sweep++) {
     let moved = false;
-    for (const b of SOLID_BOXES) {
+    for (const b of t.solidBoxes) {
       const minX = b.x - b.w / 2;
       const maxX = b.x + b.w / 2;
       const minZ = b.z - b.d / 2;
@@ -74,7 +75,7 @@ export function resolveCircle(px: number, pz: number, r: number, out: Hit, extra
   }
 
   for (let pass = 0; pass < 2; pass++) {
-    for (const c of pass === 0 ? SOLID_CIRCLES : extra) {
+    for (const c of pass === 0 ? t.solidCircles : extra) {
       const dx = px - c.x;
       const dz = pz - c.z;
       const rr = r + c.r;
@@ -91,10 +92,11 @@ export function resolveCircle(px: number, pz: number, r: number, out: Hit, extra
     }
   }
 
-  if (px < BOUNDS.minX + r) { px = BOUNDS.minX + r; out.hit = true; out.nx = 1; out.nz = 0; sx += 1; }
-  if (px > BOUNDS.maxX - r) { px = BOUNDS.maxX - r; out.hit = true; out.nx = -1; out.nz = 0; sx -= 1; }
-  if (pz < BOUNDS.minZ + r) { pz = BOUNDS.minZ + r; out.hit = true; out.nx = 0; out.nz = 1; sz += 1; }
-  if (pz > BOUNDS.maxZ - r) { pz = BOUNDS.maxZ - r; out.hit = true; out.nx = 0; out.nz = -1; sz -= 1; }
+  const B = t.bounds;
+  if (px < B.minX + r) { px = B.minX + r; out.hit = true; out.nx = 1; out.nz = 0; sx += 1; }
+  if (px > B.maxX - r) { px = B.maxX - r; out.hit = true; out.nx = -1; out.nz = 0; sx -= 1; }
+  if (pz < B.minZ + r) { pz = B.minZ + r; out.hit = true; out.nx = 0; out.nz = 1; sz += 1; }
+  if (pz > B.maxZ - r) { pz = B.maxZ - r; out.hit = true; out.nx = 0; out.nz = -1; sz -= 1; }
 
   // Opposing walls (a tight gap) cancel out; keep the last single normal in that case.
   const len = Math.hypot(sx, sz);
@@ -108,15 +110,16 @@ export function resolveCircle(px: number, pz: number, r: number, out: Hit, extra
   return out;
 }
 
-/** True when a circle of radius `margin` at (x, z) touches nothing solid and is inside the fence. */
-export function isFree(x: number, z: number, margin: number, extra: readonly Circle[] = NO_CIRCLES): boolean {
-  if (x < BOUNDS.minX + margin || x > BOUNDS.maxX - margin) return false;
-  if (z < BOUNDS.minZ + margin || z > BOUNDS.maxZ - margin) return false;
-  for (const b of SOLID_BOXES) {
+/** True when a circle of radius `margin` at (x, z) touches nothing solid and is inside the fence of `t`. */
+export function isFree(t: Terrain, x: number, z: number, margin: number, extra: readonly Circle[] = NO_CIRCLES): boolean {
+  const B = t.bounds;
+  if (x < B.minX + margin || x > B.maxX - margin) return false;
+  if (z < B.minZ + margin || z > B.maxZ - margin) return false;
+  for (const b of t.solidBoxes) {
     if (Math.abs(x - b.x) < b.w / 2 + margin && Math.abs(z - b.z) < b.d / 2 + margin) return false;
   }
   for (let pass = 0; pass < 2; pass++) {
-    for (const c of pass === 0 ? SOLID_CIRCLES : extra) {
+    for (const c of pass === 0 ? t.solidCircles : extra) {
       const rr = c.r + margin;
       if ((x - c.x) ** 2 + (z - c.z) ** 2 < rr * rr) return false;
     }

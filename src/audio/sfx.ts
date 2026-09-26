@@ -218,6 +218,21 @@ export class Sfx {
     this.tone(240, 0.14, { type: 'triangle', gain: 0.1, slideTo: 90, delay: 0.05 });
   }
 
+  /** A wolf's warning howl / a predator's snarl on the Common: a low rising growl. */
+  growl(): void {
+    this.tone(70, 0.4, { type: 'sawtooth', gain: 0.18, slideTo: 150 });
+    this.tone(110, 0.32, { type: 'square', gain: 0.08, slideTo: 200, delay: 0.05 });
+    this.hiss(0.3, 900, 300, 0.1, 0, 1.5);
+  }
+
+  /** A roll of thunder after a lightning flash: a deep rumble that fades. */
+  thunder(): void {
+    this.hiss(1.4, 300, 60, 0.28, 0, 0.7);
+    this.hiss(0.9, 900, 200, 0.14, 0.06, 1);
+    this.tone(48, 1.3, { type: 'sine', gain: 0.3, slideTo: 30 });
+    this.tone(70, 0.8, { type: 'triangle', gain: 0.14, slideTo: 40, delay: 0.15 });
+  }
+
   /** The player got bonked by a rival: a comedy tumble downstairs. */
   bonked(): void {
     [440, 370, 311, 262, 196].forEach((f, i) => this.tone(f, 0.16, { type: 'square', gain: 0.09, slideTo: f * 0.8, delay: i * 0.09 }));

@@ -5,6 +5,7 @@
  */
 
 import { asMode, godUnlocked, type Mode } from '../sim/modes';
+import { asStage, type StageId } from '../sim/stage';
 import { cleanName, randomName } from './names';
 
 export type AudioMode = 'all' | 'sfx' | 'off';
@@ -26,12 +27,18 @@ export interface Save {
   audio: AudioMode;
   /** Difficulty. 'god' only sticks once it is unlocked (see readDisk). */
   mode: Mode;
+  /** Where to play: the school, or the Common once it is unlocked. */
+  stage: StageId;
+  /** Paid the 100-gem ticket to the Common (Level 2). Sticky. */
+  commonUnlocked: boolean;
   /** Reached the top size tier (MEGA Telfersnake) in a Normal game: God mode's proof-of-skill. */
   mega: boolean;
   /** God mode's one-time "you've unlocked it" flourish has been shown. */
   godRevealed: boolean;
   /** Has ever dashed: until then the dash button teaches itself. */
   dashed: boolean;
+  /** The one-time "Welcome to the Common!" flourish has been shown. */
+  commonSeen: boolean;
 }
 
 const KEY = 'telfersnake.save.v1';
@@ -49,9 +56,12 @@ const FRESH: Save = {
   gems: 0,
   audio: 'all',
   mode: 'easy', // new players start gently; the choice is remembered once they change it
+  stage: 'school',
+  commonUnlocked: false,
   mega: false,
   godRevealed: false,
   dashed: false,
+  commonSeen: false,
 };
 
 const AUDIO_MODES: readonly AudioMode[] = ['all', 'sfx', 'off'];
@@ -72,6 +82,9 @@ function readDisk(): Save {
     const mega = data.mega === true;
     const wanted = asMode(data.mode ?? FRESH.mode);
     const mode = wanted === 'god' && !godUnlocked(owned, mega) ? 'normal' : wanted;
+    // The Common is a paid ticket: a hand-edited save can't pick it without having bought it.
+    const commonUnlocked = data.commonUnlocked === true;
+    const stage = asStage(data.stage) === 'common' && !commonUnlocked ? 'school' : asStage(data.stage);
     return {
       stars: count(data.stars),
       owned,
@@ -85,9 +98,12 @@ function readDisk(): Save {
       gems: count(data.gems),
       audio: AUDIO_MODES.includes(data.audio as AudioMode) ? (data.audio as AudioMode) : FRESH.audio,
       mode,
+      stage,
+      commonUnlocked,
       mega,
       godRevealed: data.godRevealed === true,
       dashed: data.dashed === true,
+      commonSeen: data.commonSeen === true,
     };
   } catch {
     return { ...FRESH, owned: [...FRESH.owned], name: randomName() };
@@ -123,7 +139,10 @@ export function writeSave(save: Save): void {
       runs: Math.max(save.runs, disk.runs),
       // The MEGA-in-Normal proof and the God reveal are sticky: once earned in any tab, they stay.
       mega: save.mega || disk.mega,
+      commonUnlocked: save.commonUnlocked || disk.commonUnlocked,
       godRevealed: save.godRevealed || disk.godRevealed,
+      commonSeen: save.commonSeen || disk.commonSeen,
+      dashed: save.dashed || disk.dashed,
     };
     localStorage.setItem(KEY, JSON.stringify(merged));
     // Only once it is safely on disk does this tab adopt the merged picture.

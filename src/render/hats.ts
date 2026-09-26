@@ -207,6 +207,59 @@ export function makeHat(id: string): THREE.Group | null {
       g.add(ring);
       break;
     }
+    case 'acorn': {
+      const nut = new THREE.Mesh(new THREE.SphereGeometry(0.82, 12, 10), mat(0xc79a5b));
+      nut.scale.set(1, 1.1, 1);
+      nut.position.y = 0.5;
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.88, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), mat(0x7a5230));
+      cap.scale.set(1.06, 0.72, 1.06);
+      cap.position.y = 0.86;
+      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.3, 5), mat(0x5b3a1e));
+      stalk.position.y = 1.35;
+      g.add(nut, cap, stalk);
+      break;
+    }
+    case 'flower-crown': {
+      const cols = [0xff8fab, 0xffd43b, 0xffffff, 0xa5d8ff, 0xffc9de];
+      const leaf = mat(0x3f8f3a);
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const bx = Math.cos(a) * 0.86;
+        const bz = Math.sin(a) * 0.86;
+        const centre = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), mat(0xffe066));
+        centre.position.set(bx, 0.34, bz);
+        g.add(centre);
+        for (let p = 0; p < 5; p++) {
+          const pa = (p / 5) * Math.PI * 2;
+          const petal = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 5), mat(cols[i % cols.length]));
+          petal.scale.set(1, 0.5, 1);
+          petal.position.set(bx + Math.cos(pa) * 0.13, 0.34, bz + Math.sin(pa) * 0.13);
+          g.add(petal);
+        }
+        const sprig = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 5), leaf);
+        sprig.scale.set(0.5, 0.3, 1.2);
+        sprig.position.set(Math.cos(a + 0.5) * 0.86, 0.3, Math.sin(a + 0.5) * 0.86);
+        g.add(sprig);
+      }
+      break;
+    }
+    case 'antlers': {
+      const bone = mat(0xe8d9b5);
+      for (const side of [-1, 1]) {
+        const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 1.3, 6), bone);
+        beam.position.set(side * 0.35, 0.8, -0.15);
+        beam.rotation.z = -side * 0.45;
+        beam.rotation.x = -0.35;
+        g.add(beam);
+        for (const [ty, tz, ang] of [[1.0, 0.15, 0.9], [1.25, -0.15, 1.25]] as const) {
+          const tine = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.55, 5), bone);
+          tine.position.set(side * 0.62, ty, tz);
+          tine.rotation.z = -side * ang;
+          g.add(tine);
+        }
+      }
+      break;
+    }
     default:
       return null;
   }
