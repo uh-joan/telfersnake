@@ -91,7 +91,7 @@ export const COMMON: Stage = {
   snakeSpawn: SNAKE_SPAWN,
   fallbackSpot: { x: 0, z: -80 }, // deep in the road corridor: always open
   animals: COMMON_ANIMALS,
-  gulpHints: ['🐿️🐦', '🦔', '🦊🐦‍⬛', '🦌', '🦌'], // the Common's forest animals, per tier
+  gulpHints: ['🐿️🐦', '🦔', '🦊🐦‍⬛', '🦌', '🦌', '🔥🐲'], // the Common's forest animals, then the Dragon
 
   // Big map, so twice the food to keep it worth chasing.
   foodScale: 2,

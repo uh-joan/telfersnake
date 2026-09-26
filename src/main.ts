@@ -27,7 +27,7 @@ import { CREATURES } from './sim/creatures';
 import { asMode, godUnlocked, type Mode, rulesFor } from './sim/modes';
 import { asStage, type StageId } from './sim/stage';
 import { stageFor } from './sim/stages';
-import { TIERS } from './sim/snake';
+import { MEGA_TIER, TIERS } from './sim/snake';
 import { POWER_GEM_COST, POWER_IDS, UPGRADES } from './sim/upgrades';
 import type { WorldView } from './sim/view';
 import { STEP, World } from './sim/world';
@@ -453,8 +453,8 @@ function handleEvents(): void {
         sparkles.burst(world.snake.x, world.snake.z, CONFETTI, 30, 1.4);
         sfx?.tierUp();
         music?.setLevel(e.tier);
-        // Going MEGA (the top tier) in a Normal game is the proof God mode asks for.
-        if (e.tier >= TIERS.length - 1 && save.mode === 'normal' && !save.mega) {
+        // Going MEGA in a Normal game is the proof God mode asks for (the Dragon is above it now).
+        if (e.tier >= MEGA_TIER && save.mode === 'normal' && !save.mega) {
           save.mega = true;
           writeSave(save);
         }

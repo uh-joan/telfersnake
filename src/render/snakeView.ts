@@ -16,6 +16,8 @@ export class SnakeView {
   private readonly spikes: THREE.InstancedMesh;
   private readonly head = new THREE.Group();
   private readonly helmet = new THREE.Group();
+  /** The Dragon (top size tier): a big red dragon head — horns, crest, snout and fangs. */
+  private readonly dragon = new THREE.Group();
   private readonly tongue: THREE.Mesh;
   private readonly hat: THREE.Group | null;
   private readonly hatSpin: THREE.Object3D | null;
@@ -88,6 +90,38 @@ export class SnakeView {
     this.helmet.position.set(0, 0.2, -0.42);
     this.helmet.visible = false;
     this.head.add(this.helmet);
+
+    // The Dragon: a big red dragon head that appears at the very top size tier.
+    const dragonRed = new THREE.MeshLambertMaterial({ color: 0xc0271f });
+    const bone = new THREE.MeshLambertMaterial({ color: 0xf0e2c4 });
+    const mask = new THREE.Mesh(new THREE.SphereGeometry(1.06, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), dragonRed);
+    mask.scale.set(1.24, 1.04, 1.4); // a red scaly crown over the skull
+    mask.position.set(0, 0.05, -0.05);
+    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.62, 1.4, 4), dragonRed);
+    snout.rotation.set(Math.PI / 2, Math.PI / 4, 0);
+    snout.position.set(0, -0.12, 1.05);
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.34, 0.55), dragonRed);
+    brow.position.set(0, 0.95, 0.6);
+    brow.rotation.x = -0.32;
+    this.dragon.add(mask, snout, brow);
+    for (const side of [-1, 1]) {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.24, 1.7, 6), bone);
+      horn.position.set(side * 0.52, 1.2, -0.35);
+      horn.rotation.set(-0.95, 0, side * 0.28);
+      const fang = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.42, 5), bone);
+      fang.rotation.x = Math.PI;
+      fang.position.set(side * 0.32, -0.55, 1.05);
+      this.dragon.add(horn, fang);
+    }
+    // A spiny crest running back over the crown.
+    for (let i = 0; i < 4; i++) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.55, 4), dragonRed);
+      spike.position.set(0, 1.15 - i * 0.06, -0.15 - i * 0.5);
+      spike.rotation.x = -0.2;
+      this.dragon.add(spike);
+    }
+    this.dragon.visible = false;
+    this.head.add(this.dragon);
 
     const red = new THREE.MeshLambertMaterial({ color: 0xe03131 });
     const horseshoe = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.2, 8, 14, Math.PI), red);
@@ -217,7 +251,11 @@ export class SnakeView {
     if (spikeCount > 0 || this.spikes.count > 0) this.spikes.instanceMatrix.needsUpdate = true;
     this.spikes.count = spikeCount;
 
-    const hs = r * 1.18;
+    // The Dragon (top tier): the red dragon head takes over, and the hat comes off for it.
+    const isDragon = snake.tier >= 5;
+    this.dragon.visible = isDragon;
+    if (this.hat) this.hat.visible = !isDragon;
+    const hs = r * 1.18 * (isDragon ? 1.15 : 1);
     this.head.scale.setScalar(hs);
     this.head.position.set(snake.x, hs, snake.z);
     this.head.rotation.y = Math.PI / 2 - snake.heading;

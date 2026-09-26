@@ -31,7 +31,11 @@ export const TIERS = [
   { name: 'Python', mass: 70, gulps: '🐇' },
   { name: 'Anaconda', mass: 170, gulps: '🐑🐷' },
   { name: 'MEGA Telfersnake', mass: 350, gulps: '🐐' },
+  { name: 'The Dragon', mass: 700, gulps: '🔥' },
 ] as const;
+
+/** Going MEGA (not the very top any more, now the Dragon is above it) is still God mode's proof. */
+export const MEGA_TIER = 4;
 
 const TRAIL_STEP = 0.1; // metres between stored trail points
 const TRAIL_CAP = 4096;
