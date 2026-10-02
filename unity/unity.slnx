@@ -1,0 +1,4 @@
+﻿<Solution>
+  <Project Path="Telfer.csproj" />
+  <Project Path="Telfer.Editor.csproj" />
+</Solution>
