@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Telfer.Sim
 {
-    public enum EventType { Eat, Gulp, Boop, Ouch, Rock, Pellet, Tier, Cards, Bonk, Helmet, Respawn, Breath, Sneeze, Say, BumpWall, BumpCooper }
+    public enum EventType { Eat, Gulp, Boop, Ouch, Rock, Pellet, Tier, Cards, Bonk, Helmet, Respawn, Breath, Sneeze, Say, BumpWall, BumpCooper, BumpKid, Power, Hit, Howl, Chomp, Lob, Pelt, Kiss, Magic }
 
     public sealed class GameEvent
     {
@@ -16,13 +16,26 @@ namespace Telfer.Sim
         public HazardKind hazard;
         public int tier;
         public string text;
+        /// <summary>Power: which one was cast. Hit: freeze (true) or shrink.</summary>
+        public UpgradeId power;
+        public bool freeze;
+        public PredatorKind predator;
+        public ProjectileKind projectile;
+        public CreatureKind creature;
+        /// <summary>Gems earned by `who` (magic), or whether a kiss carried one.</summary>
+        public int gems;
+        public bool gem;
+        /// <summary>Upgrades lost to a bonk, for the HUD.</summary>
+        public UpgradeId[] lostUpgrades;
+        /// <summary>Say: Miss Sami speaking (not the warden).</summary>
+        public bool sami;
     }
 
     /// <summary>
-    /// The whole game state, advanced in fixed 1/60 s steps from inputs alone (port of world.ts, school
-    /// stage, solo play). No rendering, no Unity: the views read it and drain its events.
+    /// The whole game state, advanced in fixed 1/60 s steps from inputs alone (port of world.ts, solo
+    /// play, either stage). No rendering, no Unity: the views read it and drain its events.
     /// </summary>
-    public sealed class World
+    public sealed partial class World
     {
         public const float STEP = 1f / 60f;
         const float SLOW_FACTOR = 0.6f, BUMP_QUIET = 0.4f, GULP_REACH = 0.75f, RESPAWN_CLEARANCE = 15;
@@ -34,43 +47,67 @@ namespace Telfer.Sim
         const int DROP_HEADINGS = 8;
         const float MAGNET_PULL = 7, BEE_ORBIT = 2.4f, BEE_REACH = 0.9f, BEE_SPIN = 2.2f;
         const float BREATH_HALF_ANGLE = 0.5f, BREATH_RECHECK = 0.25f, DAZE = 1.8f, BREATH_SHARE = 0.14f;
+        const float LASER_HALF_ANGLE = 0.2f, CREATURE_RESPAWN = 25, PIXIE_MAGNET = 22;
+
+        static readonly string[] SAMI_LINES =
+        {
+            "Morning! Lovely to see you on the Common.", "Mind the bears, poppet — give them a wide berth.",
+            "Ooh, someone has grown! Well done, you.", "Have you seen a white stag? They say one lives in the woods.",
+            "Stay on the grass, away from the road, there’s a love.", "Kind hands and kind hearts, everyone!",
+            "…and I said to her, well, he’s not had his tea yet!", "The mushrooms are out — the spotted ones are the best.",
+            "No throwing pebbles! …Oh. It’s only a little one.", "Wave to the kiddies, they do love a friendly snake.",
+        };
 
         public static readonly SnakeLook PLAYER_LOOK = new SnakeLook("You", 0x4cbb4a, 0xf2d94a, 0x57c955);
 
         public int Tick;
         public readonly Rng Rng;
-        public readonly School Stage = School.Stage;
+        public readonly Stage Stage;
         public readonly List<Snake> Snakes = new List<Snake>();
         public readonly List<Food> Foods = new List<Food>();
         public readonly List<Animal> Animals = new List<Animal>();
         public readonly List<Hazard> Hazards;
         public readonly List<Pellet> Pellets = new List<Pellet>();
         public readonly List<GameEvent> Events = new List<GameEvent>();
-        public readonly Cooper Cooper = new Cooper();
+        public readonly Cooper Cooper;
+        public readonly List<Predator> Predators;
+        public readonly List<Kid> Kids;
+        public readonly List<Projectile> Projectiles = new List<Projectile>();
+        public readonly List<Creature> Creatures;
+        /// <summary>How keen the predators are (Easy &lt; Normal &lt; God).</summary>
+        readonly float ferocity;
+        float samiSayIn = 3;
         public readonly Hit ScratchHit = new Hit();
         public readonly Mode Mode;
 
         /// <summary>Rocks as circles, refreshed when one breaks and moves: what snakes and animals bounce off.</summary>
         public readonly List<Circle> HazardCircles = new List<Circle>();
+        /// <summary>What snakes bounce off on top of the stage: the rocks, plus the fallen log.</summary>
+        readonly List<Circle> snakeSolids = new List<Circle>();
         readonly Dictionary<Snake, Bot> bots = new Dictionary<Snake, Bot>();
         SnakeInput playerInput;
 
         public Snake Me => Snakes[0];
 
-        public World(uint seed, Mode mode, SnakeLook look = null)
+        public World(uint seed, Mode mode, Stage stage = null, SnakeLook look = null, bool canBuyPowers = false)
         {
             Rng = new Rng(seed);
             Mode = mode;
+            Stage = stage ?? School.Stage;
+            ferocity = Rivals.Ferocity(mode);
+            Cooper = new Cooper(Stage.Warden);
             Hazards = Sim.Hazards.Make(Rng, Stage);
             RefreshHazardCircles();
 
-            var player = new Snake(0, look ?? PLAYER_LOOK, false);
-            player.PlaceAt(School.SPAWN_X, School.SPAWN_Z, School.SPAWN_HEADING);
+            var player = new Snake(0, look ?? PLAYER_LOOK, false) { canBuyPowers = canBuyPowers };
+            player.PlaceAt(Stage.SpawnX, Stage.SpawnZ, Stage.SpawnHeading);
             Snakes.Add(player);
 
-            foreach (var p0 in Rivals.SOLO)
+            var roster = new List<Personality>(Rivals.SOLO);
+            for (int i = 0; i < Stage.ExtraRivals && i < Rivals.MORE.Length; i++) roster.Add(Rivals.MORE[i]);
+            foreach (var p0 in roster)
             {
-                var who = mode == Mode.Easy ? p0.Easy() : p0;
+                var who = p0.For(mode);
                 var s = new Snake(Snakes.Count, who.look, true);
                 Snakes.Add(s);
                 SeatBot(s, who);
@@ -78,29 +115,35 @@ namespace Telfer.Sim
             }
             foreach (var s in Snakes) s.immune = RESPAWN_GRACE;
 
-            int foodCount = mode == Mode.Easy ? 55 : 42;
+            int foodCount = (int)Math.Round(Rivals.FoodCount(mode) * Stage.FoodScale);
             for (int i = 0; i < foodCount; i++)
             {
                 var f = new Food { born = -999 };
                 Sim.Foods.Place(f, Rng, Stage, -999, player.x, player.z, 2, HazardCircles);
                 Foods.Add(f);
             }
-            for (int k = 0; k < Sim.Animals.SPECS.Length; k++)
+            foreach (var kind in Stage.AnimalKinds)
             {
-                for (int i = 0; i < Sim.Animals.SPECS[k].count; i++)
+                for (int i = 0; i < Sim.Animals.SPECS[(int)kind].count; i++)
                 {
-                    var a = new Animal { kind = (AnimalKind)k };
+                    var a = new Animal { kind = kind };
                     Sim.Animals.Place(a, this, 6);
                     a.born = -999;
                     Animals.Add(a);
                 }
             }
+            Predators = Sim.Predators.Make(Stage, Rng);
+            Kids = Sim.Kids.Make(Stage, Rng);
+            Creatures = Sim.Creatures.Make(Stage, Rng);
         }
 
         void RefreshHazardCircles()
         {
             HazardCircles.Clear();
             foreach (var h in Hazards) HazardCircles.Add(h.AsCircle);
+            snakeSolids.Clear();
+            snakeSolids.AddRange(HazardCircles);
+            snakeSolids.AddRange(Stage.Logs);
         }
 
         void SeatBot(Snake s, Personality who)
@@ -112,6 +155,8 @@ namespace Telfer.Sim
             s.baseSpeedMul = s.speedMul = who.speedMul;
             s.baseGrowthMul = s.growthMul = who.growthMul;
             s.massCap = who.massCap;
+            // In God mode the bots take upgrades, so let them draw powers too (they pay no gems).
+            s.canBuyPowers = Mode == Mode.God;
             bots[s] = new Bot(who);
         }
 
@@ -146,6 +191,11 @@ namespace Telfer.Sim
             const float dt = STEP;
             Cooper.Update(this, dt);
             foreach (var a in Animals) Sim.Animals.Update(a, this, dt);
+            UpdatePredators(dt);
+            UpdateKids(dt);
+            UpdateProjectiles(dt);
+            UpdateCreatures(dt);
+            ChatterSami(dt);
 
             foreach (var s in Snakes)
             {
@@ -155,12 +205,14 @@ namespace Telfer.Sim
                     if (s.respawnIn <= 0) Respawn(s);
                     continue;
                 }
+                s.TickMagic(dt);
                 bots.TryGetValue(s, out var bot);
+                if (s.frozenFor > 0) { s.frozenFor -= dt; continue; }
                 var inp = bot != null ? bot.Think(s, this, dt) : playerInput;
 
                 s.slowed = Collide.Hypot(s.x - Cooper.x, s.z - Cooper.z) < Cooper.AURA;
                 s.speedFactor += ((s.slowed ? SLOW_FACTOR : 1) - s.speedFactor) * Math.Min(1, dt * 4);
-                s.Update(inp, dt, !s.slowed, Stage, HazardCircles);
+                s.Update(inp, dt, !s.slowed, Stage, snakeSolids);
 
                 bool ouch = BonkRock(s);
                 if (s.touchingWall && !s.wasTouchingWall && !ouch && s.bumpQuiet <= 0 && s.immune <= 0)
@@ -171,21 +223,27 @@ namespace Telfer.Sim
 
                 BumpCooper(s, dt);
                 MeetAnimals(s, dt);
+                MeetKids(s, dt);
+                MeetCreatures(s);
                 PullFood(s, dt);
                 Eat(s);
                 Bees(s);
                 Breathe(s, dt);
+                CastPowers(s, dt);
 
                 if (s.Tier > s.highestTier)
                 {
                     s.highestTier = s.Tier;
                     Events.Add(new GameEvent { type = EventType.Tier, who = s.id, tier = s.Tier, x = s.x, z = s.z });
                 }
-                if (bot != null) s.pendingCards = 0;
+                // Upgrades are normally the player's edge: bots level up but take no cards — except in God
+                // mode, where a bot grabs the scariest card at once.
+                if (bot != null && Mode != Mode.God) s.pendingCards = 0;
                 else if (s.pendingCards > 0 && s.cards == null)
                 {
                     s.cards = Upgrades.Roll(Rng, s);
-                    Events.Add(new GameEvent { type = EventType.Cards, who = s.id });
+                    if (bot != null) { s.TakeCard(s.cards[Upgrades.BotChoice(s.cards)]); s.cards = null; }
+                    else Events.Add(new GameEvent { type = EventType.Cards, who = s.id });
                 }
             }
 
@@ -202,7 +260,7 @@ namespace Telfer.Sim
         {
             float dx = s.x - cx, dz = s.z - cz, d = Collide.Hypot(dx, dz);
             float nx = d > 1e-5f ? dx / d : 1, nz = d > 1e-5f ? dz / d : 0;
-            Collide.ResolveCircle(Stage, cx + nx * reach, cz + nz * reach, s.Radius, ScratchHit, HazardCircles);
+            Collide.ResolveCircle(Stage, cx + nx * reach, cz + nz * reach, s.Radius, ScratchHit, snakeSolids);
             s.x = ScratchHit.x; s.z = ScratchHit.z;
             s.Deflect(nx, nz, dt);
         }
@@ -282,9 +340,11 @@ namespace Telfer.Sim
 
         void SwallowFood(Snake s, Food f, bool toasted)
         {
-            float value = Sim.Foods.VALUE[(int)f.kind] * (f.golden ? Sim.Foods.GOLDEN_MULTIPLIER : 1) * (toasted ? 2 : 1);
+            // Rainbow Rush (the Unicorn): every bite counts golden while it lasts.
+            bool golden = f.golden || s.HasMagic(MagicId.Rainbow);
+            float value = Sim.Foods.VALUE[(int)f.kind] * (golden ? Sim.Foods.GOLDEN_MULTIPLIER : 1) * (toasted ? 2 : 1);
             float points = s.Gain(value);
-            Events.Add(new GameEvent { type = EventType.Eat, who = s.id, food = f.kind, x = f.x, z = f.z, points = points, golden = f.golden, toasted = toasted });
+            Events.Add(new GameEvent { type = EventType.Eat, who = s.id, food = f.kind, x = f.x, z = f.z, points = points, golden = golden, toasted = toasted });
             Sim.Foods.Place(f, Rng, Stage, Tick, s.x, s.z, 8, HazardCircles, s.luck);
         }
 
@@ -310,7 +370,7 @@ namespace Telfer.Sim
 
         void PullFood(Snake s, float dt)
         {
-            float reach = s.magnet;
+            float reach = Math.Max(s.magnet, s.HasMagic(MagicId.Magnet) ? PIXIE_MAGNET : 0);
             if (reach <= 0) return;
             float r2 = reach * reach;
             void Pull(ref float ox, ref float oz)
@@ -358,12 +418,15 @@ namespace Telfer.Sim
             foreach (var f in Foods) if (InBreath(s, f.x, f.z, range)) { worth = true; break; }
             if (!worth) foreach (var o in Snakes) if (o != s && o.alive && o.immune <= 0 && InBreath(s, o.x, o.z, range)) { worth = true; break; }
             if (!worth) foreach (var a in Animals) if (s.Tier >= a.Spec.tier && InBreath(s, a.x, a.z, range)) { worth = true; break; }
+            if (!worth) foreach (var p in Predators) if (InBreath(s, p.x, p.z, range)) { worth = true; break; }
             if (!worth) { s.breathIn = BREATH_RECHECK; return; }
 
             s.breathIn = 4.2f - 0.4f * s.breathLevel;
             Events.Add(new GameEvent { type = EventType.Breath, who = s.id, x = s.x, z = s.z, heading = s.heading, range = range });
             foreach (var f in Foods) if (InBreath(s, f.x, f.z, range)) SwallowFood(s, f, true);
             foreach (var a in Animals) if (s.Tier >= a.Spec.tier && InBreath(s, a.x, a.z, range)) a.dazed = DAZE;
+            foreach (var p in Predators)
+                if (InBreath(s, p.x, p.z, range)) { p.scaredFor = Math.Max(p.scaredFor, 2.5f); p.chargeFor = 0; p.biteIn = Math.Max(p.biteIn, 1); }
             foreach (var o in Snakes)
             {
                 if (o == s || !o.alive || o.immune > 0 || !InBreath(s, o.x, o.z, range)) continue;
@@ -380,10 +443,10 @@ namespace Telfer.Sim
         {
             foreach (var a in Snakes)
             {
-                if (!a.alive || a.immune > 0 || School.SAIL.Contains(a.x, a.z)) continue;
+                if (!a.alive || a.immune > 0 || a.HasMagic(MagicId.Hidden) || (Stage.Sanctuary.HasValue && Stage.Sanctuary.Value.Contains(a.x, a.z))) continue;
                 foreach (var b in Snakes)
                 {
-                    if (b == a || !b.alive || b.immune > 0) continue;
+                    if (b == a || !b.alive || b.immune > 0 || b.HasMagic(MagicId.Hidden)) continue;
                     float gap = Collide.Hypot(a.x - b.x, a.z - b.z);
                     if (gap > b.Length + 3) continue;
                     float hitX = 0, hitZ = 0;
@@ -420,8 +483,10 @@ namespace Telfer.Sim
 
         void Bonk(Snake victim, Snake by)
         {
+            var lostUps = new List<UpgradeId>();
+            foreach (var kv in victim.Owned()) lostUps.Add(kv.Key);
             victim.DropAllUpgrades();
-            Events.Add(new GameEvent { type = EventType.Bonk, who = victim.id, by = by.id, x = victim.x, z = victim.z, lost = victim.mass });
+            Events.Add(new GameEvent { type = EventType.Bonk, who = victim.id, by = by.id, x = victim.x, z = victim.z, lost = victim.mass, lostUpgrades = lostUps.ToArray() });
             victim.cards = null;
             int n = Math.Min(BONK_PELLETS, Math.Max(3, (int)Math.Ceiling(victim.Length / 1.5f)));
             Shed(victim, victim.mass, BONK_RETURN, n);
@@ -444,21 +509,21 @@ namespace Telfer.Sim
 
         void DropIn(Snake s)
         {
-            float bestX = School.SPAWN_X, bestZ = School.SPAWN_Z, bestHeading = 0;
+            float bestX = Stage.SpawnX, bestZ = Stage.SpawnZ, bestHeading = 0;
             int fewest = int.MaxValue;
             float length = s.Length;
             var B = Stage.Bounds;
             for (int tries = 0; tries < 60 && fewest > 0; tries++)
             {
                 float x = Rng.Range(B.minX, B.maxX), z = Rng.Range(B.minZ, B.maxZ);
-                if (!Collide.IsFree(Stage, x, z, 2.5f, HazardCircles) || !ClearOfSnakes(x, z, tries < 40 ? SNAKE_CLEARANCE : 5)) continue;
+                if (!Collide.IsFree(Stage, x, z, 2.5f, snakeSolids) || !ClearOfSnakes(x, z, tries < 40 ? SNAKE_CLEARANCE : 5)) continue;
                 float turn = Rng.Range(0, Collide.PI * 2);
                 for (int k = 0; k < DROP_HEADINGS && fewest > 0; k++)
                 {
                     float heading = Collide.WrapAngle(turn + k * Collide.PI * 2 / DROP_HEADINGS);
                     int blocked = 0;
                     for (float d = 1; d <= length; d += 1)
-                        if (!Collide.IsFree(Stage, x - (float)Math.Cos(heading) * d, z - (float)Math.Sin(heading) * d, 0.4f, HazardCircles)) blocked++;
+                        if (!Collide.IsFree(Stage, x - (float)Math.Cos(heading) * d, z - (float)Math.Sin(heading) * d, 0.4f, snakeSolids)) blocked++;
                     if (blocked >= fewest) continue;
                     fewest = blocked; bestX = x; bestZ = z; bestHeading = heading;
                 }

@@ -5,7 +5,7 @@ namespace Telfer.Sim
 {
     // ------------------------------------------------------------------ food
 
-    public enum FoodKind { Burger, Sausage, Cookie, Broccoli, Carrot, Apple }
+    public enum FoodKind { Burger, Sausage, Cookie, Broccoli, Carrot, Apple, Mushroom, Tomato, Berry, Acorn }
 
     public sealed class Food
     {
@@ -18,7 +18,7 @@ namespace Telfer.Sim
 
     public static class Foods
     {
-        public static readonly float[] VALUE = { 3, 2, 1, 3, 2, 2 };
+        public static readonly float[] VALUE = { 3, 2, 1, 3, 2, 2, 3, 2, 1, 2 };
         public static readonly float[] WEIGHTS_YARD = { 1.5f, 2, 3, 1, 1, 1.5f };
         public static readonly float[] WEIGHTS_GREEN = { 0, 0, 0.5f, 4, 4, 2 };
         public const float GOLDEN_MULTIPLIER = 5;
@@ -37,7 +37,7 @@ namespace Telfer.Sim
             return (FoodKind)(weights.Length - 1);
         }
 
-        public static void Place(Food food, Rng rng, School stage, int tick, float avoidX, float avoidZ, float clear, IReadOnlyList<Circle> rocks, int luck = 0)
+        public static void Place(Food food, Rng rng, Stage stage, int tick, float avoidX, float avoidZ, float clear, IReadOnlyList<Circle> rocks, int luck = 0)
         {
             food.golden = rng.Next() < GOLDEN_CHANCE + GOLDEN_PER_LUCK * luck;
             food.born = tick;
@@ -52,10 +52,10 @@ namespace Telfer.Sim
                 food.kind = stage.FoodKindAt(rng, x, z);
                 return;
             }
-            float a = Sq(School.SPAWN_X - avoidX) + Sq(School.SPAWN_Z - avoidZ);
-            float b = Sq(School.COOPER_X - avoidX) + Sq(School.COOPER_Z - avoidZ);
-            if (a > b) { food.x = School.SPAWN_X; food.z = School.SPAWN_Z; }
-            else { food.x = School.COOPER_X; food.z = School.COOPER_Z; }
+            float a = Sq(stage.SpawnX - avoidX) + Sq(stage.SpawnZ - avoidZ);
+            float b = Sq(stage.FallbackX - avoidX) + Sq(stage.FallbackZ - avoidZ);
+            if (a > b) { food.x = stage.SpawnX; food.z = stage.SpawnZ; }
+            else { food.x = stage.FallbackX; food.z = stage.FallbackZ; }
         }
 
         static float Sq(float v) => v * v;
@@ -92,12 +92,13 @@ namespace Telfer.Sim
 
         static int HitLimit(Rng rng) => 2 + rng.Int(4);
 
-        public static bool Place(Hazard h, Rng rng, School stage, List<Circle> others, Func<float, float, bool> avoid)
+        public static bool Place(Hazard h, Rng rng, Stage stage, List<Circle> others, Func<float, float, bool> avoid)
         {
+            if (!stage.HasHazards) return false;
             var B = stage.Bounds;
             for (int tries = 0; tries < 200; tries++)
             {
-                var box = rng.Next() < School.HAZARD_SHARE ? School.HAZARD_ROUGH : B;
+                var box = rng.Next() < stage.HazardShare ? stage.HazardRough : B;
                 float x = rng.Range(box.minX, box.maxX), z = rng.Range(box.minZ, box.maxZ);
                 if (!Collide.IsFree(stage, x, z, h.r + 1.6f, others)) continue;
                 float edge = h.r + FENCE_GAP;
@@ -113,15 +114,16 @@ namespace Telfer.Sim
             return false;
         }
 
-        public static List<Hazard> Make(Rng rng, School stage)
+        public static List<Hazard> Make(Rng rng, Stage stage)
         {
             var list = new List<Hazard>();
+            if (!stage.HasHazards) return list;
             var circles = new List<Circle>();
             for (int i = 0; i < COUNT; i++)
             {
                 var kind = (HazardKind)rng.Int(3);
                 var h = new Hazard { kind = kind, r = RADIUS[(int)kind], limit = HitLimit(rng) };
-                if (Place(h, rng, stage, circles, (x, z) => Collide.Hypot(x - School.SPAWN_X, z - School.SPAWN_Z) < SPAWN_CLEARANCE))
+                if (Place(h, rng, stage, circles, (x, z) => Collide.Hypot(x - stage.SpawnX, z - stage.SpawnZ) < SPAWN_CLEARANCE))
                 {
                     list.Add(h);
                     circles.Add(h.AsCircle);
@@ -133,8 +135,8 @@ namespace Telfer.Sim
 
     // ------------------------------------------------------------------ animals
 
-    public enum AnimalKind { Snail, Ladybird, Chicken, Duck, Rabbit, Sheep, Pig, Goat }
-    public enum Home { Green, Yard, Lagoon, Anywhere }
+    public enum AnimalKind { Snail, Ladybird, Chicken, Duck, Rabbit, Sheep, Pig, Goat, Squirrel, Crow, Deer, Hedgehog, Fox, Pigeon }
+    public enum Home { Green, Yard, Lagoon, Anywhere, Woods, Meadow, Glade }
     public enum AnimalMode { Wander, Rest, Flee, Charge }
 
     public struct AnimalSpec
@@ -169,6 +171,13 @@ namespace Telfer.Sim
             new AnimalSpec(3, 18, 0.6f, 0.9f, 3.2f, 6, 0.3f, 3, Home.Green),    // sheep
             new AnimalSpec(3, 18, 0.6f, 1.1f, 3.8f, 5.5f, 0.4f, 1, Home.Yard),  // pig
             new AnimalSpec(4, 30, 0.65f, 1.2f, 4.5f, 6, 0.3f, 1, Home.Yard),    // goat
+            // Forest animals of the Common.
+            new AnimalSpec(0, 4, 0.28f, 1.4f, 5.5f, 6, 1.6f, 4, Home.Woods),     // squirrel
+            new AnimalSpec(2, 7, 0.35f, 1.2f, 4.5f, 6, 1.0f, 3, Home.Anywhere),  // crow
+            new AnimalSpec(3, 22, 0.6f, 1.0f, 7.0f, 9, 0.4f, 2, Home.Anywhere),  // deer
+            new AnimalSpec(1, 6, 0.3f, 0.6f, 1.4f, 3, 0.3f, 3, Home.Woods),      // hedgehog
+            new AnimalSpec(2, 12, 0.4f, 1.5f, 4.0f, 6, 0.7f, 2, Home.Woods),     // fox
+            new AnimalSpec(0, 3, 0.25f, 0.9f, 3.5f, 4, 1.2f, 5, Home.Anywhere),  // pigeon
         };
 
         const float TURN_RATE = 6, JITTER_EVERY = 0.35f, CALM_DOWN = 1.6f;
@@ -188,8 +197,8 @@ namespace Telfer.Sim
             }
             if (!placed)
             {
-                if (w.ClearOfSnakes(School.SPAWN_X, School.SPAWN_Z, 6)) { a.x = School.SPAWN_X; a.z = School.SPAWN_Z; }
-                else { a.x = School.COOPER_X; a.z = School.COOPER_Z; }
+                if (w.ClearOfSnakes(w.Stage.SpawnX, w.Stage.SpawnZ, 6)) { a.x = w.Stage.SpawnX; a.z = w.Stage.SpawnZ; }
+                else { a.x = w.Stage.FallbackX; a.z = w.Stage.FallbackZ; }
             }
             a.heading = a.want = w.Rng.Range(-Collide.PI, Collide.PI);
             a.speed = 0;

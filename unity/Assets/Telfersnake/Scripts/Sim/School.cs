@@ -22,7 +22,7 @@ namespace Telfer.Sim
     /// The Telferscot playground, blocked out from the satellite view. Metres; +x east, +z south.
     /// A straight port of src/sim/layout.ts: the sim reads it for collisions, the views for looks.
     /// </summary>
-    public sealed class School : ITerrain
+    public sealed class School : Stage
     {
         static School stage;
         /// <summary>Built on first use: the static tables below must be initialised first.</summary>
@@ -90,8 +90,40 @@ namespace Telfer.Sim
         readonly Box[] solidBoxes;
         readonly Circle[] solidCircles;
 
+        public override StageId Id => StageId.School;
+        public override string Name => "School";
+
         School()
         {
+            SpawnX = SPAWN_X; SpawnZ = SPAWN_Z; SpawnHeading = SPAWN_HEADING;
+            FallbackX = COOPER_X; FallbackZ = COOPER_Z;
+            AnimalKinds = new[] { AnimalKind.Snail, AnimalKind.Ladybird, AnimalKind.Chicken, AnimalKind.Duck, AnimalKind.Rabbit, AnimalKind.Sheep, AnimalKind.Pig, AnimalKind.Goat };
+            Sanctuary = SAIL;
+            HasHazards = true;
+            HazardRough = HAZARD_ROUGH;
+            HazardShare = HAZARD_SHARE;
+            Warden = new WardenConfig
+            {
+                spawnX = COOPER_X, spawnZ = COOPER_Z, beat = COOPER_BEAT, persona = "cooper",
+                general = new[]
+                {
+                    "No running, please!", "Walking feet, thank you!", "Do move along, please.", "Single file, if you'd be so kind.",
+                    "Mind the flower beds, please!", "Lovely manners, everyone. Carry on.", "Shirts tucked in, please!", "Has anyone seen the class snake?",
+                    "That is not what the hopscotch is for.", "Splendid. Absolutely splendid. Move along.",
+                    "Inside voices, please. Oh. We are outside. Carry on.", "Respect and resilience, please. And walking feet.",
+                    "Lovely collaboration, everyone. Well done.", "Be polite and co-operative, thank you!",
+                    "One hundred years of learning. No running in any of them.", "Who, may I ask, let the sheep in?",
+                    "Chickens are not permitted on the hopscotch.", "Would the owner of the goat please come to the office.",
+                    "Mind the rocks, everyone. Thank you.",
+                },
+                near = new[]
+                {
+                    "No running, please! That includes slithering.", "Excuse me! Snakes must sign in at the office.",
+                    "Slow down, please. Thank you so much.", "I say! Walking pace, if you please.", "Move along, please. Nothing to eat here.",
+                },
+                big = new[] { "Goodness. You have grown. Still no running.", "Remarkable. Do mind the windows, please." },
+                bump = new[] { "I beg your pardon!", "Oh! Terribly sorry. No running!", "Good heavens. Mind how you go." },
+            };
             var list = new System.Collections.Generic.List<Box>();
             foreach (var b in BUILDINGS) list.Add(b.box);
             list.AddRange(COURT_FENCES);
@@ -102,14 +134,14 @@ namespace Telfer.Sim
             solidCircles = Array.ConvertAll(TREES, t => new Circle(t.x, t.z, t.r));
         }
 
-        public Bounds2 Bounds => BOUNDS;
-        public Box[] SolidBoxes => solidBoxes;
-        public Circle[] SolidCircles => solidCircles;
+        public override Bounds2 Bounds => BOUNDS;
+        public override Box[] SolidBoxes => solidBoxes;
+        public override Circle[] SolidCircles => solidCircles;
 
-        public FoodKind FoodKindAt(Rng rng, float x, float z) =>
+        public override FoodKind FoodKindAt(Rng rng, float x, float z) =>
             Foods.Pick(rng, GREEN.Contains(x, z) ? Foods.WEIGHTS_GREEN : Foods.WEIGHTS_YARD);
 
-        public void HomePoint(Rng rng, Home home, out float x, out float z)
+        public override void HomePoint(Rng rng, Home home, out float x, out float z)
         {
             switch (home)
             {

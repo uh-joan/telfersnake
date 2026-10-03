@@ -25,7 +25,7 @@ namespace Telfer.Sim
 
     public enum Rarity { Common, Rare, Epic, Legendary }
 
-    public enum UpgradeId { Skates, Belly, Homework, Wrap, Magnet, Tongue, Helmet, Clover, Spikes, Dragon, Bees, Snack }
+    public enum UpgradeId { Skates, Belly, Homework, Wrap, Magnet, Tongue, Helmet, Clover, Spikes, Dragon, Bees, Laser, Stink, Zap, Freeze, Snack }
 
     public struct UpgradeDef
     {
@@ -33,7 +33,10 @@ namespace Telfer.Sim
         public UpgradeDef(string name, string label, Rarity rarity, int max) { this.name = name; this.label = label; this.rarity = rarity; this.max = max; }
     }
 
-    /// <summary>Level-up cards, Megabonk style (the gem-priced powers are left out of the remaster's first cut).</summary>
+    /// <summary>The timed magic buffs a fantastic creature grants (rainbow, hidden, magnet, owl, halo).</summary>
+    public enum MagicId { Rainbow, Hidden, Magnet, Owl, Halo }
+
+    /// <summary>Level-up cards, Megabonk style. The four offensive powers cost a blue gem each (port of upgrades.ts).</summary>
     public static class Upgrades
     {
         public static readonly UpgradeDef[] DEFS =
@@ -49,28 +52,36 @@ namespace Telfer.Sim
             new UpgradeDef("Hedgehog Spikes", "Spiky", Rarity.Legendary, 3),
             new UpgradeDef("Dragon Breath", "Fire!", Rarity.Legendary, 5),
             new UpgradeDef("Bee Buddies", "Bees", Rarity.Legendary, 3),
+            new UpgradeDef("Laser Eyes", "Laser", Rarity.Epic, 5),
+            new UpgradeDef("Stink Cloud", "Stink", Rarity.Epic, 3),
+            new UpgradeDef("Zap Ring", "Zap", Rarity.Epic, 3),
+            new UpgradeDef("Freeze Puff", "Freeze", Rarity.Epic, 3),
             new UpgradeDef("Snack Pack", "Big snack", Rarity.Common, 999),
         };
 
         public const float SNACK_MASS = 15;
-        /// <summary>UPGRADE_IDS order in upgrades.ts (the free ones): draws walk the pool in this order.</summary>
+        public const int POWER_GEM_COST = 1;
+        /// <summary>UPGRADE_IDS order in upgrades.ts: draws walk the pool in this order.</summary>
         static readonly UpgradeId[] TS_ORDER =
         {
             UpgradeId.Skates, UpgradeId.Belly, UpgradeId.Homework, UpgradeId.Magnet, UpgradeId.Tongue, UpgradeId.Helmet,
             UpgradeId.Wrap, UpgradeId.Spikes, UpgradeId.Dragon, UpgradeId.Bees, UpgradeId.Clover,
+            UpgradeId.Laser, UpgradeId.Stink, UpgradeId.Zap, UpgradeId.Freeze,
         };
+
+        public static bool IsPower(UpgradeId id) => id == UpgradeId.Laser || id == UpgradeId.Stink || id == UpgradeId.Zap || id == UpgradeId.Freeze;
         static readonly float[] HELMET_RECHARGE = { 0, 40, 30, 20 };
         static readonly float[] RARITY_WEIGHT = { 6, 3, 1.5f, 0.75f };
         static readonly float[] LUCK_BONUS = { 0, 1, 0.7f, 0.5f };
 
         public static int XpForLevel(int level) => (int)Math.Round(20 + 14 * level + 2f * level * level);
 
-        public static UpgradeId[] Roll(Rng rng, Snake s)
+        /// <summary>Up to `n` different cards from `from`, weighted by rarity (and the clover's luck).</summary>
+        static List<UpgradeId> Draw(Rng rng, Snake s, List<UpgradeId> from, int n)
         {
-            var pool = new List<UpgradeId>();
-            foreach (var id in TS_ORDER) if (s.LevelOf(id) < DEFS[(int)id].max) pool.Add(id);
+            var pool = new List<UpgradeId>(from);
             var cards = new List<UpgradeId>();
-            while (cards.Count < 3 && pool.Count > 0)
+            while (cards.Count < n && pool.Count > 0)
             {
                 float total = 0;
                 var weights = new float[pool.Count];
@@ -90,8 +101,54 @@ namespace Telfer.Sim
                 cards.Add(pool[pick]);
                 pool.RemoveAt(pick);
             }
+            return cards;
+        }
+
+        /// <summary>Three different cards the snake can still use; Snack Packs fill any gaps.</summary>
+        public static UpgradeId[] Roll(Rng rng, Snake s)
+        {
+            var pool = new List<UpgradeId>();
+            foreach (var id in TS_ORDER)
+                if ((s.canBuyPowers || !IsPower(id)) && s.LevelOf(id) < DEFS[(int)id].max) pool.Add(id);
+            List<UpgradeId> cards;
+            if (s.luckyCards > 0)
+            {
+                // Owl Eyes: a lucky draw of the best free cards, legendaries topped up with rares. Never a gem card.
+                s.luckyCards--;
+                cards = Draw(rng, s, pool.FindAll(id => DEFS[(int)id].rarity == Rarity.Legendary), 3);
+                cards.AddRange(Draw(rng, s, pool.FindAll(id => DEFS[(int)id].rarity == Rarity.Rare), 3 - cards.Count));
+            }
+            else
+            {
+                cards = Draw(rng, s, pool, 3);
+                // Never force a spend: a player always gets at least one free card to pick.
+                if (!s.isBot && cards.Count == 3 && cards.TrueForAll(IsPower))
+                {
+                    var free = Draw(rng, s, pool.FindAll(id => !IsPower(id)), 1);
+                    cards[2] = free.Count > 0 ? free[0] : UpgradeId.Snack;
+                }
+            }
             while (cards.Count < 3) cards.Add(UpgradeId.Snack);
             return cards.ToArray();
+        }
+
+        /// <summary>A bot grabs the scariest card on offer (modes.ts botCardChoice).</summary>
+        static readonly UpgradeId[] BOT_PREF =
+        {
+            UpgradeId.Dragon, UpgradeId.Laser, UpgradeId.Zap, UpgradeId.Freeze, UpgradeId.Spikes, UpgradeId.Stink, UpgradeId.Skates, UpgradeId.Magnet,
+            UpgradeId.Bees, UpgradeId.Belly, UpgradeId.Tongue, UpgradeId.Clover, UpgradeId.Homework, UpgradeId.Helmet, UpgradeId.Wrap, UpgradeId.Snack,
+        };
+
+        public static int BotChoice(UpgradeId[] cards)
+        {
+            int best = 0, bestRank = int.MaxValue;
+            for (int i = 0; i < cards.Length; i++)
+            {
+                int r = Array.IndexOf(BOT_PREF, cards[i]);
+                if (r < 0) r = 99;
+                if (r < bestRank) { bestRank = r; best = i; }
+            }
+            return best;
         }
 
         public static void Refresh(Snake s)
@@ -154,6 +211,20 @@ namespace Telfer.Sim
         public float helmetRecharge, helmetIn;
         public bool helmetReady;
 
+        /// <summary>Seconds left of each magic buff, indexed by MagicId. All 0 on the school.</summary>
+        public readonly float[] magic = new float[5];
+        /// <summary>Lucky card draws owed (the Wise Owl): the next rolls are epic-or-better.</summary>
+        public int luckyCards;
+        /// <summary>Whether power cards may be offered (the player has a gem, or it is a God bot).</summary>
+        public bool canBuyPowers;
+        public float laserIn, stinkIn, zapIn, freezeIn;
+        /// <summary>Seconds frozen solid by a rival's Freeze Puff: it cannot steer or move.</summary>
+        public float frozenFor;
+
+        public bool HasMagic(MagicId id) => magic[(int)id] > 0;
+        public void GiveMagic(MagicId id, float secs) => magic[(int)id] = Math.Max(magic[(int)id], secs);
+        public void TickMagic(float dt) { for (int i = 0; i < magic.Length; i++) if (magic[i] > 0) magic[i] = Math.Max(0, magic[i] - dt); }
+
         public readonly float[] body = new float[BODY_POINTS * 2];
         public int bodyCount;
 
@@ -172,6 +243,9 @@ namespace Telfer.Sim
             baseSpeedMul = baseGrowthMul = 1; massCap = float.MaxValue;
             Array.Clear(upgrades, 0, upgrades.Length);
             helmetReady = false; helmetRecharge = 0;
+            laserIn = stinkIn = zapIn = freezeIn = frozenFor = 0;
+            Array.Clear(magic, 0, magic.Length);
+            luckyCards = 0;
             Upgrades.Refresh(this);
         }
 

@@ -15,10 +15,16 @@ namespace Telfer.Sim
             this.aggression = aggression; this.dashy = dashy; this.timid = timid; this.massCap = massCap;
         }
 
+        /// <summary>God mode: faster than a fresh player, greedier, cannier (modes.ts deify).</summary>
+        public Personality God() => new Personality(look.name, look.body, look.stripe, look.head, startMass + 6, Math.Min(1.15f, speedMul + 0.2f), growthMul * 1.15f,
+            Math.Min(1, caution + 0.15f), Math.Min(1, aggression + 0.35f), Math.Min(1, dashy + 0.4f), timid, (float)Math.Round(massCap * 1.3f));
+
+        public Personality For(Mode m) => m == Mode.Easy ? Easy() : m == Mode.God ? God() : this;
+
         public Personality Easy() => new Personality(look.name, look.body, look.stripe, look.head, 0, Math.Min(speedMul, 0.8f), growthMul * 0.7f, caution * 0.5f, 0, 0, true, Math.Max(40, (float)Math.Round(massCap * 0.5f)));
     }
 
-    public enum Mode { Easy, Normal }
+    public enum Mode { Easy, Normal, God }
 
     public static class Rivals
     {
@@ -29,6 +35,18 @@ namespace Telfer.Sim
             new Personality("Danger Noodle", 0xe63946, 0x2b2d42, 0xea5560, 5, 0.95f, 0.65f, 0.55f, 0.5f, 0.8f, false, 180),
             new Personality("Spaghetti", 0xf4a261, 0xe76f51, 0xf6b07a, 110, 0.62f, 0.4f, 0.5f, 0, 0, false, 220),
         };
+
+        /// <summary>Forest-flavoured rivals a bigger stage seats on top (the Common's four).</summary>
+        public static readonly Personality[] MORE =
+        {
+            new Personality("Twiggy", 0x8a9a5b, 0xc7d59f, 0x9aab6a, 2, 0.9f, 0.7f, 0.7f, 0.25f, 0.35f, false, 190),
+            new Personality("Mossy", 0x4b7f52, 0x9fd8a0, 0x5c9063, 0, 0.88f, 0.72f, 0.9f, 0.05f, 0.2f, true, 150),
+            new Personality("Copper", 0xc06a3a, 0xf0b48a, 0xcf7a4a, 6, 0.95f, 0.66f, 0.5f, 0.55f, 0.75f, false, 200),
+            new Personality("Willow", 0x6a8fbf, 0xbcd3ef, 0x7a9ccf, 4, 0.9f, 0.7f, 0.75f, 0.3f, 0.4f, false, 210),
+        };
+
+        public static int FoodCount(Mode m) => m == Mode.Easy ? 55 : 42;
+        public static float Ferocity(Mode m) => m == Mode.Easy ? 0.7f : m == Mode.God ? 1.3f : 1;
     }
 
     /// <summary>Rival snakes: same Snake, same input as the player. Beatable by a seven-year-old. Port of bot.ts.</summary>
@@ -166,24 +184,16 @@ namespace Telfer.Sim
         public const float RADIUS = 0.55f, AURA = 6;
         const float RUN_SPEED = 3.4f, TURN_RATE = 5, NEAR = 10, SEEK_SNAKE_CHANCE = 0.35f;
 
-        static readonly string[] GENERAL =
-        {
-            "No running, please!", "Walking feet, thank you!", "Do move along, please.", "Single file, if you'd be so kind.",
-            "Mind the flower beds, please!", "Lovely manners, everyone. Carry on.", "Has anyone seen the class snake?",
-            "That is not what the hopscotch is for.", "Splendid. Absolutely splendid. Move along.",
-            "Who, may I ask, let the sheep in?", "Chickens are not permitted on the hopscotch.",
-            "Would the owner of the goat please come to the office.", "Mind the rocks, everyone. Thank you.",
-        };
-        static readonly string[] NEAR_LINES =
-        {
-            "No running, please! That includes slithering.", "Excuse me! Snakes must sign in at the office.",
-            "Slow down, please. Thank you so much.", "I say! Walking pace, if you please.", "Move along, please. Nothing to eat here.",
-        };
-        static readonly string[] BIG = { "Goodness. You have grown. Still no running.", "Remarkable. Do mind the windows, please." };
-        static readonly string[] BUMP = { "I beg your pardon!", "Oh! Terribly sorry. No running!", "Good heavens. Mind how you go." };
+        public readonly WardenConfig config;
+        public float x, z, heading = Collide.PI / 2, speed, talking, travel;
+        float tx, tz, pause = 1, sayIn = 2, bumpCooldown, checkIn = 1, checkX, checkZ;
 
-        public float x = School.COOPER_X, z = School.COOPER_Z, heading = Collide.PI / 2, speed, talking, travel;
-        float tx = School.COOPER_X, tz = School.COOPER_Z, pause = 1, sayIn = 2, bumpCooldown, checkIn = 1, checkX = School.COOPER_X, checkZ = School.COOPER_Z;
+        public Cooper(WardenConfig c)
+        {
+            config = c;
+            x = tx = checkX = c.spawnX;
+            z = tz = checkZ = c.spawnZ;
+        }
 
         public void Update(World w, float dt)
         {
@@ -202,8 +212,8 @@ namespace Telfer.Sim
             {
                 sayIn = w.Rng.Range(3.5f, 6.5f);
                 bool near = Collide.Hypot(w.Me.x - x, w.Me.z - z) < NEAR;
-                var lines = GENERAL;
-                if (near) lines = w.Me.Tier >= 3 && w.Rng.Next() < 0.5f ? BIG : NEAR_LINES;
+                var lines = config.general;
+                if (near) lines = w.Me.Tier >= 3 && w.Rng.Next() < 0.5f ? config.big : config.near;
                 Say(w, w.Rng.Pick(lines));
             }
         }
@@ -213,7 +223,7 @@ namespace Telfer.Sim
             if (bumpCooldown > 0) return false;
             bumpCooldown = 2.5f;
             sayIn = w.Rng.Range(3.5f, 6.5f);
-            Say(w, w.Rng.Pick(BUMP));
+            Say(w, w.Rng.Pick(config.bump));
             return true;
         }
 
@@ -243,7 +253,7 @@ namespace Telfer.Sim
 
         void PickTarget(World w)
         {
-            var beat = School.COOPER_BEAT;
+            var beat = config.beat;
             if (w.Rng.Next() < SEEK_SNAKE_CHANCE)
             {
                 float px = Math.Min(Math.Max(w.Me.x + w.Rng.Range(-3, 3), beat.minX), beat.maxX);
@@ -257,7 +267,7 @@ namespace Telfer.Sim
                 tx = px; tz = pz;
                 return;
             }
-            tx = School.COOPER_X; tz = School.COOPER_Z;
+            tx = config.spawnX; tz = config.spawnZ;
         }
     }
 }

@@ -1,0 +1,55 @@
+using System;
+
+namespace Telfer.Sim
+{
+    public enum StageId { School, Common }
+
+    /// <summary>What a stage needs to place its warden: Mr Cooper at school, the park keeper on the Common.</summary>
+    public sealed class WardenConfig
+    {
+        public float spawnX, spawnZ;
+        public Bounds2 beat;
+        public string[] general, near, big, bump;
+        /// <summary>Which figure the views draw: "cooper" (the head teacher) or "keeper".</summary>
+        public string persona = "cooper";
+    }
+
+    /// <summary>
+    /// A place to play (port of stage.ts): its fence and fixed solids, where things spawn and live, and
+    /// who patrols it. The sim never reads a layout as a global: everything takes the stage it runs on.
+    /// </summary>
+    public abstract class Stage : ITerrain
+    {
+        public abstract StageId Id { get; }
+        public abstract string Name { get; }
+        public abstract Bounds2 Bounds { get; }
+        public abstract Box[] SolidBoxes { get; }
+        public abstract Circle[] SolidCircles { get; }
+
+        public float SpawnX, SpawnZ, SpawnHeading;
+        /// <summary>A known-open spot well away from the snake spawn: the last resort when nothing else fits.</summary>
+        public float FallbackX, FallbackZ;
+        public AnimalKind[] AnimalKinds = new AnimalKind[0];
+        /// <summary>Nobody can be bonked inside this box (the blue sail at school).</summary>
+        public Box? Sanctuary;
+        public float FoodScale = 1;
+        /// <summary>Rocks and sticks spawn here (a rough corner gets `HazardShare` of them). False: none.</summary>
+        public bool HasHazards;
+        public Bounds2 HazardRough;
+        public float HazardShare;
+        /// <summary>Solids the snake goes round but the children clamber over (the Common's fallen log).</summary>
+        public Circle[] Logs = new Circle[0];
+        public (PredatorKind kind, int count)[] Predators = new (PredatorKind, int)[0];
+        public KidKind[] Kids = new KidKind[0];
+        public int CreatureCount;
+        public int ExtraRivals;
+        /// <summary>Miss Sami and a mum by the road mouth (the Common), or null.</summary>
+        public float[] Greeters;
+        public WardenConfig Warden;
+
+        public abstract FoodKind FoodKindAt(Rng rng, float x, float z);
+        public abstract void HomePoint(Rng rng, Home home, out float x, out float z);
+
+        public static Stage For(StageId id) => id == StageId.Common ? (Stage)Common.Stage : School.Stage;
+    }
+}
