@@ -58,6 +58,21 @@ namespace Telfer.View
         }
     }
 
+    /// <summary>
+    /// Meshes and materials made for one run (snakes, halos, Mr Cooper). Destroying a GameObject
+    /// does not free them, so the next run releases the last one's: no heap creep on replays.
+    /// </summary>
+    public static class RunAssets
+    {
+        static readonly List<Object> owned = new List<Object>();
+        public static T Track<T>(T o) where T : Object { owned.Add(o); return o; }
+        public static void Release()
+        {
+            foreach (var o in owned) if (o) Object.Destroy(o);
+            owned.Clear();
+        }
+    }
+
     /// <summary>Procedural textures: bricks, roof tiles, grit. Painted once at start-up.</summary>
     public static class Tex
     {

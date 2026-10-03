@@ -368,7 +368,8 @@ namespace Telfer.View
                     var p = Vector3.Lerp(Vector3.Lerp(corners[0], corners[1], u), Vector3.Lerp(corners[3], corners[2], u), v);
                     // Sag towards the middle, and the edges curve in like a real tensioned sail.
                     p.y -= Mathf.Sin(u * Mathf.PI) * Mathf.Sin(v * Mathf.PI) * 0.45f;
-                    float tri = (u + v < 1) == (u > v) ? 1 : 0.86f;
+                    // Alternating panels, like a real stitched sail.
+                    float tri = Mathf.FloorToInt((u - v + 1) * 3.5f) % 2 == 0 ? 1 : 0.8f;
                     cloth.C = Color.Lerp(MeshKit.Hex(0x2f6fd6), MeshKit.Hex(0x1d4fa3), (u + v) * 0.5f) * tri;
                     cloth.C.a = 1;
                     cloth.V.Add(p); cloth.N.Add(Vector3.up); cloth.Col.Add(cloth.C); cloth.UV.Add(new Vector2(u, v * 0.6f + 0.4f));
@@ -393,7 +394,8 @@ namespace Telfer.View
                 posts.Tint(0x3b4350).Cylinder(foot, p + Vector3.up * 0.3f, 0.09f, 0.07f, 10);
                 posts.Tint(0xd9dee5).Cylinder(p, foot + Vector3.up * 0.2f, 0.012f, 0.012f, 4, false, false);
             }
-            Emit("sailPosts", posts, Mats.VertexGlossy, true);
+            var postsGo = Emit("sailPosts", posts, Mats.VertexGlossy, true);
+            Occluders.Add(new Occluder { minX = s.x - s.w / 2 - 1, maxX = s.x + s.w / 2 + 1, northZ = s.z - s.d / 2, southZ = s.z + s.d / 2, reach = 3.5f, renderers = new Renderer[] { go.GetComponent<MeshRenderer>() } });
         }
 
         // ------------------------------------------------------------------ climbing platform, benches

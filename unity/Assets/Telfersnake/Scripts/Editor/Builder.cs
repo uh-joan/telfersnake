@@ -14,6 +14,8 @@ namespace Telfer.EditorTools
     public static class Builder
     {
         const string Scene = "Assets/Telfersnake/Scenes/Main.unity";
+        /// <summary>Quit the editor when a batch build finishes (false when driving a resident editor).</summary>
+        public static bool ExitWhenDone = true;
 
         [MenuItem("Telfersnake/Set Up Project")]
         public static void Setup()
@@ -36,7 +38,7 @@ namespace Telfer.EditorTools
             PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;
             PlayerSettings.WebGL.decompressionFallback = true;
             PlayerSettings.WebGL.dataCaching = true;
-            PlayerSettings.WebGL.template = "APPLICATION:Default";
+            PlayerSettings.WebGL.template = "PROJECT:Telfersnake";
             AssetDatabase.SaveAssets();
             Debug.Log("[Telfersnake] project set up");
         }
@@ -66,7 +68,7 @@ namespace Telfer.EditorTools
             });
             var s = report.summary;
             Debug.Log($"[Telfersnake] build {s.result}: {s.totalErrors} errors, {s.totalSize / (1024 * 1024)} MB, {s.totalTime} → {path}");
-            if (Application.isBatchMode) EditorApplication.Exit(s.result == BuildResult.Succeeded ? 0 : 1);
+            if (Application.isBatchMode && ExitWhenDone) EditorApplication.Exit(s.result == BuildResult.Succeeded ? 0 : 1);
         }
     }
 }

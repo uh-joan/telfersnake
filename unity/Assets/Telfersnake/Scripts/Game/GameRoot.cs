@@ -42,11 +42,20 @@ namespace Telfer.Game
         float acc, slowmo, slowmoFor;
         readonly Vector4[] pushers = new Vector4[16];
         bool wasDashing;
+        MaterialPropertyBlock block;
+        System.Func<int, Vector3> headOf;
+        int runGulps, runBonks;
+        float runLongest;
         int bestSaved;
         bool mobile;
         public static GameRoot I;
         /// <summary>Dev: a bot drives the player's snake in a real run (screenshots, soak tests).</summary>
         public static bool Autopilot;
+        /// <summary>Dev: point the camera at a spot (sim x, z) instead of the snake; null to follow again.</summary>
+        public static Vector2? LookAt;
+        /// <summary>Dev: like LookAt, but evaluated every frame (follow Mr Cooper, a rival...).</summary>
+        public static System.Func<Vector2> LookAtFn;
+        public static float LookDistance = 24;
         Bot pilot;
         public World World => world;
 
@@ -54,8 +63,9 @@ namespace Telfer.Game
         {
             I = this;
             mobile = Application.isMobilePlatform || Application.platform == RuntimePlatform.WebGLPlayer;
-            Application.targetFrameRate = mobile ? 60 : 120;
-            QualitySettings.vSyncCount = mobile ? 0 : 1;
+            // WebGL paces itself with requestAnimationFrame; a target rate there would swap in a timer.
+            if (Application.platform != RuntimePlatform.WebGLPlayer) Application.targetFrameRate = mobile ? 60 : 120;
+            QualitySettings.vSyncCount = mobile || Application.isEditor ? 0 : 1;
 
             var es = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
             es.transform.SetParent(transform, false);
@@ -90,11 +100,13 @@ namespace Telfer.Game
             hud.OnPlay = StartRun;
             hud.OnPause = () => SetPaused(true);
             hud.OnResume = () => SetPaused(false);
-            hud.OnQuit = () => { SetPaused(false); ToTitle(); };
+            hud.OnQuit = () => { SetPaused(false); FinishRun(); };
             hud.OnSound = on => { synth.SfxOn = on; synth.MusicOn = on; };
 
             controls = new Controls();
-            Shots.BeforeRender = () => { if (state != State.Title) hud.Sync(world, rig.Cam, i => snakeViews[i].HeadPos, 0); };
+            headOf = i => snakeViews[i].HeadPos;
+            block = new MaterialPropertyBlock();
+            Shots.BeforeRender = () => { if (state != State.Title) hud.Sync(world, rig.Cam, headOf, 0); };
             bestSaved = PlayerPrefs.GetInt("best", 0);
             NewWorld(Mode.Normal, true);
             rig.TitleOrbit(0);
@@ -105,6 +117,7 @@ namespace Telfer.Game
         void NewWorld(Mode mode, bool attractMode)
         {
             if (runRoot) Destroy(runRoot.gameObject);
+            RunAssets.Release();
             snakeViews.Clear();
             runRoot = new GameObject("Run").transform;
             runRoot.SetParent(transform, false);
@@ -128,11 +141,30 @@ namespace Telfer.Game
             synth.Play("pick");
             NewWorld(mode, false);
             state = State.Play;
+            runGulps = runBonks = 0;
+            runLongest = 0;
             hud.ShowTitle(false);
             var me = world.Me;
             rig.Snap(W.P(me.x, me.z), me.Length);
             synth.SetMusicLevel(0);
             Fx.I.Ring(W.P(me.x, me.z), Color.white, 4, 0.6f);
+        }
+
+        /// <summary>Home time: the bell, the results, the stars.</summary>
+        void FinishRun()
+        {
+            if (state == State.Title) return;
+            SaveBest();
+            hud.HideCards();
+            var me = world.Me;
+            int stars = Mathf.FloorToInt((Mathf.Floor(me.score / 100) + 10 * me.highestTier + 5 * runBonks) * (world.Mode == Mode.Easy ? 0.5f : 1));
+            PlayerPrefs.SetInt("stars", PlayerPrefs.GetInt("stars", 0) + stars);
+            PlayerPrefs.Save();
+            synth.Play("bell");
+            var mode = world.Mode;
+            hud.ShowResults((int)me.score, runLongest, runGulps, runBonks, stars, () => StartRun(mode), ToTitle);
+            NewWorld(Mode.Normal, true);
+            state = State.Title;
         }
 
         void ToTitle()
@@ -193,7 +225,7 @@ namespace Telfer.Game
                 if (state == State.Play) SetPaused(true);
                 else if (state == State.Paused) SetPaused(false);
             }
-            if (state == State.Title && (Controls.Pressed(Key.Enter) || Controls.PadPressed(p => p.buttonSouth))) StartRun(hud.Mode);
+            if (state == State.Title && !hud.ResultsOpen && (Controls.Pressed(Key.Enter) || Controls.PadPressed(p => p.buttonSouth))) StartRun(hud.Mode);
             if (state == State.Cards)
             {
                 if (Controls.Pressed(Key.Digit1) || Controls.Pressed(Key.Numpad1)) Choose(0);
@@ -241,7 +273,9 @@ namespace Telfer.Game
             views.Sync(alpha, dt, time, me);
 
             // Camera.
-            if (state == State.Title) rig.TitleOrbit(realDt);
+            if (LookAtFn != null) LookAt = LookAtFn();
+            if (LookAt.HasValue) rig.Follow(W.P(LookAt.Value.x, LookAt.Value.y), Vector3.zero, (LookDistance - 21) / 0.45f, false, realDt);
+            else if (state == State.Title) rig.TitleOrbit(realDt);
             else
             {
                 var vel = W.Dir(me.heading) * (me.alive ? me.BaseSpeed * me.speedFactor : 0);
@@ -264,9 +298,10 @@ namespace Telfer.Game
             // HUD.
             hud.ShowStick(controls.StickOn && state == State.Play, controls.StickBase, controls.StickKnob);
             hud.SetBubbleWorld(views.CooperHead);
+            if (state == State.Play && me.alive) runLongest = Mathf.Max(runLongest, me.Length);
             if (state != State.Title)
             {
-                hud.Sync(world, cam, i => snakeViews[i].HeadPos, realDt);
+                hud.Sync(world, cam, headOf, realDt);
                 hud.ShowBonk(state == State.Play && !me.alive, me.respawnIn);
                 synth.SetMusicLevel(me.alive ? me.Tier : 0);
             }
@@ -310,6 +345,7 @@ namespace Telfer.Game
                         if (sv != null) views.SwallowAnimal(e, sv);
                         if (mine)
                         {
+                            runGulps++;
                             synth.Play("gulp-" + e.animal);
                             rig.Shake(0.18f);
                             hud.Pop(at + Vector3.up * 1.4f, "+" + (int)e.points, new Color(0.6f, 1f, 0.5f), 48, 1.2f);
@@ -367,6 +403,7 @@ namespace Telfer.Game
                         }
                         else if (e.by == 0 && live)
                         {
+                            runBonks++;
                             synth.Play("bonkedRival");
                             rig.Shake(0.3f);
                             hud.Pop(at + Vector3.up * 1.5f, "Bonk! +80", new Color(1f, 0.6f, 0.9f), 50, 1.4f);
@@ -411,7 +448,6 @@ namespace Telfer.Game
         {
             var me = world.Me;
             bool watching = state != State.Title && me.alive;
-            var block = new MaterialPropertyBlock();
             foreach (var o in scenery.Occluders)
             {
                 bool hidden = watching && me.x > o.minX - 1 && me.x < o.maxX + 1 && me.z > o.northZ - o.reach && me.z < o.southZ + 0.5f;

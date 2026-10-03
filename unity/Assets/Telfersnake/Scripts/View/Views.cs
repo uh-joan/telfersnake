@@ -42,8 +42,8 @@ namespace Telfer.View
                 return m;
             });
             pelletMat = Mats.Cached("pellet", () => Mats.Toon(Color.white, gloss: 1, smooth: 0.8f, rim: 0.6f, vertexColor: false));
-            haloMat = Mats.Glow(new Color(1, 0.85f, 0.35f, 0.55f), 0, true, 1.5f);
-            auraMat = Mats.Glow(new Color(0.55f, 0.75f, 1f, 0.22f), 2, false, 1);
+            haloMat = RunAssets.Track(Mats.Glow(new Color(1, 0.85f, 0.35f, 0.55f), 0, true, 1.5f));
+            auraMat = RunAssets.Track(Mats.Glow(new Color(0.55f, 0.75f, 1f, 0.22f), 2, false, 1));
 
             foreach (var f in w.Foods) foods.Add(MakeFood());
             foreach (var a in w.Animals) animals.Add(MakeAnimal(a));
@@ -54,16 +54,26 @@ namespace Telfer.View
             cooperPrev = cooperCur = W.P(w.Cooper.x, w.Cooper.z);
         }
 
+        static Mesh flatQuad;
+        static Mesh FlatQuad
+        {
+            get
+            {
+                if (flatQuad) return flatQuad;
+                flatQuad = new Mesh { name = "flat-quad" };
+                flatQuad.vertices = new[] { new Vector3(-0.5f, 0, -0.5f), new Vector3(-0.5f, 0, 0.5f), new Vector3(0.5f, 0, 0.5f), new Vector3(0.5f, 0, -0.5f) };
+                flatQuad.uv = new[] { new Vector2(0, 0), new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0) };
+                flatQuad.colors = new[] { Color.white, Color.white, Color.white, Color.white };
+                flatQuad.triangles = new[] { 0, 1, 2, 0, 2, 3 };
+                return flatQuad;
+            }
+        }
+
         Transform Flat(string name, Material m, float size)
         {
             var go = new GameObject(name, typeof(MeshFilter), typeof(MeshRenderer));
             go.transform.SetParent(root, false);
-            var mesh = new Mesh();
-            mesh.vertices = new[] { new Vector3(-0.5f, 0, -0.5f), new Vector3(-0.5f, 0, 0.5f), new Vector3(0.5f, 0, 0.5f), new Vector3(0.5f, 0, -0.5f) };
-            mesh.uv = new[] { new Vector2(0, 0), new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0) };
-            mesh.colors = new[] { Color.white, Color.white, Color.white, Color.white };
-            mesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
-            go.GetComponent<MeshFilter>().sharedMesh = mesh;
+            go.GetComponent<MeshFilter>().sharedMesh = FlatQuad;
             var r = go.GetComponent<MeshRenderer>();
             r.sharedMaterial = m;
             r.shadowCastingMode = ShadowCastingMode.Off;
@@ -89,7 +99,7 @@ namespace Telfer.View
             body.SetParent(t, false);
             body.GetComponent<MeshFilter>().sharedMesh = Models.Animal(a.kind);
             body.GetComponent<MeshRenderer>().sharedMaterial = Mats.VertexGlossy;
-            var hm = Mats.Glow(new Color(0.45f, 1f, 0.45f, 0.5f), 2, true, 1.6f);
+            var hm = RunAssets.Track(Mats.Glow(new Color(0.45f, 1f, 0.45f, 0.5f), 2, true, 1.6f));
             var halo = Flat("halo", hm, a.Spec.radius * 4.2f);
             halo.SetParent(t, false);
             var p = W.P(a.x, a.z);

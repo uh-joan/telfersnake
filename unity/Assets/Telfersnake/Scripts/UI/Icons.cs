@@ -78,7 +78,45 @@ namespace Telfer.UI
         public static Texture2D Animal(AnimalKind k) => Of("animal-" + k, Models.Animal(k), Mats.VertexGlossy);
         public static Texture2D Food(FoodKind k) => Of("food-" + k, Models.Food(k), Mats.VertexGlossy);
 
-        public static Texture2D Upgrade(UpgradeId id) => Of("upgrade-" + id, UpgradeMesh(id), Mats.VertexGlossy, -30, 24, 256);
+        public static Texture2D Trophy => Of("trophy", Build(k =>
+        {
+            k.Tint(0xffc93c).Cylinder(new Vector3(0, 0.55f, 0), new Vector3(0, 1.15f, 0), 0.22f, 0.42f, 20);
+            k.Tint(0xffd95a).Sphere(new Vector3(0, 0.55f, 0), new Vector3(0.22f, 0.12f, 0.22f), 16, 8);
+            k.Tint(0xffc93c).Cylinder(new Vector3(0, 0.25f, 0), new Vector3(0, 0.5f, 0), 0.07f, 0.09f, 10);
+            k.Tint(0x8a5a3a).RoundBox(new Vector3(0, 0.12f, 0), new Vector3(0.5f, 0.24f, 0.36f), 0.05f);
+            for (int s = -1; s <= 1; s += 2) { k.M = Matrix4x4.TRS(new Vector3(s * 0.42f, 0.9f, 0), Quaternion.Euler(0, 0, 90), Vector3.one); k.Tint(0xffc93c).Torus(Vector3.zero, 0.16f, 0.04f, 14, 6, 200); k.M = Matrix4x4.identity; }
+        }), Mats.VertexGlossy);
+
+        public static Texture2D Coil => Of("coil", Build(k =>
+        {
+            for (int i = 0; i < 26; i++)
+            {
+                float a = i * 0.42f, r = 0.15f + i * 0.022f;
+                k.C = i % 5 == 0 ? MeshKit.Hex(0xf2d94a) : MeshKit.Hex(0x4cbb4a);
+                k.Sphere(new Vector3(Mathf.Cos(a) * r, 0.12f, Mathf.Sin(a) * r), 0.13f, 10, 8);
+            }
+            k.Tint(0x57c955).Sphere(new Vector3(0, 0.22f, 0), new Vector3(0.17f, 0.14f, 0.2f), 12, 8);
+            k.Tint(0xffffff).Sphere(new Vector3(-0.07f, 0.33f, 0.1f), 0.06f, 8, 6);
+            k.Tint(0xffffff).Sphere(new Vector3(0.07f, 0.33f, 0.1f), 0.06f, 8, 6);
+            k.Tint(0x111111).Sphere(new Vector3(-0.07f, 0.35f, 0.14f), 0.03f, 6, 4);
+            k.Tint(0x111111).Sphere(new Vector3(0.07f, 0.35f, 0.14f), 0.03f, 6, 4);
+        }), Mats.VertexGlossy, -20, 50);
+
+        public static Texture2D Burst => Of("burst", Build(k =>
+        {
+            k.Tint(0xff6b6b).Sphere(new Vector3(0, 0.5f, 0), 0.32f, 16, 12);
+            for (int i = 0; i < 10; i++)
+            {
+                float a = i * Mathf.PI * 2 / 10;
+                var d = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0);
+                k.Tint(i % 2 == 0 ? 0xffd43bu : 0xff922bu).Cylinder(new Vector3(0, 0.5f, 0) + d * 0.25f, new Vector3(0, 0.5f, 0) + d * (i % 2 == 0 ? 0.75f : 0.55f), 0.12f, 0, 8);
+            }
+        }), Mats.VertexGlossy, 0, 5);
+
+        static Mesh Build(System.Action<MeshKit> f) { var k = new MeshKit(); f(k); return k.ToMesh(); }
+
+        public static Texture2D Upgrade(UpgradeId id) =>
+            Of("upgrade-" + id, UpgradeMesh(id), Mats.VertexGlossy, id == UpgradeId.Tongue ? 10 : -30, id == UpgradeId.Tongue ? 62 : 24, 256);
 
         static Mesh UpgradeMesh(UpgradeId id)
         {
@@ -162,11 +200,18 @@ namespace Telfer.UI
                     }
                     break;
                 case UpgradeId.Dragon:
-                    k.Tint(0xff922b).Cylinder(new Vector3(0, 0.1f, 0), new Vector3(0, 1.3f, 0), 0.42f, 0, 14);
-                    k.Tint(0xffd43b).Cylinder(new Vector3(0.05f, 0.1f, 0.1f), new Vector3(0.1f, 0.95f, 0.12f), 0.28f, 0, 12);
-                    k.Tint(0xe03131).Cylinder(new Vector3(-0.3f, 0.1f, 0), new Vector3(-0.45f, 0.8f, -0.1f), 0.2f, 0, 10);
-                    k.Tint(0xe03131).Cylinder(new Vector3(0.3f, 0.1f, -0.1f), new Vector3(0.48f, 0.75f, -0.15f), 0.2f, 0, 10);
-                    k.Tint(0xff922b).Sphere(new Vector3(0, 0.25f, 0), new Vector3(0.48f, 0.25f, 0.48f), 16, 10);
+                    // A cartoon flame: teardrop tongues, red outside, gold inside, a white-hot core.
+                    void Tongue(Vector3 b, float h, float r, float lean, uint c)
+                    {
+                        k.Tint(c).Sphere(b + new Vector3(0, r * 0.8f, 0), new Vector3(r, r * 0.9f, r), 14, 10);
+                        k.Tint(c).Cylinder(b + new Vector3(0, r * 0.8f, 0), b + new Vector3(lean, h, 0), r * 0.98f, 0, 14, false, false);
+                    }
+                    Tongue(new Vector3(0, 0, 0), 1.45f, 0.42f, 0.08f, 0xe03131);
+                    Tongue(new Vector3(-0.3f, 0, 0.05f), 0.95f, 0.26f, -0.18f, 0xe03131);
+                    Tongue(new Vector3(0.32f, 0, 0.05f), 1.05f, 0.26f, 0.2f, 0xe03131);
+                    Tongue(new Vector3(0, 0, 0.12f), 1.1f, 0.3f, 0.06f, 0xff922b);
+                    Tongue(new Vector3(0, 0, 0.22f), 0.75f, 0.2f, 0.03f, 0xffd43b);
+                    k.Tint(0xfff9db).Sphere(new Vector3(0, 0.22f, 0.3f), new Vector3(0.11f, 0.13f, 0.08f), 10, 8);
                     break;
                 case UpgradeId.Bees:
                     k.Tint(0xffd43b).Sphere(new Vector3(0, 0.6f, 0), new Vector3(0.38f, 0.34f, 0.5f), 18, 12);

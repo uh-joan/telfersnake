@@ -28,7 +28,6 @@ namespace Telfer.Sim
             new Personality("Sir Hiss-a-lot", 0x9b5de5, 0xf15bb5, 0xa873ea, 8, 0.9f, 0.75f, 0.8f, 0.15f, 0.3f, false, 260),
             new Personality("Danger Noodle", 0xe63946, 0x2b2d42, 0xea5560, 5, 0.95f, 0.65f, 0.55f, 0.5f, 0.8f, false, 180),
             new Personality("Spaghetti", 0xf4a261, 0xe76f51, 0xf6b07a, 110, 0.62f, 0.4f, 0.5f, 0, 0, false, 220),
-            new Personality("Slinky", 0x2ec4b6, 0xcbf3f0, 0x4fd1c5, 3, 0.9f, 0.7f, 0.75f, 0.3f, 0.4f, false, 200),
         };
     }
 

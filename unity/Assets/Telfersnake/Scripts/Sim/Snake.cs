@@ -53,6 +53,12 @@ namespace Telfer.Sim
         };
 
         public const float SNACK_MASS = 15;
+        /// <summary>UPGRADE_IDS order in upgrades.ts (the free ones): draws walk the pool in this order.</summary>
+        static readonly UpgradeId[] TS_ORDER =
+        {
+            UpgradeId.Skates, UpgradeId.Belly, UpgradeId.Homework, UpgradeId.Magnet, UpgradeId.Tongue, UpgradeId.Helmet,
+            UpgradeId.Wrap, UpgradeId.Spikes, UpgradeId.Dragon, UpgradeId.Bees, UpgradeId.Clover,
+        };
         static readonly float[] HELMET_RECHARGE = { 0, 40, 30, 20 };
         static readonly float[] RARITY_WEIGHT = { 6, 3, 1.5f, 0.75f };
         static readonly float[] LUCK_BONUS = { 0, 1, 0.7f, 0.5f };
@@ -62,11 +68,7 @@ namespace Telfer.Sim
         public static UpgradeId[] Roll(Rng rng, Snake s)
         {
             var pool = new List<UpgradeId>();
-            for (int i = 0; i < (int)UpgradeId.Snack; i++)
-            {
-                var id = (UpgradeId)i;
-                if (s.LevelOf(id) < DEFS[i].max) pool.Add(id);
-            }
+            foreach (var id in TS_ORDER) if (s.LevelOf(id) < DEFS[(int)id].max) pool.Add(id);
             var cards = new List<UpgradeId>();
             while (cards.Count < 3 && pool.Count > 0)
             {
@@ -218,7 +220,7 @@ namespace Telfer.Sim
 
         public float Gain(float value, float pointsPerMass = 10)
         {
-            float points = Math.Max(1, (float)Math.Round(value * pointsPerMass));
+            float points = Math.Max(1, (float)Math.Floor(value * pointsPerMass + 0.5f));
             mass = Math.Min(mass + value * growthMul, Math.Max(mass, massCap));
             score += points;
             xp += value * xpMul;
@@ -233,6 +235,9 @@ namespace Telfer.Sim
 
         public void DropAllUpgrades()
         {
+            bool any = false;
+            for (int i = 0; i < upgrades.Length; i++) any |= upgrades[i] > 0;
+            if (!any) return;
             int levelsLost = 0;
             for (int i = 0; i < upgrades.Length; i++) { levelsLost += upgrades[i]; upgrades[i] = 0; }
             level = Math.Max(1, level - levelsLost);

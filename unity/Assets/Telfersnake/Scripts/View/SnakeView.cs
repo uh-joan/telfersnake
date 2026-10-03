@@ -48,13 +48,14 @@ namespace Telfer.View
             root = new GameObject("Snake " + s.look.name).transform;
             root.SetParent(parent, false);
 
-            bodyMesh = new Mesh { name = "snake-body" };
+            bodyMesh = RunAssets.Track(new Mesh { name = "snake-body" });
             bodyMesh.MarkDynamic();
             bodyMesh.vertices = verts;
-            bodyMesh.SetIndices(BuildIndices(), MeshTopology.Triangles, 0);
+            indices = BuildIndices();
+            bodyMesh.SetIndices(indices, MeshTopology.Triangles, 0);
             bodyMesh.bounds = new Bounds(Vector3.zero, Vector3.one * 400);
 
-            bodyMat = new Material(Mats.SnakeShader);
+            bodyMat = RunAssets.Track(new Material(Mats.SnakeShader));
             ApplyLook(bodyMat, s.look);
             if (player)
             {
@@ -67,7 +68,7 @@ namespace Telfer.View
             bodyRenderer = bodyGo.GetComponent<MeshRenderer>();
             bodyRenderer.sharedMaterial = bodyMat;
 
-            headMat = new Material(bodyMat);
+            headMat = RunAssets.Track(new Material(bodyMat));
             headMat.SetFloat("_Radius", 0.85f);
             headMat.SetColor("_BodyColor", MeshKit.Hex(s.look.head));
 
@@ -124,7 +125,7 @@ namespace Telfer.View
                 float nose = Mathf.InverseLerp(1.2f, 0.4f, v.z);
                 skull.Col[i] = new Color(1, 1, 1, Mathf.Lerp(0.15f, 0.9f, nose));
             }
-            var m = skull.ToMesh("head", true);
+            var m = RunAssets.Track(skull.ToMesh("head", true));
             var go = new GameObject("skull", typeof(MeshFilter), typeof(MeshRenderer));
             go.transform.SetParent(head, false);
             go.GetComponent<MeshFilter>().sharedMesh = m;
@@ -219,7 +220,7 @@ namespace Telfer.View
         {
             var go = new GameObject(name, typeof(MeshFilter), typeof(MeshRenderer));
             go.transform.SetParent(parent, false);
-            go.GetComponent<MeshFilter>().sharedMesh = k.ToMesh(name);
+            go.GetComponent<MeshFilter>().sharedMesh = RunAssets.Track(k.ToMesh(name));
             go.GetComponent<MeshRenderer>().sharedMaterial = mat;
         }
 
@@ -341,7 +342,7 @@ namespace Telfer.View
             bodyMesh.colors = cols;
             if (rings != lastRings)
             {
-                var idx = bodyMesh.GetIndices(0);
+                var idx = indices;
                 int capStart = (MAX_RINGS - 1) * SIDES * 6;
                 for (int j = 0; j < SIDES; j++)
                 {
@@ -423,6 +424,7 @@ namespace Telfer.View
         }
 
         int lastRings = -1;
+        int[] indices;
 
         Transform MakeBee()
         {

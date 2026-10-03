@@ -175,6 +175,9 @@ namespace Telfer.Audio
                 Clip("bell", b);
             }
 
+            for (int i = 0; i < 8; i++) { var b = new Buf(0.15f); Tone(b, 0, 880 * Math.Pow(2, i / 12.0), 0.09, Wave.Sine, 0.1f); Clip("star" + i, b); }
+            { var b = new Buf(0.5f); Hiss(b, 0, 0.06, 5000, 8000, 0.12f, 4); Tone(b, 0.05, 1568, 0.3, Wave.Sine, 0.13f); Tone(b, 0.14, 2093, 0.3, Wave.Sine, 0.13f); Clip("chaChing", b); }
+
             BuildMusic();
         }
 
@@ -237,14 +240,13 @@ namespace Telfer.Audio
             }
             var layers = new[] { Clip("m-core", core, 1.3f), Clip("m-arps", arps, 1.3f), Clip("m-hats", hats, 1.3f), Clip("m-drums", drums, 1.3f), Clip("m-sparkle", sparkle, 1.3f) };
             music = new AudioSource[layers.Length];
-            double at = AudioSettings.dspTime + 0.3;
             for (int i = 0; i < layers.Length; i++)
             {
                 var s = gameObject.AddComponent<AudioSource>();
                 s.clip = layers[i];
                 s.loop = true;
                 s.volume = 0;
-                s.PlayScheduled(at);
+                s.Play();
                 music[i] = s;
             }
         }
@@ -276,9 +278,11 @@ namespace Telfer.Audio
         {
             if (music == null) return;
             float master = MusicOn ? (ducked ? 0.3f : 0.75f) : 0;
-            float[] want = { 1, musicLevel >= 1 ? 1 : 0, musicLevel >= 2 ? 1 : 0, musicLevel >= 3 ? 1 : 0, musicLevel >= 4 ? 1 : 0 };
             for (int i = 0; i < music.Length; i++)
-                music[i].volume = Mathf.MoveTowards(music[i].volume, want[i] * master, Time.unscaledDeltaTime * 0.8f);
+            {
+                float want = i == 0 || musicLevel >= i ? 1 : 0;
+                music[i].volume = Mathf.MoveTowards(music[i].volume, want * master, Time.unscaledDeltaTime * 0.8f);
+            }
         }
     }
 }

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en-gb">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#3f8a34">
+    <title>{{{ PRODUCT_NAME }}}</title>
+    <style>
+      @font-face { font-family: Fredoka; src: url("TemplateData/Fredoka-Bold.ttf"); font-weight: 700; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #8fc0ea; touch-action: none; }
+      #unity-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+      #loader {
+        position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+        font-family: Fredoka, ui-rounded, system-ui, sans-serif; color: #fff;
+        background: radial-gradient(ellipse at 50% 30%, #bfe3ff 0%, #8fc0ea 45%, #5d9a4a 46%, #3f8a34 100%);
+        transition: opacity .6s ease; z-index: 2;
+      }
+      #loader.gone { opacity: 0; pointer-events: none; }
+      #logo { font-size: min(16vw, 120px); font-weight: 700; letter-spacing: -.02em; text-shadow: 0 6px 0 rgba(20,40,70,.35), 0 0 30px rgba(255,255,255,.35); animation: bob 2.4s ease-in-out infinite; }
+      #logo b { color: #7ddc5c; font-weight: 700; text-shadow: 0 6px 0 rgba(10,60,20,.55); }
+      #logo sup { font-size: .28em; vertical-align: super; background: #ffd43b; color: #222638; border-radius: .5em; padding: .1em .45em; margin-left: .2em; display: inline-block; transform: rotate(-8deg); text-shadow: none; }
+      #bar { width: min(70vw, 460px); height: 26px; border-radius: 13px; background: rgba(0,0,0,.25); padding: 5px; box-sizing: border-box; box-shadow: inset 0 2px 6px rgba(0,0,0,.25); }
+      #fill { height: 100%; width: 0%; border-radius: 9px; transition: width .25s ease;
+        background: repeating-linear-gradient(115deg, #4cbb4a 0 18px, #f2d94a 18px 26px); box-shadow: 0 0 12px rgba(242,217,74,.6); }
+      #hint { font-size: 20px; opacity: .85; }
+      @keyframes bob { 50% { transform: translateY(-8px) rotate(-1deg); } }
+    </style>
+  </head>
+  <body>
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <div id="loader">
+      <div id="logo">Telfer<b>snake</b><sup>HD</sup></div>
+      <div id="bar"><div id="fill"></div></div>
+      <div id="hint">Getting the playground ready…</div>
+    </div>
+    <script src="Build/{{{ LOADER_FILENAME }}}"></script>
+    <script>
+      const fill = document.querySelector("#fill");
+      const loader = document.querySelector("#loader");
+      createUnityInstance(document.querySelector("#unity-canvas"), {
+        arguments: [],
+#if PROGRESSIVE_ASSET_LOADING
+        primaryDataUrls: {{{ JSON.stringify(PRIMARY_DATA_FILES) }}},
+        secondaryDataUrls: {{{ JSON.stringify(SECONDARY_DATA_FILES) }}},
+#else
+        dataUrl: "Build/{{{ DATA_FILENAME }}}",
+#endif
+        frameworkUrl: "Build/{{{ FRAMEWORK_FILENAME }}}",
+#if USE_WASM
+        codeUrl: "Build/{{{ CODE_FILENAME }}}",
+#endif
+#if SYMBOLS_FILENAME
+        symbolsUrl: "Build/{{{ SYMBOLS_FILENAME }}}",
+#endif
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+        productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+        productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+        // Retina at full density is a lot of pixels for a browser GPU: cap it.
+        devicePixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
+      }, (p) => { fill.style.width = Math.round(10 + p * 90) + "%"; })
+      .then((unity) => {
+        window.unityInstance = unity;
+        fill.style.width = "100%";
+        setTimeout(() => loader.classList.add("gone"), 900);
+      })
+      .catch((message) => { document.querySelector("#hint").textContent = "Oops: " + message; });
+    </script>
+  </body>
+</html>

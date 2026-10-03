@@ -328,22 +328,40 @@ namespace Telfer.View
             rig.root.SetParent(parent, false);
             rig.body = Part(rig.root, "body", new Vector3(0, 0, 0), k =>
             {
-                k.Tint(0x1f2a44).RoundBox(new Vector3(0, 1.25f, 0), new Vector3(0.5f, 0.75f, 0.28f), 0.12f);
+                k.Tint(0x1f2a44).RoundBox(new Vector3(0, 1.25f, 0), new Vector3(0.56f, 0.75f, 0.3f), 0.12f);
+                k.Tint(0x1f2a44).Sphere(new Vector3(-0.27f, 1.56f, 0), 0.09f, 10, 8);
+                k.Tint(0x1f2a44).Sphere(new Vector3(0.27f, 1.56f, 0), 0.09f, 10, 8);
                 k.Tint(0xffffff).Box(new Vector3(0, 1.45f, 0.13f), new Vector3(0.16f, 0.3f, 0.04f));
                 k.Tint(0xc92a2a).Box(new Vector3(0, 1.38f, 0.155f), new Vector3(0.07f, 0.34f, 0.02f));
                 k.Tint(0x1f2a44).Box(new Vector3(-0.1f, 1.48f, 0.145f), new Vector3(0.08f, 0.22f, 0.02f));
                 k.Tint(0x1f2a44).Box(new Vector3(0.1f, 1.48f, 0.145f), new Vector3(0.08f, 0.22f, 0.02f));
                 k.Tint(0xf1c9a5).Cylinder(new Vector3(0, 1.6f, 0), new Vector3(0, 1.72f, 0), 0.07f, 0.07f, 8);
             });
-            rig.head = Part(rig.body, "head", new Vector3(0, 1.82f, 0), k =>
+            rig.head = Part(rig.body, "head", new Vector3(0, 1.86f, 0), k =>
             {
-                k.Tint(0xf1c9a5).Sphere(Vector3.zero, new Vector3(0.15f, 0.18f, 0.16f), 14, 10);
-                k.Tint(0xf2f2f2).Sphere(new Vector3(0, 0.07f, -0.02f), new Vector3(0.16f, 0.13f, 0.17f), 14, 10, 0, 0.55f);
-                k.Tint(0x111111).Sphere(new Vector3(0.055f, 0.02f, 0.14f), 0.022f, 6, 4);
-                k.Tint(0x111111).Sphere(new Vector3(-0.055f, 0.02f, 0.14f), 0.022f, 6, 4);
-                k.Tint(0x9a9a9a).Box(new Vector3(0, 0.065f, 0.14f), new Vector3(0.17f, 0.015f, 0.01f));
-                k.Tint(0xe2a985).Sphere(new Vector3(0, -0.02f, 0.165f), new Vector3(0.025f, 0.04f, 0.03f), 6, 4);
-                k.Tint(0x7a3b2e).Box(new Vector3(0, -0.09f, 0.145f), new Vector3(0.07f, 0.012f, 0.01f));
+                k.Tint(0xf1c9a5).Sphere(Vector3.zero, new Vector3(0.19f, 0.22f, 0.2f), 16, 12);
+                // A neat short crop: a thin white cap at the back and top, the face left clear.
+                k.M = Matrix4x4.TRS(new Vector3(0, 0.05f, -0.03f), Quaternion.Euler(-28, 0, 0), Vector3.one);
+                k.Tint(0xf4f4f4).Sphere(Vector3.zero, new Vector3(0.2f, 0.19f, 0.2f), 16, 10, 0, 0.42f);
+                k.M = Matrix4x4.identity;
+                foreach (int s in new[] { -1, 1 })
+                {
+                    k.Tint(0xf1c9a5).Sphere(new Vector3(s * 0.19f, 0, 0), new Vector3(0.04f, 0.06f, 0.04f), 8, 6);
+                    k.Tint(0x111111).Sphere(new Vector3(s * 0.07f, 0.03f, 0.18f), 0.026f, 8, 6);
+                    k.M = Matrix4x4.TRS(new Vector3(s * 0.07f, 0.03f, 0.19f), Quaternion.Euler(90, 0, 0), Vector3.one);
+                    k.Tint(0x2b2d42).Torus(Vector3.zero, 0.05f, 0.008f, 16, 4);
+                    k.M = Matrix4x4.identity;
+                    k.Tint(0xdedede).Box(new Vector3(s * 0.07f, 0.1f, 0.18f), new Vector3(0.07f, 0.015f, 0.02f));
+                }
+                k.Tint(0x2b2d42).Box(new Vector3(0, 0.035f, 0.2f), new Vector3(0.05f, 0.008f, 0.01f));
+                k.Tint(0xe2a985).Sphere(new Vector3(0, -0.02f, 0.2f), new Vector3(0.03f, 0.045f, 0.035f), 8, 6);
+                // A polite smile.
+                for (int i = 0; i < 5; i++)
+                {
+                    float a0 = Mathf.Lerp(-0.7f, 0.7f, i / 5f), a1 = Mathf.Lerp(-0.7f, 0.7f, (i + 1) / 5f);
+                    Vector3 P(float a) => new Vector3(Mathf.Sin(a) * 0.06f, -0.09f + (1 - Mathf.Cos(a)) * 0.04f, 0.185f);
+                    k.Tint(0x7a3b2e).Cylinder(P(a0), P(a1), 0.009f, 0.009f, 4, false, false);
+                }
             });
             Transform Limb(Vector3 at, System.Action<MeshKit> build) => Part(rig.body, "limb", at, build);
             rig.legL = Limb(new Vector3(-0.12f, 0.9f, 0), k => { k.Tint(0x1f2a44).Capsule(new Vector3(0, -0.05f, 0), new Vector3(0, -0.78f, 0), 0.08f, 8); k.Tint(0x111111).RoundBox(new Vector3(0, -0.86f, 0.07f), new Vector3(0.12f, 0.08f, 0.28f), 0.04f); });
@@ -360,7 +378,7 @@ namespace Telfer.View
             t.localPosition = at;
             var k = new MeshKit();
             build(k);
-            t.GetComponent<MeshFilter>().sharedMesh = k.ToMesh(name);
+            t.GetComponent<MeshFilter>().sharedMesh = RunAssets.Track(k.ToMesh(name));
             t.GetComponent<MeshRenderer>().sharedMaterial = Mats.VertexLit;
             return t;
         }

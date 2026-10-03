@@ -472,6 +472,88 @@ namespace Telfer.UI
             }
         }
 
+        RectTransform results;
+        Text resultStars;
+        float starShown, starTarget, starChime;
+        int starStep;
+
+        /// <summary>Home time: what the run came to, the stars counting up with a chime each.</summary>
+        public void ShowResults(int score, float longest, int gulps, int bonks, int stars, Action again, Action home)
+        {
+            if (results) Destroy(results.gameObject);
+            results = UiKit.Fill(rootRt, "Results");
+            var dim = UiKit.Panel(results, "dim", new Color(0.04f, 0.08f, 0.18f, 0.5f), 0);
+            dim.raycastTarget = true;
+            var box = UiKit.Rect(results, "box", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -10), new Vector2(980, 640));
+            box.gameObject.AddComponent<CardIntro>();
+            UiKit.Shadow(box, 34, 0.4f);
+            UiKit.Panel(box, "bg", Cream, 50);
+            var t = UiKit.Rect(box, "title", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -26), new Vector2(800, 100));
+            UiKit.Label(t, "t", "Home time!", 78, Ink);
+            var tiles = new (Texture2D icon, string value, string label)[]
+            {
+                (Icons.Trophy, score.ToString("N0"), "Score"), (Icons.Coil, Mathf.RoundToInt(longest) + "m", "Longest"),
+                (Icons.Animal(AnimalKind.Chicken), gulps.ToString(), "Gulps"), (Icons.Burst, bonks.ToString(), "Bonks"),
+            };
+            for (int i = 0; i < tiles.Length; i++)
+            {
+                var tile = UiKit.Rect(box, "tile", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2((i - 1.5f) * 225, -140), new Vector2(205, 250));
+                UiKit.Panel(tile, "bg", new Color(0, 0, 0, 0.05f), 30);
+                var ic = UiKit.Rect(tile, "icon", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -6), new Vector2(130, 130));
+                ic.gameObject.AddComponent<RawImage>().texture = tiles[i].icon;
+                ic.gameObject.AddComponent<Bob>().Amount = 4;
+                var v = UiKit.Rect(tile, "v", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 52), new Vector2(200, 60));
+                UiKit.Label(v, "t", tiles[i].value, 44, Ink);
+                var l = UiKit.Rect(tile, "l", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 16), new Vector2(200, 36));
+                UiKit.Label(l, "t", tiles[i].label, 26, new Color(0.35f, 0.4f, 0.5f));
+            }
+            var earned = UiKit.Rect(box, "earned", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-150, 64), new Vector2(330, 110));
+            UiKit.Panel(earned, "bg", new Color(1f, 0.83f, 0.23f, 0.35f), 40);
+            var st = UiKit.Image(earned, "star", UiKit.Star, Yellow);
+            var sr = (RectTransform)st.transform; sr.anchorMin = sr.anchorMax = new Vector2(0, 0.5f); sr.sizeDelta = new Vector2(84, 84); sr.anchoredPosition = new Vector2(64, 0);
+            st.gameObject.AddComponent<Bob>().Amount = 5;
+            resultStars = UiKit.Label(earned, "n", "+0", 64, Ink);
+            ((RectTransform)resultStars.transform).offsetMin = new Vector2(90, 0);
+            starShown = 0; starTarget = stars; starStep = 0; starChime = 0.6f;
+
+            var againRt = UiKit.Rect(box, "again", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(150, 118), new Vector2(150, 150));
+            UiKit.Shadow(againRt, 20, 0.3f);
+            var ab = UiKit.Button(againRt, "btn", Yellow, 75, () => { HideResults(); again(); });
+            ab.GetComponent<Springy>().Idle = 0.03f;
+            var tri = UiKit.Image(ab.transform, "tri", UiKit.Play, Ink);
+            ((RectTransform)tri.transform).offsetMin = new Vector2(42, 38); ((RectTransform)tri.transform).offsetMax = new Vector2(-32, -38);
+            var al = UiKit.Rect(againRt, "l", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(0, -4), new Vector2(200, 36));
+            UiKit.Label(al, "t", "Again", 28, Ink);
+            var homeRt = UiKit.Rect(box, "home", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(330, 118), new Vector2(110, 110));
+            var hb = UiKit.Button(homeRt, "btn", new Color(0.35f, 0.65f, 1f), 55, () => { HideResults(); home(); });
+            var hl = UiKit.Rect(homeRt, "l", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(0, -4), new Vector2(200, 36));
+            UiKit.Label(hl, "t", "Home", 28, Ink);
+            var house = UiKit.Image(hb.transform, "house", UiKit.Play, Color.white);
+            house.transform.localRotation = Quaternion.Euler(0, 0, 90);
+            ((RectTransform)house.transform).offsetMin = new Vector2(28, 28); ((RectTransform)house.transform).offsetMax = new Vector2(-28, -28);
+            game.gameObject.SetActive(false);
+        }
+
+        public void HideResults() { if (results) Destroy(results.gameObject); results = null; }
+        public bool ResultsOpen => results != null;
+
+        void Update()
+        {
+            if (results == null || resultStars == null) return;
+            starChime -= Time.unscaledDeltaTime;
+            if (starShown < starTarget && starChime <= 0)
+            {
+                float step = Mathf.Max(1, Mathf.Ceil(starTarget / 30));
+                starShown = Mathf.Min(starTarget, starShown + step);
+                resultStars.text = "+" + (int)starShown;
+                resultStars.transform.localScale = Vector3.one * 1.25f;
+                Audio.Synth.I?.Play("star" + (starStep++ % 8));
+                if (starShown >= starTarget) Audio.Synth.I?.Play("chaChing");
+                starChime = 0.06f;
+            }
+            resultStars.transform.localScale = Vector3.Lerp(resultStars.transform.localScale, Vector3.one, Time.unscaledDeltaTime * 12);
+        }
+
         public void HideCards() { foreach (Transform c in cardsLayer) Destroy(c.gameObject); cardsLayer.gameObject.SetActive(false); }
 
         // ------------------------------------------------------------------ per frame
@@ -481,12 +563,13 @@ namespace Telfer.UI
             var me = w.Me;
             displayScore = Mathf.Lerp(displayScore, me.score, 1 - Mathf.Exp(-dt * 10));
             if (Mathf.Abs(displayScore - me.score) < 1) displayScore = me.score;
-            score.text = Mathf.RoundToInt(displayScore).ToString("N0");
+            int shownScore = Mathf.RoundToInt(displayScore);
+            if (shownScore != lastScore) { lastScore = shownScore; score.text = shownScore.ToString("N0"); }
             int tier = me.Tier;
-            tierName.text = Snake.TIERS[tier].name;
+            if (tier != lastTier) { lastTier = tier; tierName.text = Snake.TIERS[tier].name; }
             tierFill.fillAmount = Mathf.Lerp(tierFill.fillAmount, me.TierProgress, 1 - Mathf.Exp(-dt * 8));
             xpFill.fillAmount = Mathf.Lerp(xpFill.fillAmount, me.xp / Upgrades.XpForLevel(me.level), 1 - Mathf.Exp(-dt * 8));
-            levelText.text = "Level " + me.level;
+            if (me.level != lastLevel) { lastLevel = me.level; levelText.text = "Level " + me.level; }
 
             // The animals the next size will let you gulp.
             var next = NextGulps(tier + 1);
@@ -526,9 +609,12 @@ namespace Telfer.UI
             }
             for (int i = di; i < mapDots.Count; i++) mapDots[i].rt.gameObject.SetActive(false);
 
-            // Leaderboard.
-            var order = new List<Snake>(w.Snakes);
-            order.Sort((a, b) => b.score.CompareTo(a.score));
+            // Leaderboard: the top five, with "You" pinned to the last row if you are further down.
+            order.Clear();
+            order.AddRange(w.Snakes);
+            order.Sort(ByScore);
+            int mineAt = order.IndexOf(me);
+            if (mineAt >= board.Count) { order[board.Count - 1] = me; }
             for (int i = 0; i < board.Count; i++)
             {
                 bool on = i < order.Count;
@@ -536,8 +622,8 @@ namespace Telfer.UI
                 if (!on) continue;
                 var s = order[i];
                 bool mine = s.id == 0;
-                board[i].name.text = mine ? "You" : s.look.name;
-                board[i].score.text = ((int)s.score).ToString("N0");
+                SetText(board[i].name, mine ? "You" : s.look.name);
+                if (boardScores[i] != (int)s.score || board[i].score.text.Length == 0) { boardScores[i] = (int)s.score; board[i].score.text = boardScores[i].ToString("N0"); }
                 board[i].dot.color = MeshKit.Hex(s.look.body);
                 board[i].name.color = board[i].score.color = mine ? Yellow : Color.white;
             }
@@ -557,7 +643,7 @@ namespace Telfer.UI
                 var p = ToUi(headOf(i) + Vector3.up * (s.Radius * 2 + 0.6f), out bool vis);
                 nameTags[i].rt.gameObject.SetActive(vis);
                 nameTags[i].rt.anchoredPosition = p;
-                nameTags[i].t.text = s.look.name;
+                SetText(nameTags[i].t, s.look.name);
                 nameTags[i].t.color = Color.Lerp(MeshKit.Hex(s.look.body), Color.white, 0.55f);
             }
 
@@ -600,14 +686,25 @@ namespace Telfer.UI
 
         public void SetBubbleWorld(Vector3 w) => bubbleWorld = w;
 
+        static Texture2D[][] gulpsByTier;
+
+        /// <summary>The animals a snake of `tier` can newly gulp, as pictures (built once per tier).</summary>
         public static Texture2D[] NextGulps(int tier)
         {
             if (tier >= Snake.TIERS.Length) return null;
+            if (gulpsByTier == null) gulpsByTier = new Texture2D[Snake.TIERS.Length][];
+            if (gulpsByTier[tier] != null) return gulpsByTier[tier];
             var list = new List<Texture2D>();
-            foreach (AnimalKind k in Enum.GetValues(typeof(AnimalKind)))
-                if (Animals.SPECS[(int)k].tier == tier) list.Add(Icons.Animal(k));
-            return list.ToArray();
+            for (int k = 0; k < Animals.SPECS.Length; k++)
+                if (Animals.SPECS[k].tier == tier) list.Add(Icons.Animal((AnimalKind)k));
+            return gulpsByTier[tier] = list.ToArray();
         }
+
+        readonly List<Snake> order = new List<Snake>();
+        readonly int[] boardScores = new int[8];
+        int lastScore = -1, lastTier = -1, lastLevel = -1;
+        static readonly Comparison<Snake> ByScore = (a, b) => b.score.CompareTo(a.score);
+        static void SetText(Text t, string s) { if (!ReferenceEquals(t.text, s) && t.text != s) t.text = s; }
     }
 
     /// <summary>A gentle idle bob, so the title and the banners feel alive.</summary>
