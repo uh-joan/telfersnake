@@ -61,6 +61,8 @@ namespace Telfer.EditorTools
         static void Build(BuildTarget target, string path)
         {
             Setup();
+            // WebGL files are named by hash: start clean, or every old build would ship alongside.
+            if (target == BuildTarget.WebGL && Directory.Exists(path)) Directory.Delete(path, true);
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = new[] { Scene },

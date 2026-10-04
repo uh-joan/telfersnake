@@ -16,8 +16,15 @@ telfersnake.joans.cat {
     Referrer-Policy "no-referrer"
     # A children's game: it asks the device for nothing.
     Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
-    # Only its own files and its own socket. Inline styles are needed for the HUD's moving labels.
-    Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' wss://telfersnake.joans.cat; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
     Strict-Transport-Security "max-age=31536000"
   }
+
+  # Only its own files and its own socket. Inline styles are needed for the HUD's moving labels.
+  @web not path /hd /hd/*
+  header @web Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' wss://telfersnake.joans.cat; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
+
+  # The Unity remaster at /hd/ also compiles WebAssembly and runs the engine from a blob: the loader
+  # unpacks the Brotli build in the page and hands it over as a blob URL. Still no inline script.
+  @hd path /hd /hd/*
+  header @hd Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' blob: data: wss://telfersnake.joans.cat; frame-ancestors 'none'; base-uri 'self'; form-action 'none'"
 }

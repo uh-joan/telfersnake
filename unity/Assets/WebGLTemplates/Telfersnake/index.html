@@ -33,53 +33,29 @@
       <div id="bar"><div id="fill"></div></div>
       <div id="hint">Getting the playground ready…</div>
     </div>
-    <script src="Build/{{{ LOADER_FILENAME }}}"></script>
-    <script>
-      const fill = document.querySelector("#fill");
-      const loader = document.querySelector("#loader");
-      createUnityInstance(document.querySelector("#unity-canvas"), {
-        arguments: [],
+    <!-- The build's settings, as data: the site's CSP allows no inline script, so boot.js reads them. -->
+    <script type="application/json" id="unity-config">
+      {
 #if PROGRESSIVE_ASSET_LOADING
-        primaryDataUrls: {{{ JSON.stringify(PRIMARY_DATA_FILES) }}},
-        secondaryDataUrls: {{{ JSON.stringify(SECONDARY_DATA_FILES) }}},
+        "primaryDataUrls": {{{ JSON.stringify(PRIMARY_DATA_FILES) }}},
+        "secondaryDataUrls": {{{ JSON.stringify(SECONDARY_DATA_FILES) }}},
 #else
-        dataUrl: "Build/{{{ DATA_FILENAME }}}",
+        "dataUrl": "Build/{{{ DATA_FILENAME }}}",
 #endif
-        frameworkUrl: "Build/{{{ FRAMEWORK_FILENAME }}}",
+        "frameworkUrl": "Build/{{{ FRAMEWORK_FILENAME }}}",
 #if USE_WASM
-        codeUrl: "Build/{{{ CODE_FILENAME }}}",
+        "codeUrl": "Build/{{{ CODE_FILENAME }}}",
 #endif
 #if SYMBOLS_FILENAME
-        symbolsUrl: "Build/{{{ SYMBOLS_FILENAME }}}",
+        "symbolsUrl": "Build/{{{ SYMBOLS_FILENAME }}}",
 #endif
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
-        productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
-        productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
-        // Retina at full density is a lot of pixels for a browser GPU: cap it.
-        devicePixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
-      }, (p) => { fill.style.width = Math.round(10 + p * 90) + "%"; })
-      .then((unity) => {
-        window.unityInstance = unity;
-        // Screen.safeArea knows nothing of notches in a browser: measure them in CSS and pass them on.
-        const probe = document.createElement("div");
-        probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;" +
-          "left:env(safe-area-inset-left);bottom:env(safe-area-inset-bottom);right:env(safe-area-inset-right);top:env(safe-area-inset-top)";
-        document.body.appendChild(probe);
-        const insets = () => {
-          const s = getComputedStyle(probe), w = innerWidth || 1, h = innerHeight || 1;
-          const f = (v, d) => (parseFloat(v) || 0) / d;
-          unity.SendMessage("Telfersnake", "SafeInsets",
-            [f(s.left, w), f(s.bottom, h), f(s.right, w), f(s.top, h)].map((n) => n.toFixed(4)).join(","));
-        };
-        // The game object may not exist the moment the promise resolves: say it again shortly after.
-        insets(); setTimeout(insets, 500); setTimeout(insets, 2000);
-        addEventListener("resize", () => setTimeout(insets, 100));
-        addEventListener("orientationchange", () => setTimeout(insets, 300));
-        fill.style.width = "100%";
-        setTimeout(() => loader.classList.add("gone"), 900);
-      })
-      .catch((message) => { document.querySelector("#hint").textContent = "Oops: " + message; });
+        "streamingAssetsUrl": "StreamingAssets",
+        "companyName": {{{ JSON.stringify(COMPANY_NAME) }}},
+        "productName": {{{ JSON.stringify(PRODUCT_NAME) }}},
+        "productVersion": {{{ JSON.stringify(PRODUCT_VERSION) }}}
+      }
     </script>
+    <script src="Build/{{{ LOADER_FILENAME }}}"></script>
+    <script src="TemplateData/boot.js"></script>
   </body>
 </html>

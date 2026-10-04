@@ -235,10 +235,14 @@ namespace Telfer.UI
         void RefreshModes()
         {
             var p = Meta.Profile.I;
+            int shown = p.GodUnlocked ? 3 : 2;
             for (int i = 0; i < 3; i++)
             {
                 bool on = (Mode)i == Mode;
-                modeButtons[i].transform.parent.gameObject.SetActive(i < 2 || p.GodUnlocked);
+                var rt = (RectTransform)modeButtons[i].transform.parent;
+                rt.gameObject.SetActive(i < shown);
+                // Centre the row on the buttons there are: two until God mode is earned.
+                Place(rt, new Vector2((i - (shown - 1) * 0.5f) * 200, 0), rt.sizeDelta);
                 modeButtons[i].color = on ? ((Mode)i == Mode.God ? new Color(0.55f, 0.3f, 0.9f) : Green) : Cream;
                 modeButtons[i].GetComponentInChildren<Text>().color = on ? Color.white : Ink;
             }
