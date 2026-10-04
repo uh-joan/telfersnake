@@ -271,8 +271,9 @@ namespace Telfer.Net
     /// <summary>Only for me: the ack of my inputs, xp and the cards I am being offered.</summary>
     public struct You
     {
-        public int ack, level, cardsFor;
-        public float xp, speedFactor;
+        public int ack, level;
+        /// <summary>Seconds left to pick before the server takes the first card.</summary>
+        public float xp, speedFactor, cardsFor;
         /// <summary>Null when no cards are offered.</summary>
         public UpgradeId[] cards;
     }
@@ -318,7 +319,7 @@ namespace Telfer.Net
             snap.you = new You
             {
                 ack = (int)Json.Num(y, "ack"), xp = (float)Json.Num(y, "xp"), level = (int)Json.Num(y, "level"),
-                speedFactor = (float)Json.Num(y, "speedFactor", 1), cardsFor = (int)Json.Num(y, "cardsFor"),
+                speedFactor = (float)Json.Num(y, "speedFactor", 1), cardsFor = (float)Json.Num(y, "cardsFor"),
             };
             var cards = Json.List(y, "cards");
             if (cards != null)

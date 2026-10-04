@@ -90,6 +90,8 @@ namespace Telfer.Net
 
         /// <summary>The cards on offer, or null (also null for a moment after a pick, while the server agrees).</summary>
         public UpgradeId[] Cards => pickedFor > 0 ? null : cards;
+        /// <summary>Seconds left to pick (CARD_TIME = 8 on the server) before the first card is taken for me.</summary>
+        public float CardsFor { get; private set; }
 
         /// <summary>Pick a card by index. The server checks nothing about gems: the caller pays.</summary>
         public void Pick(int i)
@@ -124,6 +126,7 @@ namespace Telfer.Net
             if (World == null || !Live || Net.State != NetState.Joined) return;
 
             pickedFor = Math.Max(0, pickedFor - dt);
+            CardsFor = Math.Max(0, CardsFor - dt);
             if (Paused && (awayIn -= dt) <= 0) { awayIn = AWAY_REPEAT; Net.Away(true); }
 
             var mine = World.Me;
@@ -254,6 +257,7 @@ namespace Telfer.Net
                 EventCounts[ge.type] = EventCounts.TryGetValue(ge.type, out var n) ? n + 1 : 1;
             }
             cards = snap.you.cards;
+            CardsFor = snap.you.cardsFor;
             if (Me < snap.s.Length)
             {
                 Away = snap.s[Me].Has(Protocol.AWAY);

@@ -25,6 +25,8 @@ namespace Telfer.Meta
         /// <summary>Reached MEGA in a Normal game: half of God mode's key.</summary>
         public bool mega;
         public bool godRevealed, commonSeen;
+        /// <summary>The name other players see over your head (from the shuffle, or typed and cleaned).</summary>
+        public string name = "";
 
         /// <summary>The one-off star ticket to the Common.</summary>
         public const int COMMON_COST = 300;
@@ -47,6 +49,7 @@ namespace Telfer.Meta
             }
             if (p.owned == null) p.owned = new List<string>();
             foreach (var free in new[] { "telfer", "no-hat", "no-trail" }) if (!p.owned.Contains(free)) p.owned.Add(free);
+            p.name = Names.Clean(p.name) ?? Names.Random();
             return p;
         }
 

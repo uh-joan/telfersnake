@@ -13,7 +13,7 @@ namespace Telfer.UI
         public static Font Font => font ? font : (font = Resources.Load<Font>("Fredoka-Bold") ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
 
         static readonly Dictionary<int, Sprite> rounded = new Dictionary<int, Sprite>();
-        static Sprite circle, ring, bolt, softShadow, play, star, gem;
+        static Sprite circle, ring, bolt, softShadow, play, star, gem, pals, me, dice, signal;
 
         /// <summary>A white rounded-rect sprite, 9-sliced, with an anti-aliased edge.</summary>
         public static Sprite Rounded(int radius)
@@ -103,6 +103,52 @@ namespace Telfer.UI
             var pts = new Vector2[10];
             for (int i = 0; i < 10; i++) { float a = Mathf.PI / 2 + i * Mathf.PI / 5; float r = i % 2 == 0 ? 0.95f : 0.42f; pts[i] = new Vector2(Mathf.Cos(a) * r, Mathf.Sin(a) * r); }
             return Poly(u, v, pts) - 0.03f;
+        }));
+
+        /// <summary>One person: a round head over rounded shoulders, cut flat at the bottom.</summary>
+        static float Person(float u, float v, float cx, float k)
+        {
+            float hx = u - cx, hy = v - 0.38f * k;
+            float head = Mathf.Sqrt(hx * hx + hy * hy) - 0.25f * k;
+            float by = v + 0.55f;
+            float body = Mathf.Max(Mathf.Sqrt(hx * hx + by * by * 1.3f) - 0.5f * k, -0.85f - v);
+            return Mathf.Min(head, body);
+        }
+
+        /// <summary>Two friends side by side: how many children are in the playground.</summary>
+        public static Sprite Pals => pals ? pals : (pals = Draw(128, (u, v) =>
+        {
+            // The friend behind is cut back around the one in front, so the two read apart.
+            float front = Person(u, v, 0.3f, 1);
+            return Mathf.Min(front, Mathf.Max(Person(u, v - 0.06f, -0.42f, 0.85f), -(front - 0.09f)));
+        }));
+        /// <summary>Just you: for the name chip.</summary>
+        public static Sprite Me => me ? me : (me = Draw(128, (u, v) => Person(u, v, 0, 1)));
+
+        /// <summary>A die showing five, for the name shuffle.</summary>
+        public static Sprite Dice => dice ? dice : (dice = Draw(128, (u, v) =>
+        {
+            float qx = Mathf.Abs(u) - 0.62f, qy = Mathf.Abs(v) - 0.62f;
+            float box = Mathf.Sqrt(Mathf.Max(qx, 0) * Mathf.Max(qx, 0) + Mathf.Max(qy, 0) * Mathf.Max(qy, 0)) + Mathf.Min(Mathf.Max(qx, qy), 0) - 0.3f;
+            float pip = Mathf.Sqrt(u * u + v * v) - 0.15f;
+            for (int i = 0; i < 4; i++)
+            {
+                float px = u - (i % 2 == 0 ? -0.45f : 0.45f), py = v - (i < 2 ? -0.45f : 0.45f);
+                pip = Mathf.Min(pip, Mathf.Sqrt(px * px + py * py) - 0.15f);
+            }
+            return Mathf.Max(box, -pip);
+        }));
+
+        /// <summary>A signal: a dot under three arcs (the line to the playground).</summary>
+        public static Sprite Signal => signal ? signal : (signal = Draw(128, (u, v) =>
+        {
+            float x = u, y = v + 0.6f;
+            float r = Mathf.Sqrt(x * x + y * y);
+            float d = r - 0.17f;
+            // Only the upward wedge, 45 degrees either side.
+            float wedge = (Mathf.Abs(x) - y) * 0.7071f;
+            for (int i = 1; i <= 3; i++) d = Mathf.Min(d, Mathf.Max(Mathf.Abs(r - (0.12f + i * 0.36f)) - 0.09f, wedge));
+            return d;
         }));
 
         // ------------------------------------------------------------------ builders

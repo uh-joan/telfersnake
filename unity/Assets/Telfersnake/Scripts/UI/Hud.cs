@@ -70,11 +70,14 @@ namespace Telfer.UI
             BuildBubble();
             BuildBanner();
             BuildPauseButton();
+            BuildPlayers();
             bonkLayer = BuildBonk();
             cardsLayer = UiKit.Fill(rootRt, "Cards");
             cardsLayer.gameObject.SetActive(false);
             pauseLayer = BuildPause();
             title = BuildTitle();
+            namePanel = BuildName();
+            toastRt = BuildToast();
             ShowTitle(true);
             fit.Changed += Relayout;
             Relayout();
@@ -85,6 +88,7 @@ namespace Telfer.UI
         RectTransform BuildTitle()
         {
             var t = UiKit.Fill(rootRt, "Title");
+            titleGroup = t.gameObject.AddComponent<CanvasGroup>();
             var dim = UiKit.Panel(t, "dim", new Color(0.05f, 0.1f, 0.2f, 0.12f), 0);
             // The logo, and the column of choices under it: each is moved and scaled as one to fit the screen.
             var head = titleHead = UiKit.Rect(t, "head", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
@@ -148,6 +152,11 @@ namespace Telfer.UI
             ((RectTransform)ring.transform).offsetMin = new Vector2(-6, -6); ((RectTransform)ring.transform).offsetMax = new Vector2(6, 6);
             var tri = UiKit.Image(pb.transform, "tri", UiKit.Play, Ink);
             ((RectTransform)tri.transform).offsetMin = new Vector2(50, 45); ((RectTransform)tri.transform).offsetMax = new Vector2(-40, -45);
+            // While the playground is being found: an arc chases round the button.
+            spinner = UiKit.Image(play, "spin", UiKit.Ring, Color.white);
+            spinner.type = Image.Type.Filled; spinner.fillMethod = Image.FillMethod.Radial360; spinner.fillAmount = 0.3f;
+            ((RectTransform)spinner.transform).offsetMin = new Vector2(-22, -22); ((RectTransform)spinner.transform).offsetMax = new Vector2(22, 22);
+            spinner.gameObject.SetActive(false);
             var playLbl = UiKit.Rect(mid, "playLbl", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -290), new Vector2(200, 50));
             UiKit.Label(playLbl, "t", "Play", 38, Color.white, TextAnchor.MiddleCenter, 2.5f);
 
@@ -176,13 +185,22 @@ namespace Telfer.UI
             // The Tuck Shop, bottom left: a picture of you in your current look.
             var shopRt = UiKit.Rect(t, "shop", new Vector2(0, 0), new Vector2(0, 0), new Vector2(0.5f, 0.5f), new Vector2(110, 120), new Vector2(150, 150));
             UiKit.Shadow(shopRt, 20, 0.3f, null, true);
-            var sb = UiKit.Button(shopRt, "btn", new Color(1f, 0.6f, 0.75f), 75, () => { Audio.Synth.I?.Play("pick"); shop.Open(rootRt, () => { RefreshTitle(); OnShopChanged?.Invoke(); }); });
+            var sb = UiKit.Button(shopRt, "btn", new Color(1f, 0.6f, 0.75f), 75, () => { Audio.Synth.I?.Play("pick"); OpenShop(); });
             sb.GetComponent<Springy>().Idle = 0.02f;
             var si = UiKit.Rect(sb.transform, "you", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 6), new Vector2(130, 130));
             shopIcon = si.gameObject.AddComponent<RawImage>();
             shopIcon.raycastTarget = false;
             var sl = UiKit.Rect(shopRt, "lbl", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(0, -2), new Vector2(200, 40));
             UiKit.Label(sl, "t", "Tuck Shop", 28, Color.white, TextAnchor.MiddleCenter, 2);
+
+            // Your name, top right: tap to type one or shuffle.
+            var chip = nameChip = UiKit.Rect(t, "name", new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1), new Vector2(-24, -24), new Vector2(330, 70));
+            UiKit.Shadow(chip, 14, 0.22f);
+            var nb = UiKit.Button(chip, "btn", Cream, 35, () => { Audio.Synth.I?.Play("pick"); OpenName(); });
+            var me = UiKit.Image(nb.transform, "me", UiKit.Me, new Color(0.35f, 0.65f, 1f));
+            var mer = (RectTransform)me.transform; mer.anchorMin = mer.anchorMax = new Vector2(0, 0.5f); mer.sizeDelta = new Vector2(46, 46); mer.anchoredPosition = new Vector2(38, 0);
+            chipName = UiKit.Label(nb.transform, "t", "", 30, Ink, TextAnchor.MiddleLeft);
+            ((RectTransform)chipName.transform).offsetMin = new Vector2(70, 0); ((RectTransform)chipName.transform).offsetMax = new Vector2(-14, 0);
 
             var hint = UiKit.Rect(t, "hint", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 26), new Vector2(900, 40));
             UiKit.Label(hint, "t", "Telferscot Primary  ·  Unity HD", 24, new Color(1, 1, 1, 0.75f), TextAnchor.MiddleCenter, 1.5f);
@@ -199,6 +217,18 @@ namespace Telfer.UI
         public Action<Mode> OnMode;
         public Action OnShopChanged;
         public bool ShopOpen => shop.IsOpen;
+        CanvasGroup titleGroup;
+        Image spinner;
+        RectTransform nameChip;
+        Text chipName;
+
+        /// <summary>Looking for the playground: the title stays up but takes no taps, and the play button spins.</summary>
+        public void Connecting(bool on)
+        {
+            titleGroup.interactable = !on;
+            spinner.gameObject.SetActive(on);
+        }
+        public bool IsConnecting => spinner.gameObject.activeSelf;
         static readonly Color Gem = new Color(0.35f, 0.7f, 1f);
 
         void RefreshModes()
@@ -233,6 +263,7 @@ namespace Telfer.UI
                 stageLocks[i].SetActive(i == 1 && !p.commonUnlocked);
             }
             shopIcon.texture = Icons.Skin(p.skin, p.hat);
+            chipName.text = p.name;
         }
 
         /// <summary>Not enough stars for the Common yet: the tile shakes its head.</summary>
@@ -418,14 +449,15 @@ namespace Telfer.UI
             var p = UiKit.Fill(rootRt, "Pause");
             var dim = UiKit.Panel(p, "dim", new Color(0.04f, 0.06f, 0.14f, 0.55f), 0);
             dim.raycastTarget = true;
-            var box = pauseBox = UiKit.Rect(p, "box", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(460, 420));
+            var box = pauseBox = UiKit.Rect(p, "box", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(460, 520));
             UiKit.Shadow(box, 30, 0.35f);
             UiKit.Panel(box, "bg", Cream, 40);
             var t = UiKit.Rect(box, "t", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -20), new Vector2(400, 80));
             UiKit.Label(t, "t", "Paused", 56, Ink);
-            Button(box, new Vector2(0, 60), "Play", Green, () => OnResume?.Invoke());
-            soundBtn = Button(box, new Vector2(0, -40), "Sound: on", new Color(0.35f, 0.65f, 1f), () => { soundOn = !soundOn; soundBtn.text = soundOn ? "Sound: on" : "Sound: off"; OnSound?.Invoke(soundOn); });
-            Button(box, new Vector2(0, -140), "Home", new Color(1f, 0.45f, 0.45f), () => OnQuit?.Invoke());
+            Button(box, new Vector2(0, 110), "Play", Green, () => OnResume?.Invoke());
+            Button(box, new Vector2(0, 10), "Tuck Shop", new Color(1f, 0.6f, 0.75f), () => { Audio.Synth.I?.Play("pick"); OpenShop(); });
+            soundBtn = Button(box, new Vector2(0, -90), "Sound: on", new Color(0.35f, 0.65f, 1f), () => { soundOn = !soundOn; soundBtn.text = soundOn ? "Sound: on" : "Sound: off"; OnSound?.Invoke(soundOn); });
+            Button(box, new Vector2(0, -190), "Home", new Color(1f, 0.45f, 0.45f), () => OnQuit?.Invoke());
             p.gameObject.SetActive(false);
             return p;
         }
@@ -441,6 +473,8 @@ namespace Telfer.UI
         }
 
         public void ShowPause(bool on) => pauseLayer.gameObject.SetActive(on);
+
+        void OpenShop() => shop.Open(rootRt, () => { RefreshTitle(); OnShopChanged?.Invoke(); });
 
         // ------------------------------------------------------------------ bubbles, pops, names
 
@@ -623,7 +657,8 @@ namespace Telfer.UI
 
         // ------------------------------------------------------------------ level-up cards
 
-        public void ShowCards(UpgradeId[] cards, Snake s, Action<int> pick, int gems)
+        /// <param name="timed">Online: a bar under the heading runs down to the server's own pick (see <see cref="CardsTime"/>).</param>
+        public void ShowCards(UpgradeId[] cards, Snake s, Action<int> pick, int gems, bool timed = false)
         {
             foreach (Transform c in cardsLayer) Destroy(c.gameObject);
             cardsLayer.gameObject.SetActive(true);
@@ -636,6 +671,15 @@ namespace Telfer.UI
             var head = UiKit.Rect(cardsHead, "head", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(800, 110));
             UiKit.Label(head, "t", "Level up!", 80, Yellow, TextAnchor.MiddleCenter, 4, new Color(0.3f, 0.2f, 0, 0.9f));
             head.gameObject.AddComponent<Bob>().Amount = 6;
+            cardsTimer = null;
+            if (timed)
+            {
+                var bar = UiKit.Rect(cardsHead, "timer", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -78), new Vector2(440, 24));
+                UiKit.Panel(bar, "bg", new Color(1, 1, 1, 0.25f), 12);
+                cardsTimer = UiKit.Panel(bar, "fill", Yellow, 12);
+                cardsTimer.type = Image.Type.Filled; cardsTimer.fillMethod = Image.FillMethod.Horizontal; cardsTimer.fillOrigin = (int)Image.OriginHorizontal.Left;
+                cardsTimer.sprite = UiKit.Rounded(12);
+            }
             for (int i = 0; i < cards.Length; i++)
             {
                 int idx = i;
@@ -692,6 +736,16 @@ namespace Telfer.UI
                 }
             }
             LayoutCards();
+        }
+
+        Image cardsTimer;
+
+        /// <summary>How much of the time to pick is left, 0..1; the bar reddens near the end.</summary>
+        public void CardsTime(float frac)
+        {
+            if (cardsTimer == null) return;
+            cardsTimer.fillAmount = Mathf.Clamp01(frac);
+            cardsTimer.color = Color.Lerp(new Color(1f, 0.45f, 0.45f), Yellow, Mathf.Clamp01(frac * 3));
         }
 
         RectTransform results;
@@ -773,6 +827,8 @@ namespace Telfer.UI
 
         void Update()
         {
+            if (spinner.gameObject.activeSelf) spinner.transform.localRotation = Quaternion.Euler(0, 0, -Time.unscaledTime * 360);
+            SyncToast();
             if (results == null || resultStars == null) return;
             starChime -= Time.unscaledDeltaTime;
             if (starShown < starTarget && starChime <= 0)
@@ -789,6 +845,149 @@ namespace Telfer.UI
         }
 
         public void HideCards() { foreach (Transform c in cardsLayer) Destroy(c.gameObject); cardsLayer.gameObject.SetActive(false); }
+
+        // ------------------------------------------------------------------ online: friends, the line, your name
+
+        RectTransform playersRt, toastRt, namePanel, nameBox;
+        Text playersText, toastText;
+        CanvasGroup toastGroup;
+        float toastT = -1;
+        InputField nameInput;
+        int shownPlayers = -1;
+
+        void BuildPlayers()
+        {
+            playersRt = UiKit.Rect(game, "players", new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1), Vector2.zero, new Vector2(130, 58));
+            UiKit.Shadow(playersRt, 12, 0.2f);
+            UiKit.Panel(playersRt, "bg", Cream, 29);
+            var ic = UiKit.Image(playersRt, "pals", UiKit.Pals, new Color(0.35f, 0.65f, 1f));
+            var ir = (RectTransform)ic.transform; ir.anchorMin = ir.anchorMax = new Vector2(0, 0.5f); ir.sizeDelta = new Vector2(46, 46); ir.anchoredPosition = new Vector2(36, 0);
+            playersText = UiKit.Label(playersRt, "n", "2", 34, Ink, TextAnchor.MiddleLeft);
+            ((RectTransform)playersText.transform).offsetMin = new Vector2(66, 0);
+            ShowPlayers(0);
+        }
+
+        /// <summary>How many children share the playground: shown only when it is more than just you.</summary>
+        public void ShowPlayers(int humans)
+        {
+            if (humans == shownPlayers) return;
+            bool grew = humans > shownPlayers && shownPlayers > 1;
+            shownPlayers = humans;
+            bool on = humans > 1;
+            playersRt.gameObject.SetActive(on);
+            if (playersRt.parent.Find(playersRt.name + "-shadow") is Transform sh) sh.gameObject.SetActive(on);
+            if (on) playersText.text = humans.ToString();
+            if (on && grew) playersRt.gameObject.AddComponent<Shake>();
+        }
+
+        RectTransform BuildToast()
+        {
+            var t = UiKit.Rect(rootRt, "toast", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -40), new Vector2(460, 84));
+            toastGroup = t.gameObject.AddComponent<CanvasGroup>();
+            toastGroup.blocksRaycasts = false;
+            UiKit.Panel(t, "bg", new Color(0.13f, 0.15f, 0.22f, 0.92f), 42);
+            var ic = UiKit.Image(t, "signal", UiKit.Signal, new Color(0.75f, 0.8f, 0.9f));
+            var ir = (RectTransform)ic.transform; ir.anchorMin = ir.anchorMax = new Vector2(0, 0.5f); ir.sizeDelta = new Vector2(54, 54); ir.anchoredPosition = new Vector2(52, 2);
+            // Crossed out: the line is gone.
+            var slash = UiKit.Panel(ic.transform, "slash", new Color(1f, 0.45f, 0.45f), 4);
+            var sr = (RectTransform)slash.transform; sr.anchorMin = sr.anchorMax = new Vector2(0.5f, 0.5f); sr.sizeDelta = new Vector2(8, 66); sr.localRotation = Quaternion.Euler(0, 0, 40);
+            toastText = UiKit.Label(t, "t", "", 32, Color.white, TextAnchor.MiddleLeft);
+            ((RectTransform)toastText.transform).offsetMin = new Vector2(96, 0); ((RectTransform)toastText.transform).offsetMax = new Vector2(-24, 0);
+            t.gameObject.SetActive(false);
+            return t;
+        }
+
+        /// <summary>A short note across the top that outlives the screen under it (the results come up behind it).</summary>
+        public void Toast(string text)
+        {
+            toastText.text = text;
+            toastRt.sizeDelta = new Vector2(Mathf.Max(300, text.Length * 17 + 130), 84);
+            toastRt.SetAsLastSibling();
+            toastRt.gameObject.SetActive(true);
+            toastT = 0;
+        }
+
+        void SyncToast()
+        {
+            if (toastT < 0) return;
+            toastT += Time.unscaledDeltaTime;
+            toastRt.SetAsLastSibling();
+            float a = toastT < 2.6f ? 1 : 1 - (toastT - 2.6f) / 0.4f;
+            float drop = toastT < 0.3f ? Ease.OutBack(toastT / 0.3f) : 1;
+            toastRt.anchoredPosition = new Vector2(0, -(fit.Units.y - fit.Safe.yMax) - 20 + (1 - drop) * 120);
+            toastGroup.alpha = a;
+            if (toastT >= 3) { toastT = -1; toastRt.gameObject.SetActive(false); }
+        }
+
+        RectTransform BuildName()
+        {
+            var p = UiKit.Fill(rootRt, "Name");
+            var dim = UiKit.Panel(p, "dim", new Color(0.04f, 0.06f, 0.14f, 0.55f), 0);
+            dim.raycastTarget = true;
+            var box = nameBox = UiKit.Rect(p, "box", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(620, 400));
+            UiKit.Shadow(box, 30, 0.35f);
+            UiKit.Panel(box, "bg", Cream, 40);
+            var t = UiKit.Rect(box, "t", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -20), new Vector2(560, 80));
+            UiKit.Label(t, "t", "Your name", 52, Ink);
+
+            // The box to type in (on a phone, tapping it brings up the keyboard).
+            var field = UiKit.Rect(box, "field", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 30), new Vector2(540, 90));
+            var bg = UiKit.Panel(field, "bg", Color.white, 30);
+            bg.raycastTarget = true;
+            var frame = UiKit.Image(field, "edge", UiKit.Rounded(30), new Color(0.35f, 0.65f, 1f, 0.6f));
+            frame.type = Image.Type.Sliced; frame.preserveAspect = false;
+            ((RectTransform)frame.transform).offsetMin = new Vector2(-4, -4); ((RectTransform)frame.transform).offsetMax = new Vector2(4, 4);
+            frame.transform.SetAsFirstSibling();
+            var text = UiKit.Label(field, "text", "", 42, Ink);
+            text.supportRichText = false;
+            ((RectTransform)text.transform).offsetMin = new Vector2(24, 0); ((RectTransform)text.transform).offsetMax = new Vector2(-24, 0);
+            var hint = UiKit.Label(field, "hint", "...", 42, new Color(0, 0, 0, 0.25f));
+            nameInput = bg.gameObject.AddComponent<InputField>();
+            nameInput.textComponent = text;
+            nameInput.placeholder = hint;
+            nameInput.characterLimit = Meta.Names.MAX;
+            nameInput.lineType = InputField.LineType.SingleLine;
+            nameInput.caretColor = Ink;
+            nameInput.caretWidth = 3;
+            nameInput.customCaretColor = true;
+            nameInput.selectionColor = new Color(0.35f, 0.65f, 1f, 0.35f);
+            nameInput.transition = Selectable.Transition.None;
+            nameInput.onSubmit.AddListener(_ => CommitName());
+
+            var shuffle = UiKit.Rect(box, "shuffle", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(-135, 80), new Vector2(250, 84));
+            var sb = UiKit.Button(shuffle, "btn", new Color(0.35f, 0.65f, 1f), 42, () => { nameInput.text = Meta.Names.Random(); Audio.Synth.I?.Play("pick"); });
+            var dice = UiKit.Image(sb.transform, "dice", UiKit.Dice, Color.white);
+            var dr = (RectTransform)dice.transform; dr.anchorMin = dr.anchorMax = new Vector2(0, 0.5f); dr.sizeDelta = new Vector2(52, 52); dr.anchoredPosition = new Vector2(46, 0);
+            var sl = UiKit.Label(sb.transform, "t", "Shuffle", 34, Color.white, TextAnchor.MiddleCenter, 2);
+            ((RectTransform)sl.transform).offsetMin = new Vector2(70, 0);
+            var done = UiKit.Rect(box, "done", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(135, 80), new Vector2(250, 84));
+            var db = UiKit.Button(done, "btn", Green, 42, CommitName);
+            UiKit.Label(db.transform, "t", "Done", 36, Color.white, TextAnchor.MiddleCenter, 2);
+            p.gameObject.SetActive(false);
+            return p;
+        }
+
+        public bool NameOpen => namePanel.gameObject.activeSelf;
+
+        void OpenName()
+        {
+            nameInput.text = Meta.Profile.I.name;
+            namePanel.gameObject.SetActive(true);
+            namePanel.SetAsLastSibling();
+            nameInput.ActivateInputField();
+        }
+
+        /// <summary>Take whatever is typed (cleaned), or keep the old name if it was empty or rude.</summary>
+        void CommitName()
+        {
+            if (!NameOpen) return;
+            var p = Meta.Profile.I;
+            var cleaned = Meta.Names.Clean(nameInput.text);
+            if (cleaned != null) { p.name = cleaned; p.Save(); Audio.Synth.I?.Play("pick"); }
+            else Audio.Synth.I?.Play("nope");
+            namePanel.gameObject.SetActive(false);
+            RefreshTitle();
+        }
 
         // ------------------------------------------------------------------ fitting the screen
 
@@ -811,7 +1010,9 @@ namespace Telfer.UI
             foreach (var layer in new[] { game, title }) { layer.offsetMin = lo; layer.offsetMax = -hi; }
             LayoutTitle();
             LayoutHud();
-            Place(pauseBox, SafeCentre, pauseBox.sizeDelta, fit.Portrait ? 1.3f : Mathf.Min(1, fit.Safe.height / 480));
+            Place(pauseBox, SafeCentre, pauseBox.sizeDelta, fit.Portrait ? 1.3f : Mathf.Min(1, fit.Safe.height / 580));
+            // Upright, the name box rides high so the keyboard does not cover it.
+            Place(nameBox, SafeCentre + new Vector2(0, fit.Portrait ? fit.Safe.height * 0.18f : 0), nameBox.sizeDelta, fit.Portrait ? 1.3f : Mathf.Min(1, fit.Safe.height / 460));
             if (CardsOpen) LayoutCards();
             if (results) LayoutResults();
             shop.Layout(fit);
@@ -847,6 +1048,8 @@ namespace Telfer.UI
             Place(mapBox, new Vector2(-22, -34), new Vector2(210, mapH), ms);
             Place(boardRt, new Vector2(-22, -34 - mapH * ms - 14), new Vector2(250, 20 + boardRows * 34), tall ? 0.9f : 1);
             Place(pauseBtn, new Vector2(-22 - 210 * ms - 14, -34), pauseBtn.sizeDelta, 1);
+            // The friends pill hangs under the pause button.
+            Place(playersRt, new Vector2(-22 - 210 * ms - 14, -34 - 70 - 14), playersRt.sizeDelta, 1);
             // Dash sits under the right thumb; a little higher and bigger on a phone held upright.
             Place(dashRt, tall ? new Vector2(-130, 210) : new Vector2(-120, 120), dashRt.sizeDelta, tall ? 1.15f : 1);
             // The banner drops below the top row, which is taller upright.

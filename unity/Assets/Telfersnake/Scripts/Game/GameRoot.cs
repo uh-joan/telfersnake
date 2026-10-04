@@ -105,14 +105,14 @@ namespace Telfer.Game
             hud = new GameObject("HUD").AddComponent<Hud>();
             hud.transform.SetParent(transform, false);
             hud.Build();
-            hud.OnPlay = _ => StartRun();
+            hud.OnPlay = _ => Play();
             hud.OnPause = () => SetPaused(true);
             hud.OnResume = () => SetPaused(false);
             hud.OnQuit = () => { SetPaused(false); FinishRun(); };
             hud.OnSound = on => { synth.SfxOn = on; synth.MusicOn = on; };
             hud.OnStage = ChooseStage;
             hud.OnMode = m => { P.Mode = m; P.Save(); };
-            hud.OnShopChanged = () => { if (state == State.Title) NewWorld(P.Mode, P.Stage, true); };
+            hud.OnShopChanged = () => { if (state == State.Title) NewWorld(P.Mode, P.Stage, true); else Wear(); };
 
             controls = new Controls();
             headOf = i => snakeViews[i].HeadPos;
@@ -166,6 +166,7 @@ namespace Telfer.Game
         /// <summary>Tapping the Common pays the 300 stars the first time (if you can), then picks it.</summary>
         void ChooseStage(StageId id)
         {
+            if (joining != null) return;
             if (id == StageId.Common && !P.commonUnlocked)
             {
                 if (P.stars < Profile.COMMON_COST) { synth.Play("nope"); hud.ShakeStage(id); return; }
@@ -225,6 +226,7 @@ namespace Telfer.Game
             state = State.Play;
             runGulps = runBonks = runGems = 0;
             runLongest = 0;
+            worn = Outfit;
             hud.ShowTitle(false);
             var me = world.Me;
             rig.Snap(W.P(me.x, me.z), me.Length);
@@ -240,6 +242,43 @@ namespace Telfer.Game
 
         // ------------------------------------------------------------------ online runs
 
+        /// <summary>Longest wait for the first snapshot (the welcome itself times out at 2.5 s) before playing alone.</summary>
+        const float JOIN_GIVE_UP = 4;
+        float joinFor;
+
+        /// <summary>
+        /// Play always means the shared playground; with no server (or no seat) the same game runs here
+        /// alone, without a word. A second tap while the seat is being found does nothing.
+        /// </summary>
+        void Play()
+        {
+            if (joining != null || state != State.Title) return;
+            synth.Play("pick");
+            hud.ShowTitle(true);
+            hud.Connecting(true);
+            StartOnline(P.name);
+        }
+
+        /// <summary>What I am wearing and called, as sent to the server.</summary>
+        string Outfit => P.skin + "|" + P.hat + "|" + P.trail + "|" + P.name;
+        string worn;
+
+        /// <summary>Clothes changed in the Tuck Shop mid-run: everyone online sees them (the server echoes the seat back); alone, the snake is redressed.</summary>
+        void Wear()
+        {
+            if (Outfit == worn || state == State.Title) return;
+            worn = Outfit;
+            if (net != null) { net.Net.Wear(P.skin, P.hat, P.trail, P.name); return; }
+            var me = world.Me;
+            var look = P.Look();
+            me.look.body = look.body; me.look.stripe = look.stripe; me.look.head = look.head;
+            var trail = Catalogue.Find(P.trail);
+            snakeViews[MeIx].Destroy();
+            snakeViews[MeIx] = new SnakeView(me, runRoot, true, Catalogue.FindSkin(P.skin)?.pattern, P.hat, trail?.palette);
+            snakeViews[MeIx].OnStep();
+            snakeViews[MeIx].OnStep();
+        }
+
         /// <summary>
         /// Ask the server for a seat in a shared playground with the chosen mode and place. The title keeps
         /// playing until the first snapshot arrives, then the run starts as StartRun does. If the seat never
@@ -251,6 +290,7 @@ namespace Telfer.Game
             NetWhy = "";
             bool canBuy = !Autopilot && P.gems >= Upgrades.POWER_GEM_COST;
             joining = Replica.Join(P.Mode, P.Stage, canBuy, P.skin, P.hat, P.trail, name, url);
+            joinFor = 0;
         }
 
         /// <summary>Dev, from Tools/ev.sh in play mode: join the local server with the autopilot steering.</summary>
@@ -258,6 +298,7 @@ namespace Telfer.Game
         {
             if (I == null) return "no GameRoot (not playing?)";
             Autopilot = autopilot;
+            I.hud.Connecting(true);
             I.StartOnline("Unity Dev");
             return "joining " + I.joining.Net.Url;
         }
@@ -275,24 +316,38 @@ namespace Telfer.Game
                 + (me != null ? " score=" + me.score + " mass=" + me.mass.ToString("F1") + " alive=" + me.alive + " at=" + me.x.ToString("F1") + "," + me.z.ToString("F1") : "");
         }
 
-        void PollJoin()
+        void PollJoin(float dt)
         {
             joining.Update(0, default);
-            if (joining.State == NetState.Failed || joining.State == NetState.Closed)
+            joinFor += dt;
+            if (joining.State == NetState.Failed || joining.State == NetState.Closed || (!joining.Live && joinFor > JOIN_GIVE_UP))
             {
-                NetWhy = joining.Why;
+                bool waiting = joining.State == NetState.Connecting || joining.State == NetState.Joined;
+                NetWhy = waiting ? "offline" : joining.Why;
                 Debug.Log("Telfer.Net: no seat (" + NetWhy + ")");
+                if (waiting) joining.Leave();
                 joining = null;
+                // Offline, full, busy or too old: the same game, here alone.
+                hud.Connecting(false);
+                if (state == State.Title) StartRun();
                 return;
             }
             if (!joining.Live) return;
             var r = joining;
             joining = null;
+            hud.Connecting(false);
             NewNetWorld(r);
             state = State.Play;
             runGulps = runBonks = runGems = 0;
             runLongest = 0;
+            worn = Outfit;
             hud.ShowTitle(false);
+            if (world.Stage.Id == StageId.Common && !P.commonSeen)
+            {
+                P.commonSeen = true;
+                P.Save();
+                hud.Banner("The Common!", null);
+            }
             var me = world.Me;
             rig.Snap(W.P(me.x, me.z), me.Length);
             synth.Play("bell");
@@ -346,6 +401,7 @@ namespace Telfer.Game
             {
                 NetWhy = net.Why;
                 Debug.Log("Telfer.Net: run ended (" + NetWhy + ")");
+                hud.Toast("Connection lost");
                 FinishRun(); // home time with what was earned; a replica world is never stepped
                 return;
             }
@@ -363,8 +419,16 @@ namespace Telfer.Game
             wild.OnStep();
             foreach (var sv in snakeViews) sv.OnStep();
             HandleEvents();
+            hud.ShowPlayers(net.HumanCount);
+            // A shared playground never stops: the cards follow the server's offer, and go when it picks for me.
             if (Autopilot && state == State.Play && net.Cards != null) net.Pick(Random.Range(0, 3));
+            else if (state == State.Play && net.Cards != null) OpenCards();
+            else if (state == State.Cards && net.Cards == null) { hud.HideCards(); state = State.Play; synth.Duck(false); }
+            if (state == State.Cards) hud.CardsTime(net.CardsFor / CARD_TIME);
         }
+
+        /// <summary>Seconds the server gives to pick a card (world.ts CARD_TIME).</summary>
+        const float CARD_TIME = 8;
 
         int StarsEarned()
         {
@@ -389,7 +453,9 @@ namespace Telfer.Game
                 P.Save();
             }
             synth.Play("bell");
-            hud.ShowResults((int)me.score, runLongest, runGulps, runBonks, stars, runGems, StartRun, ToTitle);
+            synth.Duck(false);
+            hud.ShowResults((int)me.score, runLongest, runGulps, runBonks, stars, runGems, Play, ToTitle);
+            hud.ShowPlayers(0);
             NewWorld(P.Mode, P.Stage, true);
             state = State.Title;
         }
@@ -443,8 +509,10 @@ namespace Telfer.Game
 
         void Choose(int i)
         {
-            if (state != State.Cards || world.Me.cards == null) return;
-            var card = world.Me.cards[Mathf.Clamp(i, 0, world.Me.cards.Length - 1)];
+            var offer = net != null ? net.Cards : world.Me.cards;
+            if (state != State.Cards || offer == null) return;
+            i = Mathf.Clamp(i, 0, offer.Length - 1);
+            var card = offer[i];
             // A power card costs a gem (it is only offered when you have one). Pay before taking it.
             if (Upgrades.IsPower(card))
             {
@@ -452,8 +520,10 @@ namespace Telfer.Game
                 P.gems -= Upgrades.POWER_GEM_COST;
                 P.Save();
                 world.Me.canBuyPowers = P.gems >= Upgrades.POWER_GEM_COST;
+                net?.SetCanBuy(world.Me.canBuyPowers);
             }
-            world.Choose(i);
+            if (net != null) net.Pick(i);
+            else world.Choose(i);
             hud.HideCards();
             synth.Play("pick");
             synth.Duck(false);
@@ -477,12 +547,12 @@ namespace Telfer.Game
             else slowmo = Mathf.Lerp(slowmo, 1, 1 - Mathf.Exp(-realDt * 6));
             float dt = realDt * slowmo;
 
-            if (Controls.Pressed(Key.Escape) || Controls.PadPressed(p => p.startButton))
+            if ((Controls.Pressed(Key.Escape) || Controls.PadPressed(p => p.startButton)) && !hud.ShopOpen)
             {
                 if (state == State.Play) SetPaused(true);
                 else if (state == State.Paused) SetPaused(false);
             }
-            if (state == State.Title && !hud.ResultsOpen && !hud.ShopOpen && (Controls.Pressed(Key.Enter) || Controls.PadPressed(p => p.buttonSouth))) StartRun();
+            if (state == State.Title && !hud.ResultsOpen && !hud.ShopOpen && !hud.NameOpen && (Controls.Pressed(Key.Enter) || Controls.PadPressed(p => p.buttonSouth))) Play();
             if (state == State.Cards)
             {
                 if (Controls.Pressed(Key.Digit1) || Controls.Pressed(Key.Numpad1)) Choose(0);
@@ -490,7 +560,7 @@ namespace Telfer.Game
                 if (Controls.Pressed(Key.Digit3) || Controls.Pressed(Key.Numpad3)) Choose(2);
             }
 
-            if (joining != null) PollJoin();
+            if (joining != null) PollJoin(realDt);
             var me = world.Me;
             var meView = snakeViews[MeIx];
             var cam = rig.Cam;
@@ -579,7 +649,7 @@ namespace Telfer.Game
             state = State.Cards;
             synth.Play("levelUp");
             synth.Duck(true);
-            hud.ShowCards(world.Me.cards, world.Me, Choose, P.gems);
+            hud.ShowCards(net != null ? net.Cards : world.Me.cards, world.Me, Choose, P.gems, net != null);
         }
 
         // ------------------------------------------------------------------ events into juice
