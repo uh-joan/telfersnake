@@ -35,8 +35,9 @@ rooms through the same `/play` socket; the server needs nothing new.
 
 `/hd/` needs a looser CSP than the web game (WebAssembly and the loader's blob scripts), set by the
 `@hd` matcher in `telfersnake.Caddyfile`. `enable-site.sh` leaves an existing vhost alone, so after
-changing the block, replace it in the shared Caddyfile by hand, then validate and reload as that
-script does. Until then `/hd/` loads to a blank page; the web game is unaffected.
+changing the block run `deploy/update-site.sh`: it swaps just that block in the shared Caddyfile,
+validates (restoring the backup if Caddy objects), reloads, and checks `/hd/`. Until then `/hd/`
+loads to a blank page; the web game is unaffected.
 
 ## What was set up once
 
