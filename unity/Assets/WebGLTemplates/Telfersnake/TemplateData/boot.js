@@ -15,9 +15,14 @@
     // Older or locked-down browser: it plays when the ringer is on.
   }
 
-  createUnityInstance(document.querySelector("#unity-canvas"), config, (p) => {
-    fill.style.width = Math.round(10 + p * 90) + "%";
-  })
+  // The bar is a snake: as it grows past a snack, the snack is eaten.
+  const snacks = [...document.querySelectorAll(".snack")].map((el) => ({ el, at: parseFloat(el.style.left) }));
+  const grow = (percent) => {
+    fill.style.width = percent + "%";
+    for (const s of snacks) if (!s.el.classList.contains("eaten") && percent + 3 >= s.at) s.el.classList.add("eaten");
+  };
+
+  createUnityInstance(document.querySelector("#unity-canvas"), config, (p) => grow(Math.round(4 + p * 96)))
     .then((unity) => {
       window.unityInstance = unity;
       // Screen.safeArea knows nothing of notches in a browser: measure them in CSS and pass them on.
@@ -35,7 +40,7 @@
       insets(); setTimeout(insets, 500); setTimeout(insets, 2000);
       addEventListener("resize", () => setTimeout(insets, 100));
       addEventListener("orientationchange", () => setTimeout(insets, 300));
-      fill.style.width = "100%";
+      grow(100);
       setTimeout(() => loader.classList.add("gone"), 900);
     })
     .catch((message) => { document.querySelector("#hint").textContent = "Oops: " + message; });
