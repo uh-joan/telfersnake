@@ -42,7 +42,7 @@ namespace Telfer.UI
             box = UiKit.Rect(frame, "box", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1440, 800));
             box.gameObject.AddComponent<CardIntro>();
             UiKit.Shadow(box, 36, 0.45f);
-            UiKit.Panel(box, "bg", Cream, 48);
+            UiKit.Panel(box, "bg", UiKit.Sheet, 48);
 
             var title = UiKit.Rect(box, "title", new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(40, -20), new Vector2(500, 90));
             UiKit.Label(title, "t", "Tuck Shop", 64, Ink, TextAnchor.MiddleLeft);
@@ -82,7 +82,7 @@ namespace Telfer.UI
             // The scrolling grid.
             view = UiKit.Rect(box, "view", new Vector2(0, 0), new Vector2(1, 1), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
             var vimg = view.gameObject.AddComponent<Image>();
-            vimg.color = new Color(0, 0, 0, 0.04f);
+            vimg.color = new Color(0.1f, 0.3f, 0.6f, 0.12f);
             view.gameObject.AddComponent<Mask>().showMaskGraphic = true;
             grid = UiKit.Rect(view, "grid", new Vector2(0, 1), new Vector2(1, 1), new Vector2(0.5f, 1), Vector2.zero, new Vector2(0, 0));
             var layout = grid.gameObject.AddComponent<GridLayoutGroup>();
@@ -152,7 +152,7 @@ namespace Telfer.UI
             for (int i = 0; i < 3; i++)
             {
                 bool on = (int)tab == i;
-                tabs[i].color = on ? Green : new Color(0, 0, 0, 0.07f);
+                tabs[i].color = on ? Green : Color.white;
                 tabs[i].GetComponentInChildren<Text>().color = on ? Color.white : Ink;
             }
             stars.text = P.stars.ToString("N0");
@@ -172,6 +172,11 @@ namespace Telfer.UI
             bool wearing = Wearing(it.kind) == it.id;
             var rt = UiKit.Rect(grid, it.id, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(220, 250));
             var b = UiKit.Button(rt, "btn", wearing ? new Color(0.75f, 0.95f, 0.7f) : Color.white, 26, () => Tap(it, rt));
+            var well = UiKit.Image(b.transform, "well", UiKit.Circle, wearing ? new Color(1, 1, 1, 0.6f) : UiKit.Well);
+            var wr = (RectTransform)well.transform;
+            wr.anchorMin = wr.anchorMax = new Vector2(0.5f, 1);
+            wr.sizeDelta = new Vector2(150, 150);
+            wr.anchoredPosition = new Vector2(0, -91); // behind the centre of the picture below
             var pic = UiKit.Rect(b.transform, "pic", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -6), new Vector2(170, 170));
             if (it.kind == ItemKind.Trail) Swatch(pic, it.palette);
             else

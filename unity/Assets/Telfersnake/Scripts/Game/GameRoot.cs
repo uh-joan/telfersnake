@@ -629,6 +629,7 @@ namespace Telfer.Game
             Pushers();
 
             hud.ShowStick(controls.StickOn && state == State.Play, controls.StickBase, controls.StickKnob);
+            hud.ShowDashing(controls.Dash && state == State.Play);
             hud.SetBubbleWorld(bubbleFromSami ? wild.SamiHead : views.CooperHead);
             if (state == State.Play && me.alive)
             {
