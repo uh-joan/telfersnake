@@ -20,9 +20,23 @@ BOX="${DEPLOY_USER}@${DEPLOY_HOST}"
 echo "→ building the game and the server…"
 npm run build
 
+# The Unity remaster rides along at /hd/. It is built in the Unity editor (unity/README.md), not
+# here; without it the copy below would delete the live /hd/, so stop unless told to go without.
+HD_BUILD=unity/Builds/WebGL
+if [ -f "$HD_BUILD/index.html" ]; then
+  echo "→ adding the Unity remaster at /hd/ (built $(date -r "$HD_BUILD/index.html" '+%d %b %H:%M'))…"
+  mkdir -p dist/hd && cp -R "$HD_BUILD"/. dist/hd/
+  # Unity writes its build files owner-only; the container serves them as another user.
+  chmod -R a+rX dist/hd
+elif [ "${SKIP_HD:-}" != 1 ]; then
+  echo "✗ no Unity build in $HD_BUILD: build it (unity/README.md), or SKIP_HD=1 to deploy without /hd/"
+  exit 1
+fi
+
 echo "→ copying to ${BOX}:${DEPLOY_PATH}…"
 ssh "$BOX" "mkdir -p '${DEPLOY_PATH}'"
-rsync -az --delete --include='/dist/***' --include='/dist-server/***' --include='/deploy/***' \
+# No -z: the builds are already compressed, and macOS's openrsync can stall compressing big files.
+rsync -a --delete --include='/dist/***' --include='/dist-server/***' --include='/deploy/***' \
   --include='/Dockerfile' --include='/.dockerignore' --exclude='*' ./ "${BOX}:${DEPLOY_PATH}/"
 
 echo "→ rebuilding and restarting the container…"

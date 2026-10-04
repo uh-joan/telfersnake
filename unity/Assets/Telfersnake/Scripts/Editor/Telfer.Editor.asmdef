@@ -1,0 +1,14 @@
+{
+    "name": "Telfer.Editor",
+    "rootNamespace": "Telfer.EditorTools",
+    "references": [
+        "Telfer",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime"
+    ],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

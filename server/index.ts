@@ -43,6 +43,7 @@ const DIST = join(fileURLToPath(new URL('.', import.meta.url)), '..', 'dist');
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json',
+  '.ttf': 'font/ttf', '.wasm': 'application/wasm',
 };
 
 const rooms = new Map<string, Room>();
@@ -131,14 +132,31 @@ function serve(req: IncomingMessage, res: import('node:http').ServerResponse): v
   // Serve the built game, so one deploy is the whole thing.
   const path = normalize(decodeURIComponent((req.url ?? '/').split('?')[0])).replace(/^(\.\.[/\\])+/, '');
   let file = join(DIST, path);
-  if (!file.startsWith(DIST) || !existsSync(file) || statSync(file).isDirectory()) file = join(DIST, 'index.html');
+  const inside = file.startsWith(DIST) && existsSync(file);
+  // A folder with its own page (the Unity remaster at /hd/): serve that page, with the trailing
+  // slash its relative links need.
+  if (inside && statSync(file).isDirectory() && existsSync(join(file, 'index.html'))) {
+    if (!path.endsWith('/') && !path.endsWith('\\')) {
+      const query = (req.url ?? '').includes('?') ? (req.url ?? '').slice((req.url ?? '').indexOf('?')) : '';
+      res.writeHead(301, { location: path.replace(/\\/g, '/') + '/' + query }).end();
+      return;
+    }
+    file = join(file, 'index.html');
+  } else if (!inside || statSync(file).isDirectory()) {
+    // A missing file of the remaster is a 404, not the web game's page (its loader would choke on HTML).
+    if (/^[/\\]hd[/\\]/.test(path)) {
+      res.writeHead(404).end();
+      return;
+    }
+    file = join(DIST, 'index.html');
+  }
   if (!existsSync(file)) {
     res.writeHead(404).end('Build the game first: npm run build');
     return;
   }
-  // Vite's bundles carry a content hash in their name, so they can be kept for ever; the page itself
-  // must be re-checked on every open or a phone's home-screen copy pins an old build.
-  const hashed = /[/\\]assets[/\\]/.test(file);
+  // Vite's bundles and the remaster's build files carry a content hash in their name, so they can be
+  // kept for ever; a page must be re-checked on every open or a phone's home-screen copy pins an old build.
+  const hashed = /[/\\]assets[/\\]/.test(file) || /[/\\]hd[/\\]Build[/\\]/.test(file);
   res.writeHead(200, {
     'content-type': MIME[extname(file)] ?? 'application/octet-stream',
     'cache-control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
