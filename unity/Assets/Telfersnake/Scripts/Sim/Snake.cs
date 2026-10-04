@@ -333,7 +333,11 @@ namespace Telfer.Sim
             ExtendTrail();
         }
 
-        void Move(SnakeInput input, float dt, bool canDash, ITerrain terrain, IReadOnlyList<Circle> rocks)
+        /// <summary>
+        /// Steering and movement only, no trail: what a client replays to predict its own snake ahead of
+        /// the server (snake.ts move). `rocks` are the world's extra solids on top of the stage.
+        /// </summary>
+        public void Move(SnakeInput input, float dt, bool canDash, ITerrain terrain, IReadOnlyList<Circle> rocks)
         {
             immune = Math.Max(0, immune - dt);
             bumpQuiet = Math.Max(0, bumpQuiet - dt);
@@ -394,6 +398,32 @@ namespace Telfer.Sim
                 if (tx_ * steerX + tz_ * steerZ < 0) { tx_ = -tx_; tz_ = -tz_; }
             }
             heading = Collide.TurnToward(heading, (float)Math.Atan2(tz_, tx_), WALL_DEFLECT * dt);
+        }
+
+        /// <summary>
+        /// Move the head to a shown position and lay the trail from there (snake.ts follow): a client's
+        /// heads are smoothed, so bodies are laid from what is shown. A jump of over 5 m is a respawn.
+        /// </summary>
+        public void Follow(float px, float pz, float h)
+        {
+            if (Collide.Hypot(px - x, pz - z) > 5) { PlaceAt(px, pz, h); return; }
+            x = px; z = pz; heading = h;
+            ExtendTrail();
+        }
+
+        /// <summary>Magic buffs on or off from the server's bitmask (bit i is MagicId i).</summary>
+        public void SetMagic(int mask)
+        {
+            for (int i = 0; i < magic.Length; i++) magic[i] = (mask & (1 << i)) != 0 ? 1 : 0;
+        }
+
+        /// <summary>Replace the upgrade levels wholesale (indexed by UpgradeId): how a client mirrors what the server says it owns.</summary>
+        public void SetUpgrades(int[] levels)
+        {
+            for (int i = 0; i < upgrades.Length; i++) upgrades[i] = i < levels.Length ? Math.Max(0, levels[i]) : 0;
+            bool ready = helmetReady;
+            Upgrades.Refresh(this);
+            helmetReady = ready;
         }
 
         /// <summary>Position d metres behind the head, measured along the body.</summary>

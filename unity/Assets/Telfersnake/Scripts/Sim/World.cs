@@ -87,7 +87,13 @@ namespace Telfer.Sim
         readonly Dictionary<Snake, Bot> bots = new Dictionary<Snake, Bot>();
         SnakeInput playerInput;
 
-        public Snake Me => Snakes[0];
+        /// <summary>Which snake is this player's: 0 in solo, the server's seat in a network replica.</summary>
+        public readonly int MeIndex;
+        public Snake Me => Snakes[MeIndex];
+        /// <summary>A network replica is shown, never stepped: the server runs the real world.</summary>
+        public readonly bool IsReplica;
+        /// <summary>What snakes bounce off: the rocks plus the stage's logs (for predicting your own snake online).</summary>
+        public IReadOnlyList<Circle> SnakeSolids => snakeSolids;
 
         public World(uint seed, Mode mode, Stage stage = null, SnakeLook look = null, bool canBuyPowers = false)
         {
@@ -137,7 +143,31 @@ namespace Telfer.Sim
             Creatures = Sim.Creatures.Make(Stage, Rng);
         }
 
-        void RefreshHazardCircles()
+        /// <summary>
+        /// An empty world for a networked replica (port of the shape of replica.ts): no bots, no food,
+        /// no animals. The replica fills the lists from the server's welcome, writes the snapshots into
+        /// them, and never calls Step.
+        /// </summary>
+        World(Stage stage, Mode mode, int me)
+        {
+            Rng = new Rng(1);
+            Mode = mode;
+            Stage = stage ?? School.Stage;
+            ferocity = Rivals.Ferocity(mode);
+            Cooper = new Cooper(Stage.Warden);
+            Hazards = new List<Hazard>();
+            Predators = new List<Predator>();
+            Kids = new List<Kid>();
+            Creatures = new List<Creature>();
+            MeIndex = me;
+            IsReplica = true;
+            RefreshHazardCircles();
+        }
+
+        public static World Replica(Stage stage, Mode mode, int me) => new World(stage, mode, me);
+
+        /// <summary>Call after moving a hazard (a broken rock dropped somewhere new).</summary>
+        public void RefreshHazardCircles()
         {
             HazardCircles.Clear();
             foreach (var h in Hazards) HazardCircles.Add(h.AsCircle);

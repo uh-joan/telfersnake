@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Telfer.Audio;
 using Telfer.Meta;
+using Telfer.Net;
 using Telfer.Sim;
 using Telfer.UI;
 using Telfer.View;
@@ -65,6 +66,14 @@ namespace Telfer.Game
         public static float LookDistance = 24;
         Bot pilot;
         public World World => world;
+        /// <summary>The online run being played (null in solo), and one still waiting for its seat.</summary>
+        Replica net, joining;
+        int netSeatsSeen;
+        public Replica Net => net;
+        /// <summary>Why the last online attempt did not start or ended ('' while fine): offline, lost, full, old, busy.</summary>
+        public string NetWhy { get; private set; } = "";
+        /// <summary>The player's snake: 0 in solo, the server's seat online.</summary>
+        int MeIx => world.MeIndex;
         Profile P => Profile.I;
 
         void Start()
@@ -177,6 +186,7 @@ namespace Telfer.Game
         void NewWorld(Mode mode, StageId stageId, bool attractMode)
         {
             ShowPlace(stageId);
+            if (net != null) { net.Leave(); net = null; }
             if (runRoot) Destroy(runRoot.gameObject);
             RunAssets.Release();
             snakeViews.Clear();
@@ -228,6 +238,134 @@ namespace Telfer.Game
             }
         }
 
+        // ------------------------------------------------------------------ online runs
+
+        /// <summary>
+        /// Ask the server for a seat in a shared playground with the chosen mode and place. The title keeps
+        /// playing until the first snapshot arrives, then the run starts as StartRun does. If the seat never
+        /// comes, <see cref="NetWhy"/> says why and nothing else happens (the caller can play solo).
+        /// </summary>
+        public void StartOnline(string name = "Telfer", string url = null)
+        {
+            joining?.Leave();
+            NetWhy = "";
+            bool canBuy = !Autopilot && P.gems >= Upgrades.POWER_GEM_COST;
+            joining = Replica.Join(P.Mode, P.Stage, canBuy, P.skin, P.hat, P.trail, name, url);
+        }
+
+        /// <summary>Dev, from Tools/ev.sh in play mode: join the local server with the autopilot steering.</summary>
+        public static string DevOnline(bool autopilot = true)
+        {
+            if (I == null) return "no GameRoot (not playing?)";
+            Autopilot = autopilot;
+            I.StartOnline("Unity Dev");
+            return "joining " + I.joining.Net.Url;
+        }
+
+        /// <summary>Dev: how the online run is doing, in one line.</summary>
+        public static string NetStatus()
+        {
+            var r = I?.net ?? I?.joining;
+            if (r == null) return "solo; last why=" + I?.NetWhy;
+            var me = r.Snake;
+            return r.State + (r.Why != "" ? "(" + r.Why + ")" : "") + " room=" + r.Room + " me=" + r.Me + " humans=" + r.HumanCount
+                + " snaps=" + r.Snapshots + " tick=" + r.World?.Tick + " silent=" + r.SilentFor.ToString("F2")
+                + " predErrMax=" + r.MaxPredictionError.ToString("F3") + " last=" + r.LastPredictionError.ToString("F3") + " resets=" + r.HardResets
+                + " events=" + string.Join(",", System.Linq.Enumerable.Select(r.EventCounts, kv => kv.Key + ":" + kv.Value))
+                + (me != null ? " score=" + me.score + " mass=" + me.mass.ToString("F1") + " alive=" + me.alive + " at=" + me.x.ToString("F1") + "," + me.z.ToString("F1") : "");
+        }
+
+        void PollJoin()
+        {
+            joining.Update(0, default);
+            if (joining.State == NetState.Failed || joining.State == NetState.Closed)
+            {
+                NetWhy = joining.Why;
+                Debug.Log("Telfer.Net: no seat (" + NetWhy + ")");
+                joining = null;
+                return;
+            }
+            if (!joining.Live) return;
+            var r = joining;
+            joining = null;
+            NewNetWorld(r);
+            state = State.Play;
+            runGulps = runBonks = runGems = 0;
+            runLongest = 0;
+            hud.ShowTitle(false);
+            var me = world.Me;
+            rig.Snap(W.P(me.x, me.z), me.Length);
+            synth.Play("bell");
+            synth.SetMusicLevel(0);
+        }
+
+        /// <summary>NewWorld for an online run: the replica's world, with views made exactly as for solo.</summary>
+        void NewNetWorld(Replica r)
+        {
+            ShowPlace(r.World.Stage.Id);
+            if (net != null) net.Leave();
+            if (runRoot) Destroy(runRoot.gameObject);
+            RunAssets.Release();
+            snakeViews.Clear();
+            runRoot = new GameObject("Run").transform;
+            runRoot.SetParent(transform, false);
+            net = r;
+            world = r.World;
+            bubbleFromSami = false;
+            hud.ClearBubble();
+            views = new Views(world, runRoot);
+            wild = new WildViews(world, runRoot);
+            for (int i = 0; i < world.Snakes.Count; i++) snakeViews.Add(NetSnakeView(i));
+            r.ChangedSeats.Clear();
+            netSeatsSeen = r.SeatsVersion;
+            pilot = null;
+            attract = null;
+            acc = 0;
+            hud.SetStage(world.Stage);
+        }
+
+        /// <summary>A snake dressed the way its seat says (the server echoes my own clothes back too).</summary>
+        SnakeView NetSnakeView(int i)
+        {
+            var seat = i < net.AllSeats.Length ? net.AllSeats[i] : null;
+            var trail = seat != null ? Catalogue.Find(seat.trail) : null;
+            var sv = new SnakeView(world.Snakes[i], runRoot, i == MeIx, seat?.look.pattern, seat?.hat, trail?.palette);
+            sv.OnStep();
+            sv.OnStep();
+            return sv;
+        }
+
+        /// <summary>One frame of an online run: the replica moves everything, the views show it as it stands.</summary>
+        void NetFrame(float dt, Snake me)
+        {
+            SnakeInput input = default;
+            if (Autopilot) input = (pilot ?? (pilot = new Bot(new Personality("You", 0, 0, 0, 0, 1, 1, 0.9f, 0.1f, 0.4f, false, 9999)))).Think(me, world, World.STEP);
+            else if (state == State.Play) input = new SnakeInput { x = controls.Steer.x, z = -controls.Steer.y, active = controls.Active, dash = controls.Dash };
+            net.Update(dt, input);
+            if (net.State != NetState.Joined)
+            {
+                NetWhy = net.Why;
+                Debug.Log("Telfer.Net: run ended (" + NetWhy + ")");
+                FinishRun(); // home time with what was earned; a replica world is never stepped
+                return;
+            }
+            if (net.SeatsVersion != netSeatsSeen)
+            {
+                netSeatsSeen = net.SeatsVersion;
+                foreach (int i in net.ChangedSeats)
+                {
+                    if (i < snakeViews.Count) { snakeViews[i].Destroy(); snakeViews[i] = NetSnakeView(i); }
+                    else while (snakeViews.Count < world.Snakes.Count) snakeViews.Add(NetSnakeView(snakeViews.Count));
+                }
+                net.ChangedSeats.Clear();
+            }
+            views.OnStep();
+            wild.OnStep();
+            foreach (var sv in snakeViews) sv.OnStep();
+            HandleEvents();
+            if (Autopilot && state == State.Play && net.Cards != null) net.Pick(Random.Range(0, 3));
+        }
+
         int StarsEarned()
         {
             var me = world.Me;
@@ -270,8 +408,9 @@ namespace Telfer.Game
         void SetPaused(bool on)
         {
             if (state == State.Title) return;
+            net?.SetAway(on && state == State.Play);
             if (on && state == State.Play) { state = State.Paused; hud.ShowPause(true); synth.Duck(true); }
-            else if (!on && state == State.Paused) { state = world.Me.cards != null ? State.Cards : State.Play; hud.ShowPause(false); synth.Duck(state == State.Cards); }
+            else if (!on && state == State.Paused) { state = net == null && world.Me.cards != null ? State.Cards : State.Play; hud.ShowPause(false); synth.Duck(state == State.Cards); }
         }
 
         void SaveBest()
@@ -297,6 +436,7 @@ namespace Telfer.Game
             runGems += n;
             P.Save();
             world.Me.canBuyPowers = P.gems >= Upgrades.POWER_GEM_COST;
+            net?.SetCanBuy(world.Me.canBuyPowers);
             hud.Pop(at + Vector3.up * 1.8f, "+" + n + " gem", new Color(0.45f, 0.8f, 1f), 36, 1.2f);
             synth.Play("zip", 0.6f);
         }
@@ -318,7 +458,7 @@ namespace Telfer.Game
             synth.Play("pick");
             synth.Duck(false);
             state = State.Play;
-            var head = snakeViews[0].HeadPos;
+            var head = snakeViews[MeIx].HeadPos;
             Fx.I.Stars(head, 18);
             Fx.I.Ring(head, new Color(0.5f, 0.8f, 1f), 3, 0.5f);
             hud.Pop(head, Upgrades.DEFS[(int)card].label + "!", new Color(0.6f, 0.9f, 1f), 40, 1.3f);
@@ -350,14 +490,16 @@ namespace Telfer.Game
                 if (Controls.Pressed(Key.Digit3) || Controls.Pressed(Key.Numpad3)) Choose(2);
             }
 
+            if (joining != null) PollJoin();
             var me = world.Me;
-            var meView = snakeViews[0];
+            var meView = snakeViews[MeIx];
             var cam = rig.Cam;
             var headScreen = (Vector2)cam.WorldToScreenPoint(meView.HeadPos);
             controls.DashButtonHeld = hud.Pad.DashHeld;
             controls.Update(headScreen, realDt, hud.PointerOverUi() || state != State.Play);
 
-            if (state == State.Play || state == State.Title)
+            if (net != null) NetFrame(realDt, me);
+            else if (state == State.Play || state == State.Title)
             {
                 acc += dt;
                 int steps = 0;
@@ -383,11 +525,11 @@ namespace Telfer.Game
                 if (steps == 6) acc = 0;
             }
 
-            float alpha = state == State.Play || state == State.Title ? Mathf.Clamp01(acc / World.STEP) : 1;
+            float alpha = net == null && (state == State.Play || state == State.Title) ? Mathf.Clamp01(acc / World.STEP) : 1;
             float time = Time.time;
             var steerWorld = new Vector2(controls.Steer.x, controls.Steer.y);
             for (int i = 0; i < snakeViews.Count; i++)
-                snakeViews[i].Sync(alpha, dt, time, world.Tick, i == 0 && attract == null ? steerWorld : Vector2.zero);
+                snakeViews[i].Sync(alpha, dt, time, world.Tick, i == MeIx && attract == null ? steerWorld : Vector2.zero);
             views.Sync(alpha, dt, time, me);
             wild.Sync(alpha, dt, time);
 
@@ -449,7 +591,7 @@ namespace Telfer.Game
             bool live = attract == null;
             foreach (var e in world.Events)
             {
-                bool mine = e.who == 0 && live;
+                bool mine = e.who == MeIx && live;
                 var sv = e.who >= 0 && e.who < snakeViews.Count ? snakeViews[e.who] : null;
                 var at = W.P(e.x, e.z);
                 switch (e.type)
@@ -511,8 +653,8 @@ namespace Telfer.Game
                             slowmoFor = 0.7f;
                             atmo.TierUp();
                             rig.Punch(1);
-                            Fx.I.Confetti(snakeViews[0].HeadPos, 110, 9);
-                            Fx.I.Ring(snakeViews[0].HeadPos, new Color(1f, 0.85f, 0.3f), 9, 0.9f);
+                            Fx.I.Confetti(snakeViews[MeIx].HeadPos, 110, 9);
+                            Fx.I.Ring(snakeViews[MeIx].HeadPos, new Color(1f, 0.85f, 0.3f), 9, 0.9f);
                             hud.ShowTier(e.tier, Hud.NextGulps(world.Stage, e.tier));
                         }
                         break;
@@ -527,7 +669,7 @@ namespace Telfer.Game
                             atmo.Hit(1);
                             SaveBest();
                         }
-                        else if (e.by == 0 && live)
+                        else if (e.by == MeIx && live)
                         {
                             runBonks++;
                             synth.Play("bonkedRival");
@@ -552,7 +694,7 @@ namespace Telfer.Game
                     case EventType.Sneeze:
                         Fx.I.Embers(at);
                         if (mine) { synth.Play("ouch"); hud.Pop(at + Vector3.up, "Hot!", new Color(1f, 0.55f, 0.3f), 40); }
-                        if (e.by == 0 && live) EarnGem(at);
+                        if (e.by == MeIx && live) EarnGem(at);
                         break;
                     case EventType.Power:
                     {
@@ -575,7 +717,7 @@ namespace Telfer.Game
                             synth.Play("ouch");
                             rig.Shake(0.3f);
                         }
-                        if (e.by == 0 && live) EarnGem(at);
+                        if (e.by == MeIx && live) EarnGem(at);
                         break;
                     case EventType.Howl:
                         if (live && Near(at)) synth.Play("growl", 0.7f);

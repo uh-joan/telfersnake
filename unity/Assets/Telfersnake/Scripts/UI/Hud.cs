@@ -974,10 +974,10 @@ namespace Telfer.UI
                 var s = w.Snakes[i];
                 if (!s.alive) continue;
                 var c = MeshKit.Hex(s.look.body);
-                float size = i == 0 ? 20 : 11 + Mathf.Min(8, s.Radius * 8);
-                var rt = MapDot(di++, i == 0 ? Color.white : c, size);
+                float size = i == w.MeIndex ? 20 : 11 + Mathf.Min(8, s.Radius * 8);
+                var rt = MapDot(di++, i == w.MeIndex ? Color.white : c, size);
                 rt.anchoredPosition = MapPos(s.x, s.z);
-                if (i == 0)
+                if (i == w.MeIndex)
                 {
                     var inner = MapDot(di++, c, 13);
                     inner.anchoredPosition = rt.anchoredPosition;
@@ -997,7 +997,7 @@ namespace Telfer.UI
                 board[i].name.transform.parent.gameObject.SetActive(on);
                 if (!on) continue;
                 var s = order[i];
-                bool mine = s.id == 0;
+                bool mine = s == me;
                 SetText(board[i].name, mine ? "You" : s.look.name);
                 if (boardScores[i] != (int)s.score || board[i].score.text.Length == 0) { boardScores[i] = (int)s.score; board[i].score.text = boardScores[i].ToString("N0"); }
                 board[i].dot.color = MeshKit.Hex(s.look.body);
@@ -1013,7 +1013,7 @@ namespace Telfer.UI
             for (int i = 0; i < w.Snakes.Count; i++)
             {
                 var s = w.Snakes[i];
-                bool on = i > 0 && s.alive;
+                bool on = i != w.MeIndex && s.alive;
                 nameTags[i].rt.gameObject.SetActive(on);
                 if (!on) continue;
                 var p = ToUi(headOf(i) + Vector3.up * (s.Radius * 2 + 0.6f), out bool vis);
