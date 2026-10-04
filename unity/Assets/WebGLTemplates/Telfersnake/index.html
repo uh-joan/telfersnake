@@ -72,7 +72,8 @@
           unity.SendMessage("Telfersnake", "SafeInsets",
             [f(s.left, w), f(s.bottom, h), f(s.right, w), f(s.top, h)].map((n) => n.toFixed(4)).join(","));
         };
-        insets();
+        // The game object may not exist the moment the promise resolves: say it again shortly after.
+        insets(); setTimeout(insets, 500); setTimeout(insets, 2000);
         addEventListener("resize", () => setTimeout(insets, 100));
         addEventListener("orientationchange", () => setTimeout(insets, 300));
         fill.style.width = "100%";

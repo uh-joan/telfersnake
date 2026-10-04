@@ -136,7 +136,7 @@ namespace Telfer.UI
             r.anchoredPosition = pos;
         }
 
-        void Close()
+        public void Close()
         {
             Audio.Synth.I?.Play("pick");
             if (layer) UnityEngine.Object.Destroy(layer.gameObject);

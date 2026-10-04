@@ -443,6 +443,9 @@ namespace Telfer.Game
         {
             if (state == State.Title) return;
             SaveBest();
+            // A run can end under the pause menu or the shop (a dropped connection): clear them first.
+            hud.ShowPause(false);
+            hud.CloseShop();
             hud.HideCards();
             var me = world.Me;
             int stars = RealRun ? StarsEarned() : 0;
@@ -552,7 +555,7 @@ namespace Telfer.Game
                 if (state == State.Play) SetPaused(true);
                 else if (state == State.Paused) SetPaused(false);
             }
-            if (state == State.Title && !hud.ResultsOpen && !hud.ShopOpen && !hud.NameOpen && (Controls.Pressed(Key.Enter) || Controls.PadPressed(p => p.buttonSouth))) Play();
+            if (state == State.Title && !hud.ResultsOpen && !hud.ShopOpen && !hud.NameOpen && hud.NameClosedFrame != Time.frameCount && (Controls.Pressed(Key.Enter) || Controls.PadPressed(p => p.buttonSouth))) Play();
             if (state == State.Cards)
             {
                 if (Controls.Pressed(Key.Digit1) || Controls.Pressed(Key.Numpad1)) Choose(0);
@@ -911,6 +914,11 @@ namespace Telfer.Game
             if (paused) { SaveBest(); if (state == State.Play) SetPaused(true); }
         }
 
-        void OnApplicationQuit() => SaveBest();
+        void OnApplicationQuit()
+        {
+            SaveBest();
+            net?.Leave();
+            joining?.Leave();
+        }
     }
 }

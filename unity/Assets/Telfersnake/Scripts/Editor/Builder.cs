@@ -38,6 +38,8 @@ namespace Telfer.EditorTools
             PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;
             PlayerSettings.WebGL.decompressionFallback = true;
             PlayerSettings.WebGL.dataCaching = true;
+            // Each build gets new file names, so a browser never mixes a cached old build with a new page.
+            PlayerSettings.WebGL.nameFilesAsHashes = true;
             PlayerSettings.WebGL.template = "PROJECT:Telfersnake";
             AssetDatabase.SaveAssets();
             Debug.Log("[Telfersnake] project set up");

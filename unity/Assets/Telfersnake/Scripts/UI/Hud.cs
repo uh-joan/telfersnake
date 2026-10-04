@@ -217,6 +217,7 @@ namespace Telfer.UI
         public Action<Mode> OnMode;
         public Action OnShopChanged;
         public bool ShopOpen => shop.IsOpen;
+        public void CloseShop() { if (shop.IsOpen) shop.Close(); }
         CanvasGroup titleGroup;
         Image spinner;
         RectTransform nameChip;
@@ -968,6 +969,8 @@ namespace Telfer.UI
         }
 
         public bool NameOpen => namePanel.gameObject.activeSelf;
+        /// <summary>The frame the name panel closed, so the Enter that typed the name doesn't also press Play.</summary>
+        public int NameClosedFrame { get; private set; } = -1;
 
         void OpenName()
         {
@@ -986,6 +989,7 @@ namespace Telfer.UI
             if (cleaned != null) { p.name = cleaned; p.Save(); Audio.Synth.I?.Play("pick"); }
             else Audio.Synth.I?.Play("nope");
             namePanel.gameObject.SetActive(false);
+            NameClosedFrame = Time.frameCount;
             RefreshTitle();
         }
 

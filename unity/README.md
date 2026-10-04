@@ -95,9 +95,20 @@ Tools/shot.sh title
 
 `GameRoot.Autopilot` lets a bot drive your snake; `GameRoot.LookAt` / `LookAtFn` point the camera.
 
-## Not in this cut
+## Playing online
 
-Multiplayer rooms stay in the web game for now. The sim port keeps the shape of the TypeScript,
-so the Unity client can talk to the same Node server later.
+Play first looks for a seat on the same Node server as the web game (`npm run server`, port
+8787), so Unity and web players share rooms; with no server it quietly starts a solo run.
+`Scripts/Net` speaks the server's JSON protocol (`src/net/protocol.ts`) and `Replica` ports
+`src/net/replica.ts`: the server runs the world, other snakes are drawn a few ticks behind, and
+your own snake is predicted. The server address comes from:
+
+- the editor and dev builds: `ws://localhost:8787/play`
+- a WebGL page: its own host, or that host on port 8787 when served from another port
+- a release desktop build: `wss://telfersnake.joans.cat/play`
+- an override: `-server <url>` on the command line or `?server=<url>` on the page
+
+The live server only accepts the site's origin. Desktop builds send it explicitly; a WebGL
+build hosted anywhere else needs adding to `ALLOWED_ORIGINS` on the server.
 
 Font: Fredoka (SIL Open Font License, see `Resources/Fredoka-OFL.txt`).

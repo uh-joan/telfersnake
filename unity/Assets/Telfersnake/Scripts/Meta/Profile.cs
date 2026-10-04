@@ -49,7 +49,10 @@ namespace Telfer.Meta
             }
             if (p.owned == null) p.owned = new List<string>();
             foreach (var free in new[] { "telfer", "no-hat", "no-trail" }) if (!p.owned.Contains(free)) p.owned.Add(free);
-            p.name = Names.Clean(p.name) ?? Names.Random();
+            var named = Names.Clean(p.name);
+            p.name = named ?? Names.Random();
+            // Keep a fresh random name, so the other players see the same one next time.
+            if (named == null) p.Save();
             return p;
         }
 
