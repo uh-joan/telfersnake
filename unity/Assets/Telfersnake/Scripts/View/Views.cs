@@ -49,7 +49,7 @@ namespace Telfer.View
             foreach (var a in w.Animals) animals.Add(MakeAnimal(a));
             foreach (var h in w.Hazards) hazards.Add(new HazardV());
 
-            cooper = Models.Cooper(root);
+            cooper = w.Cooper.config.persona == "keeper" ? ModelsWild.Person(root, "keeper") : Models.Cooper(root);
             aura = Flat("aura", auraMat, Cooper.AURA * 2.1f);
             cooperPrev = cooperCur = W.P(w.Cooper.x, w.Cooper.z);
         }
@@ -97,7 +97,7 @@ namespace Telfer.View
             t.SetParent(root, false);
             var body = new GameObject("body", typeof(MeshFilter), typeof(MeshRenderer)).transform;
             body.SetParent(t, false);
-            body.GetComponent<MeshFilter>().sharedMesh = Models.Animal(a.kind);
+            body.GetComponent<MeshFilter>().sharedMesh = ModelsWild.ForestAnimal(a.kind);
             body.GetComponent<MeshRenderer>().sharedMaterial = Mats.VertexGlossy;
             var hm = RunAssets.Track(Mats.Glow(new Color(0.45f, 1f, 0.45f, 0.5f), 2, true, 1.6f));
             var halo = Flat("halo", hm, a.Spec.radius * 4.2f);
@@ -136,12 +136,12 @@ namespace Telfer.View
 
         public void SwallowFood(GameEvent e, SnakeView to)
         {
-            Swallow(Models.Food(e.food), e.golden ? goldMat : foodMat, W.P(e.x, e.z, 0.1f), 0, Vector3.one, to);
+            Swallow(ModelsWild.ForestFood(e.food), e.golden ? goldMat : foodMat, W.P(e.x, e.z, 0.1f), 0, Vector3.one, to);
         }
 
         public void SwallowAnimal(GameEvent e, SnakeView to)
         {
-            Swallow(Models.Animal(e.animal), Mats.VertexGlossy, W.P(e.x, e.z), 0, Vector3.one, to, 0.28f);
+            Swallow(ModelsWild.ForestAnimal(e.animal), Mats.VertexGlossy, W.P(e.x, e.z), 0, Vector3.one, to, 0.28f);
         }
 
         public void Sync(float alpha, float dt, float time, Snake me)
@@ -156,7 +156,7 @@ namespace Telfer.View
                 if (v.born != f.born || v.kind != f.kind || v.golden != f.golden)
                 {
                     v.born = f.born; v.kind = f.kind; v.golden = f.golden;
-                    v.mf.sharedMesh = Models.Food(f.kind);
+                    v.mf.sharedMesh = ModelsWild.ForestFood(f.kind);
                     v.mr.sharedMaterial = f.golden ? goldMat : foodMat;
                     v.halo.gameObject.SetActive(f.golden);
                 }

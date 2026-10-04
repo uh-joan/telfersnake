@@ -219,11 +219,13 @@ namespace Telfer.View
             Apply(dt, Time.time);
         }
 
-        public void TitleOrbit(float dt)
+        public void TitleOrbit(float dt) => TitleOrbit(dt, new Vector3(-6, 0, 4), 62);
+
+        public void TitleOrbit(float dt, Vector3 centre, float distance)
         {
             orbitAngle += dt * 4;
-            focus = Vector3.Lerp(focus, new Vector3(-6, 0, 4), 1 - Mathf.Exp(-dt * 0.8f));
-            dist = Mathf.Lerp(dist, 62, 1 - Mathf.Exp(-dt * 0.8f));
+            focus = Vector3.Lerp(focus, centre, 1 - Mathf.Exp(-dt * 0.8f));
+            dist = Mathf.Lerp(dist, distance, 1 - Mathf.Exp(-dt * 0.8f));
             var rot = Quaternion.Euler(38, orbitAngle, 0);
             transform.position = focus + rot * new Vector3(0, 0, -dist);
             transform.rotation = rot;

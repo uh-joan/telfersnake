@@ -1,7 +1,8 @@
 # Telfersnake HD (Unity)
 
-A Unity 6 / URP remaster of the school level of Telfersnake, built alongside the web game
-in the parent folder. Same rules, same school, same cast — rendered with real lighting.
+A Unity 6 / URP remaster of Telfersnake, built alongside the web game in the parent folder:
+the school and the Common, the gem powers, magic creatures and the Tuck Shop. Same rules,
+same places, same cast — rendered with real lighting.
 
 Everything on screen is **made in code at start-up**: there are no imported models,
 textures or sounds. The only asset files are the shaders, a font and the (empty) scene.
@@ -66,10 +67,18 @@ Assets/Telfersnake/
   around snakes, animals and Mr Cooper (`_TelferPushers`), plus butterflies, pigeons and pollen.
 - **Juice** (`View/Fx.cs`, `Game/GameRoot.cs`) — crumbs that bounce off the tarmac, sparkles,
   dust, confetti, shockwave rings, screen shake, slow-mo on tier-ups, food flying into the mouth.
+- **The Common** (`View/CommonEnv.cs`, `View/TreeField.cs`, `View/WildViews.cs`) — level 2,
+  unlocked for ⭐300: the painted meadow and roads, instanced woods, the Telferscot Road
+  terraces, Emmanuel Road with parked cars, the playground, the fallen log and the Glade. Bears,
+  wolves, kids with pebbles and kisses, Miss Sami, the park keeper and eight magic creatures.
+- **Meta** (`Meta/`, `UI/Shop.cs`) — the saved profile (stars, blue gems, unlocks, best scores)
+  and the Tuck Shop catalogue: skins, 18 hats and trails, shown on your snake in play.
 - **HUD** (`UI/`) — visual first, short words, no sentences: score, size bar with the next
-  animals you can gulp, XP bar, live minimap, leaderboard, rival name tags, Mr Cooper's speech
-  bubbles, level-up cards and a "Home time!" results screen. Every picture is the game's own
-  3D model, photographed by `Icons`.
+  animals you can gulp *here*, gem counter, magic timers (the creature, a ring that runs down),
+  XP bar, a minimap shaped to the place (gulpable animals yellow, too-big pink, predators red,
+  kids cyan, creatures violet while Owl Eyes lasts), leaderboard, rival name tags, speech
+  bubbles, level-up cards with a 💎 price on the powers, and a "Home time!" screen with the
+  stars and gems won. Every picture is the game's own 3D model, photographed by `Icons`.
 
 ## Driving it from the command line
 
@@ -88,7 +97,7 @@ Tools/shot.sh title
 
 ## Not in this cut
 
-The Common (level 2), multiplayer rooms, the Tuck Shop and the gem-priced powers stay in the web
-game for now. The sim port keeps the shape of the TypeScript, so they can follow the same way.
+Multiplayer rooms stay in the web game for now. The sim port keeps the shape of the TypeScript,
+so the Unity client can talk to the same Node server later.
 
 Font: Fredoka (SIL Open Font License, see `Resources/Fredoka-OFL.txt`).

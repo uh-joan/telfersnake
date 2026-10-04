@@ -24,6 +24,10 @@ namespace Telfer.View
                 case FoodKind.Cookie: return MeshKit.Hex(0xd9a066);
                 case FoodKind.Broccoli: return MeshKit.Hex(0x3fa34d);
                 case FoodKind.Carrot: return MeshKit.Hex(0xf08c00);
+                case FoodKind.Mushroom: return MeshKit.Hex(0xd23b32);
+                case FoodKind.Tomato: return MeshKit.Hex(0xe5383b);
+                case FoodKind.Berry: return MeshKit.Hex(0x5f3dc4);
+                case FoodKind.Acorn: return MeshKit.Hex(0x9c6b3c);
                 default: return MeshKit.Hex(0xe03131);
             }
         }
@@ -36,6 +40,12 @@ namespace Telfer.View
                 case AnimalKind.Ladybird: return MeshKit.Hex(0xe03131);
                 case AnimalKind.Pig: return MeshKit.Hex(0xf7a8b8);
                 case AnimalKind.Rabbit: return MeshKit.Hex(0xb08968);
+                case AnimalKind.Squirrel: return MeshKit.Hex(0xc8692c);
+                case AnimalKind.Crow: return MeshKit.Hex(0x2b2d42);
+                case AnimalKind.Deer: return MeshKit.Hex(0xb98552);
+                case AnimalKind.Hedgehog: return MeshKit.Hex(0x7a5a3a);
+                case AnimalKind.Fox: return MeshKit.Hex(0xe8590c);
+                case AnimalKind.Pigeon: return MeshKit.Hex(0x9aa3b0);
                 default: return MeshKit.Hex(0xf5f1e6);
             }
         }

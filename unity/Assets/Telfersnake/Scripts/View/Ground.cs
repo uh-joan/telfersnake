@@ -12,6 +12,11 @@ namespace Telfer.View
         public const float INNER = 100f;
         public const float OUTER = 320f;
         public static Texture2D Minimap;
+        static readonly System.Collections.Generic.Dictionary<StageId, (Texture2D tex, Rect uv)> maps = new System.Collections.Generic.Dictionary<StageId, (Texture2D, Rect)>();
+
+        /// <summary>Each stage's painted plan, shrunk for the minimap, and the uv rect its fence covers.</summary>
+        public static void SetMap(StageId id, Texture2D tex, Rect uv) => maps[id] = (tex, uv);
+        public static (Texture2D tex, Rect uv) Map(StageId id) => maps.TryGetValue(id, out var m) ? m : (Minimap, new Rect(0.11f, 0.09f, 0.78f, 0.82f));
 
         static readonly string[] HOP = { "#ff6b6b", "#ffd166", "#06d6a0", "#4dabf7", "#f78fb3", "#ffa94d", "#b197fc", "#63e6be" };
 
@@ -23,6 +28,8 @@ namespace Telfer.View
 
             var inner = PaintInner(hiRes ? 3072 : 2048);
             Minimap = inner.Downsample(256);
+            var B = School.BOUNDS;
+            SetMap(StageId.School, Minimap, new Rect((B.minX + INNER / 2) / INNER, (INNER / 2 - B.maxZ) / INNER, (B.maxX - B.minX) / INNER, (B.maxZ - B.minZ) / INNER));
             var innerTex = inner.ToTexture("ground-inner");
             var innerMat = Mats.Toon(Color.white, gloss: 0.06f, smooth: 0.25f, rim: 0.0f, tex: innerTex, vertexColor: false);
             innerMat.SetTexture("_DetailMap", grit);
@@ -41,7 +48,7 @@ namespace Telfer.View
             return root;
         }
 
-        static void Plane(Transform parent, string name, float size, float y, Material mat, int div)
+        public static void Plane(Transform parent, string name, float size, float y, Material mat, int div, float cx = 0, float cz = 0)
         {
             var k = new MeshKit();
             float h = size / 2;
@@ -54,7 +61,7 @@ namespace Telfer.View
                     int a = k.V.Count;
                     foreach (var (x, z) in new[] { (x0, z0), (x1, z0), (x1, z1), (x0, z1) })
                     {
-                        k.V.Add(W.P(x, z, y));
+                        k.V.Add(W.P(x + cx, z + cz, y));
                         k.N.Add(Vector3.up);
                         k.Col.Add(Color.white);
                         k.UV.Add(new Vector2((x + h) / size, (z + h) / size));

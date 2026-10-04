@@ -36,7 +36,7 @@ namespace Telfer.UI
         readonly Stack<PopUp> popPool = new Stack<PopUp>();
         float bannerT = -1, bubbleT, displayScore;
         Vector3 bubbleWorld;
-        Image[] modeButtons = new Image[2];
+        Image[] modeButtons = new Image[3];
 
         public Action<Mode> OnPlay;
         public Action OnResume, OnQuit;
@@ -61,6 +61,7 @@ namespace Telfer.UI
             nameLayer = UiKit.Fill(game, "Names");
             popLayer = UiKit.Fill(game, "Pops");
             BuildTopLeft();
+            BuildGems();
             BuildXpBar();
             BuildMinimap();
             BuildDash();
@@ -96,58 +97,146 @@ namespace Telfer.UI
             UiKit.Label(hd, "t", "HD", 40, Ink);
             hd.gameObject.AddComponent<Bob>().Amount = 5;
 
-            // Mode pills.
-            var modes = UiKit.Rect(t, "modes", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 40), new Vector2(420, 80));
+            // Where to play: the school, or the Common (locked until 300 stars are paid).
+            var stages = UiKit.Rect(t, "stages", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 70), new Vector2(520, 130));
             for (int i = 0; i < 2; i++)
             {
-                int idx = i;
-                var rt = UiKit.Rect(modes, "mode", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(i == 0 ? -105 : 105, 0), new Vector2(190, 72));
+                var id = i == 0 ? StageId.School : StageId.Common;
+                var rt = UiKit.Rect(stages, id.ToString(), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(i == 0 ? -135 : 135, 0), new Vector2(250, 120));
                 UiKit.Shadow(rt, 14, 0.25f);
-                var b = UiKit.Button(rt, "btn", Cream, 36, () => { Mode = idx == 0 ? Mode.Easy : Mode.Normal; RefreshModes(); Audio.Synth.I?.Play("pick"); });
-                modeButtons[i] = b.GetComponent<Image>();
-                UiKit.Label(b.transform, "t", i == 0 ? "Easy" : "Normal", 36, Ink);
+                var b = UiKit.Button(rt, "btn", Cream, 30, () => OnStage?.Invoke(id));
+                stageTiles[i] = b.GetComponent<Image>();
+                var ic = UiKit.Rect(b.transform, "icon", new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(8, 4), new Vector2(104, 104));
+                stageIcons[i] = ic.gameObject.AddComponent<RawImage>();
+                stageIcons[i].raycastTarget = false;
+                var lbl = UiKit.Label(b.transform, "t", i == 0 ? "School" : "Common", 34, Ink, TextAnchor.MiddleLeft);
+                ((RectTransform)lbl.transform).offsetMin = new Vector2(112, 0);
+                var lockRt = UiKit.Rect(b.transform, "lock", new Vector2(1, 1), new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-30, -6), new Vector2(110, 44));
+                lockRt.localRotation = Quaternion.Euler(0, 0, -6);
+                UiKit.Panel(lockRt, "bg", Ink, 22);
+                var ls = UiKit.Image(lockRt, "star", UiKit.Star, Yellow);
+                var lsr = (RectTransform)ls.transform; lsr.anchorMin = lsr.anchorMax = new Vector2(0, 0.5f); lsr.sizeDelta = new Vector2(30, 30); lsr.anchoredPosition = new Vector2(24, 0);
+                var lt = UiKit.Label(lockRt, "n", Meta.Profile.COMMON_COST.ToString(), 26, Color.white);
+                ((RectTransform)lt.transform).offsetMin = new Vector2(34, 0);
+                stageLocks[i] = lockRt.gameObject;
             }
-            RefreshModes();
+
+            // How hard: Easy, Normal, and God once it is earned.
+            var modes = UiKit.Rect(t, "modes", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -38), new Vector2(620, 70));
+            for (int i = 0; i < 3; i++)
+            {
+                var m = (Mode)i;
+                var rt = UiKit.Rect(modes, "mode", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2((i - 1) * 200, 0), new Vector2(180, 64));
+                UiKit.Shadow(rt, 12, 0.22f);
+                var b = UiKit.Button(rt, "btn", Cream, 32, () => { Mode = m; RefreshModes(); OnMode?.Invoke(m); Audio.Synth.I?.Play("pick"); });
+                modeButtons[i] = b.GetComponent<Image>();
+                UiKit.Label(b.transform, "t", m == Mode.God ? "God" : m.ToString(), 32, Ink);
+            }
 
             // The big yellow play button.
-            var play = UiKit.Rect(t, "play", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -120), new Vector2(190, 190));
+            var play = UiKit.Rect(t, "play", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -175), new Vector2(170, 170));
             UiKit.Shadow(play, 30, 0.35f, new Vector2(0, -14));
-            var pb = UiKit.Button(play, "btn", Yellow, 95, () => OnPlay?.Invoke(Mode));
+            var pb = UiKit.Button(play, "btn", Yellow, 85, () => OnPlay?.Invoke(Mode));
             pb.GetComponent<Springy>().Idle = 0.035f;
             var ring = UiKit.Image(pb.transform, "ring", UiKit.Ring, new Color(1, 1, 1, 0.55f));
             ((RectTransform)ring.transform).offsetMin = new Vector2(-6, -6); ((RectTransform)ring.transform).offsetMax = new Vector2(6, 6);
             var tri = UiKit.Image(pb.transform, "tri", UiKit.Play, Ink);
-            ((RectTransform)tri.transform).offsetMin = new Vector2(55, 50); ((RectTransform)tri.transform).offsetMax = new Vector2(-45, -50);
-            var playLbl = UiKit.Rect(t, "playLbl", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -250), new Vector2(200, 50));
-            UiKit.Label(playLbl, "t", "Play", 40, Color.white, TextAnchor.MiddleCenter, 2.5f);
+            ((RectTransform)tri.transform).offsetMin = new Vector2(50, 45); ((RectTransform)tri.transform).offsetMax = new Vector2(-40, -45);
+            var playLbl = UiKit.Rect(t, "playLbl", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -290), new Vector2(200, 50));
+            UiKit.Label(playLbl, "t", "Play", 38, Color.white, TextAnchor.MiddleCenter, 2.5f);
 
-            var best = UiKit.Rect(t, "best", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -330), new Vector2(260, 56));
-            UiKit.Panel(best, "bg", new Color(0, 0, 0, 0.32f), 28);
-            var star = UiKit.Image(best, "star", UiKit.Star, Yellow);
-            var srt = (RectTransform)star.transform; srt.anchorMin = srt.anchorMax = new Vector2(0, 0.5f); srt.sizeDelta = new Vector2(38, 38); srt.anchoredPosition = new Vector2(36, 0);
-            bestText = UiKit.Label(best, "t", "", 32, Color.white);
+            // Best score.
+            var best = UiKit.Rect(t, "best", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, -360), new Vector2(240, 52));
+            UiKit.Panel(best, "bg", new Color(0, 0, 0, 0.32f), 26);
+            var trophy = UiKit.Rect(best, "trophy", new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(32, 0), new Vector2(46, 46));
+            trophy.gameObject.AddComponent<RawImage>().texture = Icons.Trophy;
+            bestText = UiKit.Label(best, "t", "", 30, Color.white);
             ((RectTransform)bestText.transform).offsetMin = new Vector2(40, 0);
+
+            // The wallet, top left: stars and blue gems.
+            var wallet = UiKit.Rect(t, "wallet", new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(24, -24), new Vector2(330, 70));
+            UiKit.Shadow(wallet, 14, 0.22f);
+            UiKit.Panel(wallet, "bg", Cream, 35);
+            var ws = UiKit.Image(wallet, "star", UiKit.Star, Yellow);
+            var wsr = (RectTransform)ws.transform; wsr.anchorMin = wsr.anchorMax = new Vector2(0, 0.5f); wsr.sizeDelta = new Vector2(48, 48); wsr.anchoredPosition = new Vector2(38, 0);
+            walletStars = UiKit.Label(wallet, "stars", "0", 36, Ink, TextAnchor.MiddleLeft);
+            ((RectTransform)walletStars.transform).offsetMin = new Vector2(70, 0);
+            ((RectTransform)walletStars.transform).offsetMax = new Vector2(-165, 0);
+            var wg = UiKit.Image(wallet, "gem", UiKit.Gem, Gem);
+            var wgr = (RectTransform)wg.transform; wgr.anchorMin = wgr.anchorMax = new Vector2(0, 0.5f); wgr.sizeDelta = new Vector2(44, 44); wgr.anchoredPosition = new Vector2(196, 0);
+            walletGems = UiKit.Label(wallet, "gems", "0", 36, Ink, TextAnchor.MiddleLeft);
+            ((RectTransform)walletGems.transform).offsetMin = new Vector2(224, 0);
+
+            // The Tuck Shop, bottom left: a picture of you in your current look.
+            var shopRt = UiKit.Rect(t, "shop", new Vector2(0, 0), new Vector2(0, 0), new Vector2(0.5f, 0.5f), new Vector2(110, 120), new Vector2(150, 150));
+            UiKit.Shadow(shopRt, 20, 0.3f);
+            var sb = UiKit.Button(shopRt, "btn", new Color(1f, 0.6f, 0.75f), 75, () => { Audio.Synth.I?.Play("pick"); shop.Open(rootRt, () => { RefreshTitle(); OnShopChanged?.Invoke(); }); });
+            sb.GetComponent<Springy>().Idle = 0.02f;
+            var si = UiKit.Rect(sb.transform, "you", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 6), new Vector2(130, 130));
+            shopIcon = si.gameObject.AddComponent<RawImage>();
+            shopIcon.raycastTarget = false;
+            var sl = UiKit.Rect(shopRt, "lbl", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(0, -2), new Vector2(200, 40));
+            UiKit.Label(sl, "t", "Tuck Shop", 28, Color.white, TextAnchor.MiddleCenter, 2);
 
             var hint = UiKit.Rect(t, "hint", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 26), new Vector2(900, 40));
             UiKit.Label(hint, "t", "Telferscot Primary  ·  Unity HD", 24, new Color(1, 1, 1, 0.75f), TextAnchor.MiddleCenter, 1.5f);
             return t;
         }
 
+        readonly Image[] stageTiles = new Image[2];
+        readonly RawImage[] stageIcons = new RawImage[2];
+        readonly GameObject[] stageLocks = new GameObject[2];
+        Text walletStars, walletGems;
+        RawImage shopIcon;
+        readonly Shop shop = new Shop();
+        public Action<StageId> OnStage;
+        public Action<Mode> OnMode;
+        public Action OnShopChanged;
+        public bool ShopOpen => shop.IsOpen;
+        static readonly Color Gem = new Color(0.35f, 0.7f, 1f);
+
         void RefreshModes()
         {
-            for (int i = 0; i < 2; i++)
+            var p = Meta.Profile.I;
+            for (int i = 0; i < 3; i++)
             {
-                bool on = (i == 0) == (Mode == Mode.Easy);
-                modeButtons[i].color = on ? Green : Cream;
+                bool on = (Mode)i == Mode;
+                modeButtons[i].transform.parent.gameObject.SetActive(i < 2 || p.GodUnlocked);
+                modeButtons[i].color = on ? ((Mode)i == Mode.God ? new Color(0.55f, 0.3f, 0.9f) : Green) : Cream;
                 modeButtons[i].GetComponentInChildren<Text>().color = on ? Color.white : Ink;
             }
         }
+
+        /// <summary>Re-read the profile: wallet, unlocks, the chosen place and mode, your look.</summary>
+        public void RefreshTitle()
+        {
+            var p = Meta.Profile.I;
+            Mode = p.Mode;
+            RefreshModes();
+            walletStars.text = p.stars.ToString("N0");
+            walletGems.text = p.gems.ToString("N0");
+            bestText.text = p.bestScore.ToString("N0");
+            stageIcons[0].texture = Icons.Animal(AnimalKind.Chicken);
+            stageIcons[1].texture = Icons.Creature(CreatureKind.Stag);
+            for (int i = 0; i < 2; i++)
+            {
+                var id = i == 0 ? StageId.School : StageId.Common;
+                bool on = p.Stage == id;
+                stageTiles[i].color = on ? (i == 0 ? new Color(0.45f, 0.65f, 1f) : Green) : Cream;
+                stageTiles[i].GetComponentInChildren<Text>().color = on ? Color.white : Ink;
+                stageLocks[i].SetActive(i == 1 && !p.commonUnlocked);
+            }
+            shopIcon.texture = Icons.Skin(p.skin, p.hat);
+        }
+
+        /// <summary>Not enough stars for the Common yet: the tile shakes its head.</summary>
+        public void ShakeStage(StageId id) => stageTiles[id == StageId.School ? 0 : 1].gameObject.AddComponent<Shake>();
 
         public void ShowTitle(bool on)
         {
             title.gameObject.SetActive(on);
             game.gameObject.SetActive(!on);
-            if (on) bestText.text = PlayerPrefs.GetInt("best", 0).ToString("N0");
+            if (on) RefreshTitle();
         }
 
         // ------------------------------------------------------------------ top left: score and size
@@ -199,14 +288,13 @@ namespace Telfer.UI
             mask.sprite = UiKit.Rounded(20); mask.type = Image.Type.Sliced;
             inner.gameObject.AddComponent<Mask>().showMaskGraphic = false;
             var map = UiKit.Fill(inner, "ground");
-            var raw = map.gameObject.AddComponent<RawImage>();
-            raw.texture = Ground.Minimap;
-            // The painted texture covers 100 m; the school is 76 x 80 m in the middle of it.
-            raw.uvRect = new Rect(0.11f, 0.09f, 0.78f, 0.82f);
-            raw.raycastTarget = false;
+            mapRaw = map.gameObject.AddComponent<RawImage>();
+            mapRaw.raycastTarget = false;
             minimapImg = mask;
+            mapBox = box;
 
             var lb = UiKit.Rect(game, "board", new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1), new Vector2(-22, -268), new Vector2(250, 190));
+            boardRt = lb;
             UiKit.Panel(lb, "bg", new Color(0, 0, 0, 0.25f), 20);
             for (int i = 0; i < 5; i++)
             {
@@ -240,8 +328,28 @@ namespace Telfer.UI
         Vector2 MapPos(float x, float z)
         {
             var size = ((RectTransform)minimapImg.transform).rect.size;
-            var B = School.BOUNDS;
+            var B = mapBounds;
             return new Vector2((x - B.minX) / (B.maxX - B.minX) * size.x, (1 - (z - B.minZ) / (B.maxZ - B.minZ)) * size.y);
+        }
+
+        RawImage mapRaw;
+        RectTransform mapBox, boardRt;
+        Stage stage;
+        Bounds2 mapBounds = School.BOUNDS;
+
+        /// <summary>Point the HUD at a place: its painted plan on the minimap, sized to its fence.</summary>
+        public void SetStage(Stage s)
+        {
+            stage = s;
+            mapBounds = s.Bounds;
+            var (tex, uv) = Ground.Map(s.Id);
+            mapRaw.texture = tex;
+            mapRaw.uvRect = uv;
+            // Keep the map the shape of the place: the Common is taller than it is wide.
+            float h = Mathf.Clamp(210 * (mapBounds.maxZ - mapBounds.minZ) / (mapBounds.maxX - mapBounds.minX), 160, 290);
+            mapBox.sizeDelta = new Vector2(210, h);
+            boardRt.anchoredPosition = new Vector2(-22, -34 - h - 14);
+            lastTier = lastGulpTier = -1;
         }
 
         // ------------------------------------------------------------------ touch controls
@@ -386,19 +494,106 @@ namespace Telfer.UI
             bannerRt.gameObject.SetActive(false);
         }
 
-        public void ShowTier(int tier, Texture2D[] gulps)
+        public void ShowTier(int tier, Texture2D[] gulps) => ShowBanner(Snake.TIERS[tier].name + "!", gulps);
+
+        /// <summary>A banner with one picture (a magic creature), or none.</summary>
+        public void Banner(string text, Texture2D icon) => ShowBanner(text, icon != null ? new[] { icon } : null);
+
+        void ShowBanner(string text, Texture2D[] icons)
         {
-            bannerTitle.text = Snake.TIERS[tier].name + "!";
+            bannerTitle.text = text;
+            int n = Mathf.Min(3, icons?.Length ?? 0);
             for (int i = 0; i < 3; i++)
             {
-                bool on = gulps != null && i < gulps.Length && gulps[i] != null;
+                bool on = i < n && icons[i] != null;
                 bannerIcons[i].gameObject.SetActive(on);
-                if (on) bannerIcons[i].texture = gulps[i];
+                if (on) bannerIcons[i].texture = icons[i];
             }
-            int n = gulps?.Length ?? 0;
-            for (int i = 0; i < n && i < 3; i++) ((RectTransform)bannerIcons[i].transform).anchoredPosition = new Vector2((i - (n - 1) / 2f) * 96, 2);
+            for (int i = 0; i < n; i++) ((RectTransform)bannerIcons[i].transform).anchoredPosition = new Vector2((i - (n - 1) / 2f) * 96, 2);
+            // No pictures: the words sit in the middle of the banner.
+            ((RectTransform)bannerTitle.transform).offsetMin = new Vector2(0, n > 0 ? 60 : 0);
             bannerT = 0;
             bannerRt.gameObject.SetActive(true);
+        }
+
+        // ------------------------------------------------------------------ gems and magic, under the score
+
+        static readonly MagicId[] MagicOrder = { MagicId.Halo, MagicId.Rainbow, MagicId.Owl, MagicId.Hidden, MagicId.Magnet };
+        static readonly CreatureKind[] MagicCreature = { CreatureKind.Unicorn, CreatureKind.Kitsune, CreatureKind.Pixie, CreatureKind.Owl, CreatureKind.Stag };
+        static readonly string[] MagicLabel = { "Rainbow", "Hidden", "Magnet", "Owl eyes", "Halo" };
+        static readonly Color[] MagicCol = { new Color(1f, 0.5f, 0.75f), new Color(1f, 0.6f, 0.25f), new Color(0.55f, 0.9f, 0.6f), new Color(0.7f, 0.6f, 1f), new Color(1f, 0.85f, 0.3f) };
+
+        sealed class MagicBadge { public RectTransform rt; public Image fill; public RawImage icon; public float max; }
+        readonly MagicBadge[] magicBadges = new MagicBadge[5];
+        Text gemCount;
+        RectTransform gemPill;
+        int lastGems = -1;
+
+        void BuildGems()
+        {
+            gemPill = UiKit.Rect(game, "gems", new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(22, -196), new Vector2(150, 58));
+            UiKit.Shadow(gemPill, 12, 0.2f);
+            UiKit.Panel(gemPill, "bg", Cream, 29);
+            var g = UiKit.Image(gemPill, "gem", UiKit.Gem, Gem);
+            var gr = (RectTransform)g.transform; gr.anchorMin = gr.anchorMax = new Vector2(0, 0.5f); gr.sizeDelta = new Vector2(40, 40); gr.anchoredPosition = new Vector2(34, 0);
+            gemCount = UiKit.Label(gemPill, "n", "0", 34, Ink, TextAnchor.MiddleLeft);
+            ((RectTransform)gemCount.transform).offsetMin = new Vector2(62, 0);
+
+            // One badge per magic: the creature that gave it, with a ring that runs down as it wears off.
+            for (int i = 0; i < 5; i++)
+            {
+                var rt = UiKit.Rect(game, "magic", new Vector2(0, 1), new Vector2(0, 1), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(84, 84));
+                UiKit.Shadow(rt, 12, 0.22f);
+                UiKit.Panel(rt, "bg", Cream, 42);
+                var fill = UiKit.Image(rt, "ring", UiKit.Circle, MagicCol[i]);
+                fill.type = Image.Type.Filled; fill.fillMethod = Image.FillMethod.Radial360; fill.fillOrigin = (int)Image.Origin360.Top; fill.fillClockwise = false;
+                ((RectTransform)fill.transform).offsetMin = new Vector2(4, 4); ((RectTransform)fill.transform).offsetMax = new Vector2(-4, -4);
+                var hole = UiKit.Image(rt, "hole", UiKit.Circle, Cream);
+                ((RectTransform)hole.transform).offsetMin = new Vector2(11, 11); ((RectTransform)hole.transform).offsetMax = new Vector2(-11, -11);
+                var ic = UiKit.Rect(rt, "icon", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(70, 70));
+                var raw = ic.gameObject.AddComponent<RawImage>();
+                raw.raycastTarget = false;
+                var lbl = UiKit.Rect(rt, "lbl", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(0, 2), new Vector2(130, 28));
+                UiKit.Label(lbl, "t", MagicLabel[i], 21, Color.white, TextAnchor.MiddleCenter, 1.5f, new Color(0, 0, 0, 0.55f));
+                rt.gameObject.SetActive(false);
+                magicBadges[i] = new MagicBadge { rt = rt, fill = fill, icon = raw };
+            }
+        }
+
+        void SyncGems(Snake me, float dt)
+        {
+            int gems = Meta.Profile.I.gems;
+            if (gems != lastGems)
+            {
+                if (lastGems >= 0 && gems > lastGems) gemPill.localScale = Vector3.one * 1.3f;
+                lastGems = gems;
+                gemCount.text = gems.ToString("N0");
+            }
+            gemPill.localScale = Vector3.Lerp(gemPill.localScale, Vector3.one, 1 - Mathf.Exp(-dt * 10));
+
+            float x = 64;
+            foreach (var id in MagicOrder)
+            {
+                int i = (int)id;
+                var b = magicBadges[i];
+                float left = me.magic[i];
+                bool on = left > 0 && me.alive;
+                if (left <= 0) b.max = 0;
+                if (b.rt.gameObject.activeSelf != on)
+                {
+                    b.rt.gameObject.SetActive(on);
+                    if (on) { b.icon.texture = Icons.Creature(MagicCreature[i]); b.rt.localScale = Vector3.one * 1.4f; }
+                }
+                if (!on) continue;
+                if (left > b.max) b.max = left;
+                b.fill.fillAmount = left / b.max;
+                b.rt.anchoredPosition = new Vector2(x, -310);
+                // Nearly gone: the badge blinks.
+                float a = left < 3 ? 0.55f + 0.45f * Mathf.Cos(Time.unscaledTime * 12) : 1;
+                b.icon.color = new Color(1, 1, 1, a);
+                b.rt.localScale = Vector3.Lerp(b.rt.localScale, Vector3.one, 1 - Mathf.Exp(-dt * 8));
+                x += 100;
+            }
         }
 
         RectTransform BuildBonk()
@@ -423,7 +618,7 @@ namespace Telfer.UI
 
         // ------------------------------------------------------------------ level-up cards
 
-        public void ShowCards(UpgradeId[] cards, Snake s, Action<int> pick)
+        public void ShowCards(UpgradeId[] cards, Snake s, Action<int> pick, int gems)
         {
             foreach (Transform c in cardsLayer) Destroy(c.gameObject);
             cardsLayer.gameObject.SetActive(true);
@@ -469,6 +664,21 @@ namespace Telfer.UI
                 var key = UiKit.Rect(b.transform, "key", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 18), new Vector2(46, 36));
                 UiKit.Panel(key, "bg", new Color(0, 0, 0, 0.08f), 10);
                 UiKit.Label(key, "t", (i + 1).ToString(), 24, new Color(0, 0, 0, 0.4f));
+
+                // Powers cost a blue gem: a price tag on the corner, greyed out if you cannot pay.
+                if (Upgrades.IsPower(id))
+                {
+                    bool afford = gems >= Upgrades.POWER_GEM_COST;
+                    var tag = UiKit.Rect(rt, "price", new Vector2(1, 1), new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-14, -10), new Vector2(104, 52));
+                    tag.localRotation = Quaternion.Euler(0, 0, -8);
+                    UiKit.Shadow(tag, 10, 0.3f);
+                    UiKit.Panel(tag, "bg", afford ? new Color(0.2f, 0.45f, 0.9f) : new Color(0.5f, 0.52f, 0.58f), 26);
+                    var gi = UiKit.Image(tag, "gem", UiKit.Gem, afford ? new Color(0.75f, 0.92f, 1f) : new Color(0.85f, 0.87f, 0.9f));
+                    var gr = (RectTransform)gi.transform; gr.anchorMin = gr.anchorMax = new Vector2(0, 0.5f); gr.sizeDelta = new Vector2(34, 34); gr.anchoredPosition = new Vector2(30, 0);
+                    var pl = UiKit.Label(tag, "n", Upgrades.POWER_GEM_COST.ToString(), 32, Color.white, TextAnchor.MiddleCenter, 1.5f);
+                    ((RectTransform)pl.transform).offsetMin = new Vector2(44, 0);
+                    if (!afford) b.GetComponent<Image>().color = new Color(0.85f, 0.85f, 0.85f);
+                }
             }
         }
 
@@ -478,7 +688,7 @@ namespace Telfer.UI
         int starStep;
 
         /// <summary>Home time: what the run came to, the stars counting up with a chime each.</summary>
-        public void ShowResults(int score, float longest, int gulps, int bonks, int stars, Action again, Action home)
+        public void ShowResults(int score, float longest, int gulps, int bonks, int stars, int gems, Action again, Action home)
         {
             if (results) Destroy(results.gameObject);
             results = UiKit.Fill(rootRt, "Results");
@@ -493,7 +703,7 @@ namespace Telfer.UI
             var tiles = new (Texture2D icon, string value, string label)[]
             {
                 (Icons.Trophy, score.ToString("N0"), "Score"), (Icons.Coil, Mathf.RoundToInt(longest) + "m", "Longest"),
-                (Icons.Animal(AnimalKind.Chicken), gulps.ToString(), "Gulps"), (Icons.Burst, bonks.ToString(), "Bonks"),
+                (Icons.Animal(stage != null && stage.Id == StageId.Common ? AnimalKind.Squirrel : AnimalKind.Chicken), gulps.ToString(), "Gulps"), (Icons.Burst, bonks.ToString(), "Bonks"),
             };
             for (int i = 0; i < tiles.Length; i++)
             {
@@ -507,14 +717,23 @@ namespace Telfer.UI
                 var l = UiKit.Rect(tile, "l", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 16), new Vector2(200, 36));
                 UiKit.Label(l, "t", tiles[i].label, 26, new Color(0.35f, 0.4f, 0.5f));
             }
-            var earned = UiKit.Rect(box, "earned", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-150, 64), new Vector2(330, 110));
+            var earned = UiKit.Rect(box, "earned", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-320, 64), new Vector2(280, 110));
             UiKit.Panel(earned, "bg", new Color(1f, 0.83f, 0.23f, 0.35f), 40);
             var st = UiKit.Image(earned, "star", UiKit.Star, Yellow);
-            var sr = (RectTransform)st.transform; sr.anchorMin = sr.anchorMax = new Vector2(0, 0.5f); sr.sizeDelta = new Vector2(84, 84); sr.anchoredPosition = new Vector2(64, 0);
+            var sr = (RectTransform)st.transform; sr.anchorMin = sr.anchorMax = new Vector2(0, 0.5f); sr.sizeDelta = new Vector2(84, 84); sr.anchoredPosition = new Vector2(60, 0);
             st.gameObject.AddComponent<Bob>().Amount = 5;
             resultStars = UiKit.Label(earned, "n", "+0", 64, Ink);
             ((RectTransform)resultStars.transform).offsetMin = new Vector2(90, 0);
             starShown = 0; starTarget = stars; starStep = 0; starChime = 0.6f;
+
+            // Blue gems won this run (bonks, zaps, kisses and magic).
+            var gemBox = UiKit.Rect(box, "gems", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-50, 64), new Vector2(220, 110));
+            UiKit.Panel(gemBox, "bg", new Color(0.35f, 0.7f, 1f, gems > 0 ? 0.3f : 0.12f), 40);
+            var gi = UiKit.Image(gemBox, "gem", UiKit.Gem, gems > 0 ? Gem : new Color(0.6f, 0.7f, 0.8f));
+            var gr = (RectTransform)gi.transform; gr.anchorMin = gr.anchorMax = new Vector2(0, 0.5f); gr.sizeDelta = new Vector2(74, 74); gr.anchoredPosition = new Vector2(56, 0);
+            if (gems > 0) gi.gameObject.AddComponent<Bob>().Amount = 5;
+            var gl = UiKit.Label(gemBox, "n", "+" + gems, 60, Ink);
+            ((RectTransform)gl.transform).offsetMin = new Vector2(86, 0);
 
             var againRt = UiKit.Rect(box, "again", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0.5f), new Vector2(150, 118), new Vector2(150, 150));
             UiKit.Shadow(againRt, 20, 0.3f);
@@ -571,14 +790,20 @@ namespace Telfer.UI
             xpFill.fillAmount = Mathf.Lerp(xpFill.fillAmount, me.xp / Upgrades.XpForLevel(me.level), 1 - Mathf.Exp(-dt * 8));
             if (me.level != lastLevel) { lastLevel = me.level; levelText.text = "Level " + me.level; }
 
-            // The animals the next size will let you gulp.
-            var next = NextGulps(tier + 1);
-            for (int i = 0; i < 3; i++)
+            // The animals the next size will let you gulp here (skipping sizes that add none).
+            if (tier != lastGulpTier)
             {
-                bool on = next != null && i < next.Length;
-                gulpIcons[i].gameObject.SetActive(on);
-                if (on) gulpIcons[i].texture = next[i];
+                lastGulpTier = tier;
+                Texture2D[] next = null;
+                for (int t = tier + 1; t < Snake.TIERS.Length && (next == null || next.Length == 0); t++) next = NextGulps(w.Stage, t);
+                for (int i = 0; i < 3; i++)
+                {
+                    bool on = next != null && i < next.Length;
+                    gulpIcons[i].gameObject.SetActive(on);
+                    if (on) gulpIcons[i].texture = next[i];
+                }
             }
+            SyncGems(me, dt);
 
             var uiSize = rootRt.rect.size;
             Vector2 ToUi(Vector3 world, out bool visible)
@@ -592,7 +817,20 @@ namespace Telfer.UI
             int di = 0;
             foreach (var f in w.Foods)
                 if (f.golden) MapDot(di++, Yellow, 9).anchoredPosition = MapPos(f.x, f.z);
-            MapDot(di++, new Color(0.15f, 0.2f, 0.35f), 12).anchoredPosition = MapPos(w.Cooper.x, w.Cooper.z);
+            // Animals: yellow if you can gulp them, pink if they would boop you.
+            foreach (var a in w.Animals)
+                MapDot(di++, tier >= a.Spec.tier ? MapGulp : MapBoop, 7).anchoredPosition = MapPos(a.x, a.z);
+            if (w.Kids != null)
+                foreach (var k in w.Kids) MapDot(di++, MapKid, 6).anchoredPosition = MapPos(k.x, k.z);
+            if (w.Predators != null)
+                foreach (var p in w.Predators) MapDot(di++, MapDanger, p.kind == PredatorKind.Bear ? 11 : 9).anchoredPosition = MapPos(p.x, p.z);
+            // Magic creatures hide, unless Owl Eyes is on.
+            if (w.Creatures != null && me.HasMagic(MagicId.Owl))
+                foreach (var c in w.Creatures)
+                    if (c.respawnIn <= 0) MapDot(di++, MapMagic, 11).anchoredPosition = MapPos(c.x, c.z);
+            var warden = MapPos(w.Cooper.x, w.Cooper.z);
+            MapDot(di++, new Color(0.12f, 0.16f, 0.27f), 13).anchoredPosition = warden;
+            MapDot(di++, Color.white, 6).anchoredPosition = warden;
             for (int i = w.Snakes.Count - 1; i >= 0; i--)
             {
                 var s = w.Snakes[i];
@@ -667,6 +905,11 @@ namespace Telfer.UI
             if (bubbleT > 0)
             {
                 var p = ToUi(bubbleWorld, out bool vis);
+                // Only someone you can see is heard; near an edge, the bubble is kept fully on screen.
+                vis &= p.x > 0 && p.x < uiSize.x && p.y > 0 && p.y < uiSize.y;
+                float half = bubbleRt.sizeDelta.x / 2 + 12;
+                p.x = Mathf.Clamp(p.x, half, Mathf.Max(half, uiSize.x - half));
+                p.y = Mathf.Min(p.y, uiSize.y - bubbleRt.sizeDelta.y - 40);
                 bubbleRt.anchoredPosition = p + Vector2.up * 20;
                 float s = Mathf.Min(1, (3f - bubbleT) / 0.2f);
                 bubbleRt.localScale = Vector3.one * (bubbleT < 0.25f ? bubbleT / 0.25f : Ease.OutBack(Mathf.Clamp01(s)));
@@ -686,23 +929,28 @@ namespace Telfer.UI
 
         public void SetBubbleWorld(Vector3 w) => bubbleWorld = w;
 
-        static Texture2D[][] gulpsByTier;
+        /// <summary>A new run: forget whatever was being said in the last one.</summary>
+        public void ClearBubble() { bubbleT = 0; bubbleRt.gameObject.SetActive(false); }
 
-        /// <summary>The animals a snake of `tier` can newly gulp, as pictures (built once per tier).</summary>
-        public static Texture2D[] NextGulps(int tier)
+        static readonly Dictionary<(StageId, int), Texture2D[]> gulpCache = new Dictionary<(StageId, int), Texture2D[]>();
+
+        /// <summary>The animals living on `stage` that a snake of `tier` can newly gulp, as pictures (built once each).</summary>
+        public static Texture2D[] NextGulps(Stage stage, int tier)
         {
-            if (tier >= Snake.TIERS.Length) return null;
-            if (gulpsByTier == null) gulpsByTier = new Texture2D[Snake.TIERS.Length][];
-            if (gulpsByTier[tier] != null) return gulpsByTier[tier];
+            if (stage == null || tier < 0 || tier >= Snake.TIERS.Length) return null;
+            if (gulpCache.TryGetValue((stage.Id, tier), out var cached)) return cached;
             var list = new List<Texture2D>();
-            for (int k = 0; k < Animals.SPECS.Length; k++)
-                if (Animals.SPECS[k].tier == tier) list.Add(Icons.Animal((AnimalKind)k));
-            return gulpsByTier[tier] = list.ToArray();
+            foreach (var k in stage.AnimalKinds)
+                if (Animals.SPECS[(int)k].tier == tier) list.Add(Icons.Animal(k));
+            return gulpCache[(stage.Id, tier)] = list.ToArray();
         }
+
+        static readonly Color MapGulp = new Color(1f, 0.88f, 0.4f), MapBoop = new Color(1f, 0.56f, 0.67f);
+        static readonly Color MapKid = new Color(0.23f, 0.79f, 0.86f), MapDanger = new Color(0.88f, 0.19f, 0.19f), MapMagic = new Color(0.69f, 0.59f, 0.99f);
 
         readonly List<Snake> order = new List<Snake>();
         readonly int[] boardScores = new int[8];
-        int lastScore = -1, lastTier = -1, lastLevel = -1;
+        int lastScore = -1, lastTier = -1, lastLevel = -1, lastGulpTier = -1;
         static readonly Comparison<Snake> ByScore = (a, b) => b.score.CompareTo(a.score);
         static void SetText(Text t, string s) { if (!ReferenceEquals(t.text, s) && t.text != s) t.text = s; }
     }
@@ -716,6 +964,18 @@ namespace Telfer.UI
         RectTransform rt;
         void Start() { rt = (RectTransform)transform; home = rt.anchoredPosition; phase = UnityEngine.Random.value * 6; }
         void Update() { if (rt) rt.anchoredPosition = home + Vector2.up * Mathf.Sin(Time.unscaledTime * 2.2f + phase) * Amount; }
+    }
+
+    /// <summary>A quick "no" wobble, then it removes itself.</summary>
+    public sealed class Shake : MonoBehaviour
+    {
+        float t;
+        void Update()
+        {
+            t += Time.unscaledDeltaTime;
+            transform.localRotation = Quaternion.Euler(0, 0, Mathf.Sin(t * 50) * 8 * (1 - t / 0.4f));
+            if (t >= 0.4f) { transform.localRotation = Quaternion.identity; Destroy(this); }
+        }
     }
 
     /// <summary>Cards fly up and flip in, one after another.</summary>

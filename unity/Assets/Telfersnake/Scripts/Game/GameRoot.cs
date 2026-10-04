@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Telfer.Audio;
+using Telfer.Meta;
 using Telfer.Sim;
 using Telfer.UI;
 using Telfer.View;
@@ -12,9 +13,9 @@ using EventType = Telfer.Sim.EventType;
 namespace Telfer.Game
 {
     /// <summary>
-    /// Boots the whole game from nothing: builds the playground, the light, the sound and the HUD,
-    /// then runs the sim in fixed 1/60 s steps and turns its events into juice.
-    /// The title screen is the real game playing itself, with a slow camera orbit.
+    /// Boots the whole game from nothing: builds the places, the light, the sound and the HUD, then
+    /// runs the sim in fixed 1/60 s steps and turns its events into juice. The title screen is the real
+    /// game playing itself, with a slow camera orbit, in whichever place is picked.
     /// </summary>
     public sealed class GameRoot : MonoBehaviour
     {
@@ -27,12 +28,17 @@ namespace Telfer.Game
 
         enum State { Title, Play, Cards, Paused }
 
+        /// <summary>Stars pay ×1.25 on the Common, half on Easy (main.ts).</summary>
+        const float COMMON_BONUS = 1.25f;
+
         State state = State.Title;
         World world;
-        Transform runRoot;
+        Transform runRoot, envRoot, schoolRoot;
         Views views;
+        WildViews wild;
         readonly List<SnakeView> snakeViews = new List<SnakeView>();
         Scenery scenery;
+        CommonEnv common;
         Atmosphere atmo;
         CameraRig rig;
         Hud hud;
@@ -41,13 +47,14 @@ namespace Telfer.Game
         Bot attract;
         float acc, slowmo, slowmoFor;
         readonly Vector4[] pushers = new Vector4[16];
+        readonly List<(float d, Vector4 p)> pushPool = new List<(float, Vector4)>();
         bool wasDashing;
         MaterialPropertyBlock block;
         System.Func<int, Vector3> headOf;
-        int runGulps, runBonks;
+        int runGulps, runBonks, runGems;
         float runLongest;
-        int bestSaved;
         bool mobile;
+        StageId shownStage = (StageId)(-1);
         public static GameRoot I;
         /// <summary>Dev: a bot drives the player's snake in a real run (screenshots, soak tests).</summary>
         public static bool Autopilot;
@@ -58,6 +65,7 @@ namespace Telfer.Game
         public static float LookDistance = 24;
         Bot pilot;
         public World World => world;
+        Profile P => Profile.I;
 
         void Start()
         {
@@ -70,7 +78,7 @@ namespace Telfer.Game
             var es = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
             es.transform.SetParent(transform, false);
 
-            var envRoot = new GameObject("Environment").transform;
+            envRoot = new GameObject("Environment").transform;
             envRoot.SetParent(transform, false);
             atmo = new GameObject("Atmosphere").AddComponent<Atmosphere>();
             atmo.transform.SetParent(transform, false);
@@ -78,15 +86,6 @@ namespace Telfer.Game
             rig = new GameObject("Camera").AddComponent<CameraRig>();
             rig.transform.SetParent(transform, false);
             rig.Build();
-
-            Ground.Build(envRoot, !mobile);
-            scenery = new Scenery(envRoot);
-            var grass = new GameObject("Grass").AddComponent<GrassField>();
-            grass.transform.SetParent(envRoot, false);
-            grass.Build();
-            var life = new GameObject("Wildlife").AddComponent<Wildlife>();
-            life.transform.SetParent(envRoot, false);
-            life.Build();
             var fx = new GameObject("Fx").AddComponent<Fx>();
             fx.transform.SetParent(transform, false);
             fx.Build();
@@ -97,35 +96,95 @@ namespace Telfer.Game
             hud = new GameObject("HUD").AddComponent<Hud>();
             hud.transform.SetParent(transform, false);
             hud.Build();
-            hud.OnPlay = StartRun;
+            hud.OnPlay = _ => StartRun();
             hud.OnPause = () => SetPaused(true);
             hud.OnResume = () => SetPaused(false);
             hud.OnQuit = () => { SetPaused(false); FinishRun(); };
             hud.OnSound = on => { synth.SfxOn = on; synth.MusicOn = on; };
+            hud.OnStage = ChooseStage;
+            hud.OnMode = m => { P.Mode = m; P.Save(); };
+            hud.OnShopChanged = () => { if (state == State.Title) NewWorld(P.Mode, P.Stage, true); };
 
             controls = new Controls();
             headOf = i => snakeViews[i].HeadPos;
             block = new MaterialPropertyBlock();
             Shots.BeforeRender = () => { if (state != State.Title) hud.Sync(world, rig.Cam, headOf, 0); };
-            bestSaved = PlayerPrefs.GetInt("best", 0);
-            NewWorld(Mode.Normal, true);
+            NewWorld(P.Mode, P.Stage, true);
             rig.TitleOrbit(0);
+            hud.RefreshTitle();
+        }
+
+        // ------------------------------------------------------------------ places
+
+        /// <summary>Show the chosen place, building it the first time it is needed.</summary>
+        void ShowPlace(StageId id)
+        {
+            if (id == shownStage) return;
+            shownStage = id;
+            if (id == StageId.School && schoolRoot == null)
+            {
+                schoolRoot = new GameObject("School").transform;
+                schoolRoot.SetParent(envRoot, false);
+                Ground.Build(schoolRoot, !mobile);
+                scenery = new Scenery(schoolRoot);
+                var grass = new GameObject("Grass").AddComponent<GrassField>();
+                grass.transform.SetParent(schoolRoot, false);
+                grass.BuildSchool();
+                var life = new GameObject("Wildlife").AddComponent<Wildlife>();
+                life.transform.SetParent(schoolRoot, false);
+                life.Build(School.Stage);
+            }
+            if (id == StageId.Common && common == null) common = new CommonEnv(envRoot, !mobile);
+            if (schoolRoot) schoolRoot.gameObject.SetActive(id == StageId.School);
+            if (common != null) common.root.gameObject.SetActive(id == StageId.Common);
+            synth.SetPlace(id == StageId.Common);
+        }
+
+        List<Occluder> Occluders => shownStage == StageId.Common ? common.Occluders : scenery.Occluders;
+
+        /// <summary>Tapping the Common pays the 300 stars the first time (if you can), then picks it.</summary>
+        void ChooseStage(StageId id)
+        {
+            if (id == StageId.Common && !P.commonUnlocked)
+            {
+                if (P.stars < Profile.COMMON_COST) { synth.Play("nope"); hud.ShakeStage(id); return; }
+                P.stars -= Profile.COMMON_COST;
+                P.commonUnlocked = true;
+                synth.Play("chaChing");
+                Fx.I.Confetti(rig.transform.position + rig.transform.forward * 20, 120, 9);
+            }
+            else synth.Play("pick");
+            P.Stage = id;
+            P.Save();
+            NewWorld(P.Mode, P.Stage, true);
+            hud.RefreshTitle();
         }
 
         // ------------------------------------------------------------------ runs
 
-        void NewWorld(Mode mode, bool attractMode)
+        void NewWorld(Mode mode, StageId stageId, bool attractMode)
         {
+            ShowPlace(stageId);
             if (runRoot) Destroy(runRoot.gameObject);
             RunAssets.Release();
             snakeViews.Clear();
             runRoot = new GameObject("Run").transform;
             runRoot.SetParent(transform, false);
-            world = new World((uint)System.Environment.TickCount, mode);
+            var look = attractMode ? null : P.Look();
+            // The dev autopilot picks cards without paying, so it is never offered powers.
+            world = new World((uint)System.Environment.TickCount, mode, Stage.For(stageId), look, !attractMode && !Autopilot && P.gems >= Upgrades.POWER_GEM_COST);
+            bubbleFromSami = false;
+            hud.ClearBubble();
             views = new Views(world, runRoot);
+            wild = new WildViews(world, runRoot);
+            var skin = Catalogue.FindSkin(P.skin);
+            var trail = Catalogue.Find(P.trail);
             for (int i = 0; i < world.Snakes.Count; i++)
             {
-                var sv = new SnakeView(world.Snakes[i], runRoot, i == 0 && !attractMode);
+                bool mine = i == 0 && !attractMode;
+                var sv = mine
+                    ? new SnakeView(world.Snakes[i], runRoot, true, skin?.pattern, P.hat, trail?.palette)
+                    : new SnakeView(world.Snakes[i], runRoot, false);
                 sv.OnStep();
                 sv.OnStep();
                 snakeViews.Add(sv);
@@ -133,21 +192,36 @@ namespace Telfer.Game
             pilot = null;
             attract = attractMode ? new Bot(new Personality("You", 0x4cbb4a, 0xf2d94a, 0x57c955, 0, 1, 1, 0.9f, 0.1f, 0.3f, false, 400)) : null;
             acc = 0;
+            hud.SetStage(world.Stage);
         }
 
-        void StartRun(Mode mode)
+        void StartRun()
         {
             synth.Play("bell");
             synth.Play("pick");
-            NewWorld(mode, false);
+            NewWorld(P.Mode, P.Stage, false);
             state = State.Play;
-            runGulps = runBonks = 0;
+            runGulps = runBonks = runGems = 0;
             runLongest = 0;
             hud.ShowTitle(false);
             var me = world.Me;
             rig.Snap(W.P(me.x, me.z), me.Length);
             synth.SetMusicLevel(0);
             Fx.I.Ring(W.P(me.x, me.z), Color.white, 4, 0.6f);
+            if (world.Stage.Id == StageId.Common && !P.commonSeen)
+            {
+                P.commonSeen = true;
+                P.Save();
+                hud.Banner("The Common!", null);
+            }
+        }
+
+        int StarsEarned()
+        {
+            var me = world.Me;
+            float raw = Catalogue.StarsFor(me.score, me.highestTier, runBonks);
+            float stage = world.Stage.Id == StageId.Common ? COMMON_BONUS : 1;
+            return Mathf.FloorToInt(raw * (world.Mode == Mode.Easy ? 0.5f : 1) * stage);
         }
 
         /// <summary>Home time: the bell, the results, the stars.</summary>
@@ -157,13 +231,16 @@ namespace Telfer.Game
             SaveBest();
             hud.HideCards();
             var me = world.Me;
-            int stars = Mathf.FloorToInt((Mathf.Floor(me.score / 100) + 10 * me.highestTier + 5 * runBonks) * (world.Mode == Mode.Easy ? 0.5f : 1));
-            PlayerPrefs.SetInt("stars", PlayerPrefs.GetInt("stars", 0) + stars);
-            PlayerPrefs.Save();
+            int stars = RealRun ? StarsEarned() : 0;
+            if (RealRun)
+            {
+                P.stars += stars;
+                P.runs++;
+                P.Save();
+            }
             synth.Play("bell");
-            var mode = world.Mode;
-            hud.ShowResults((int)me.score, runLongest, runGulps, runBonks, stars, () => StartRun(mode), ToTitle);
-            NewWorld(Mode.Normal, true);
+            hud.ShowResults((int)me.score, runLongest, runGulps, runBonks, stars, runGems, StartRun, ToTitle);
+            NewWorld(P.Mode, P.Stage, true);
             state = State.Title;
         }
 
@@ -171,9 +248,10 @@ namespace Telfer.Game
         {
             SaveBest();
             hud.HideCards();
-            NewWorld(Mode.Normal, true);
+            NewWorld(P.Mode, P.Stage, true);
             state = State.Title;
             hud.ShowTitle(true);
+            hud.RefreshTitle();
             synth.Duck(false);
         }
 
@@ -186,15 +264,43 @@ namespace Telfer.Game
 
         void SaveBest()
         {
-            if (world == null || attract != null) return;
-            int s = (int)world.Me.score;
-            if (s > bestSaved) { bestSaved = s; PlayerPrefs.SetInt("best", s); PlayerPrefs.Save(); }
+            if (world == null || !RealRun) return;
+            var me = world.Me;
+            bool changed = false;
+            if (me.score > P.bestScore) { P.bestScore = (int)me.score; changed = true; }
+            if (runLongest > P.bestLength) { P.bestLength = runLongest; changed = true; }
+            if (changed) P.Save();
+        }
+
+        /// <summary>A run a child is playing: not the title screen's bot, not the dev autopilot. Only these touch the save.</summary>
+        bool RealRun => attract == null && !Autopilot;
+
+        void EarnGem(Vector3 at, int n = 1)
+        {
+            if (!RealRun || n <= 0) return;
+            // The Common pays ×1.25: each gem has a one-in-four chance of a bonus gem (main.ts earnGem).
+            if (world.Stage.Id == StageId.Common)
+                for (int i = 0, k = n; i < k; i++) if (Random.value < COMMON_BONUS - 1) n++;
+            P.gems += n;
+            runGems += n;
+            P.Save();
+            world.Me.canBuyPowers = P.gems >= Upgrades.POWER_GEM_COST;
+            hud.Pop(at + Vector3.up * 1.8f, "+" + n + " gem", new Color(0.45f, 0.8f, 1f), 36, 1.2f);
+            synth.Play("zip", 0.6f);
         }
 
         void Choose(int i)
         {
             if (state != State.Cards || world.Me.cards == null) return;
             var card = world.Me.cards[Mathf.Clamp(i, 0, world.Me.cards.Length - 1)];
+            // A power card costs a gem (it is only offered when you have one). Pay before taking it.
+            if (Upgrades.IsPower(card))
+            {
+                if (P.gems < Upgrades.POWER_GEM_COST) { synth.Play("nope"); return; }
+                P.gems -= Upgrades.POWER_GEM_COST;
+                P.Save();
+                world.Me.canBuyPowers = P.gems >= Upgrades.POWER_GEM_COST;
+            }
             world.Choose(i);
             hud.HideCards();
             synth.Play("pick");
@@ -219,13 +325,12 @@ namespace Telfer.Game
             else slowmo = Mathf.Lerp(slowmo, 1, 1 - Mathf.Exp(-realDt * 6));
             float dt = realDt * slowmo;
 
-            // Keys that work everywhere.
             if (Controls.Pressed(Key.Escape) || Controls.PadPressed(p => p.startButton))
             {
                 if (state == State.Play) SetPaused(true);
                 else if (state == State.Paused) SetPaused(false);
             }
-            if (state == State.Title && !hud.ResultsOpen && (Controls.Pressed(Key.Enter) || Controls.PadPressed(p => p.buttonSouth))) StartRun(hud.Mode);
+            if (state == State.Title && !hud.ResultsOpen && !hud.ShopOpen && (Controls.Pressed(Key.Enter) || Controls.PadPressed(p => p.buttonSouth))) StartRun();
             if (state == State.Cards)
             {
                 if (Controls.Pressed(Key.Digit1) || Controls.Pressed(Key.Numpad1)) Choose(0);
@@ -252,6 +357,7 @@ namespace Telfer.Game
                     else input = new SnakeInput { x = controls.Steer.x, z = -controls.Steer.y, active = controls.Active, dash = controls.Dash };
                     world.Step(input);
                     views.OnStep();
+                    wild.OnStep();
                     foreach (var sv in snakeViews) sv.OnStep();
                     acc -= World.STEP;
                     steps++;
@@ -271,19 +377,19 @@ namespace Telfer.Game
             for (int i = 0; i < snakeViews.Count; i++)
                 snakeViews[i].Sync(alpha, dt, time, world.Tick, i == 0 && attract == null ? steerWorld : Vector2.zero);
             views.Sync(alpha, dt, time, me);
+            wild.Sync(alpha, dt, time);
 
             // Camera.
             if (LookAtFn != null) LookAt = LookAtFn();
             if (LookAt.HasValue) rig.Follow(W.P(LookAt.Value.x, LookAt.Value.y), Vector3.zero, (LookDistance - 21) / 0.45f, false, realDt);
-            else if (state == State.Title) rig.TitleOrbit(realDt);
+            else if (state == State.Title) rig.TitleOrbit(realDt, world.Stage.Id == StageId.Common ? W.P(4, 4) : new Vector3(-6, 0, 4), world.Stage.Id == StageId.Common ? 80 : 62);
             else
             {
                 var vel = W.Dir(me.heading) * (me.alive ? me.BaseSpeed * me.speedFactor : 0);
                 rig.Follow(me.alive ? meView.HeadPos : rig.transform.position + rig.transform.forward * 20, vel, me.Length, me.dashing, realDt);
             }
-            atmo.Focus(state == State.Title ? 60 : rig.FocusDistance);
+            atmo.Focus(state == State.Title ? 70 : rig.FocusDistance);
 
-            // Dash feedback.
             if (attract == null && me.dashing && !wasDashing) synth.Play("zip", 0.8f);
             wasDashing = me.dashing;
             for (int i = 0; i < world.Snakes.Count; i++)
@@ -295,10 +401,13 @@ namespace Telfer.Game
             Occlusion(realDt);
             Pushers();
 
-            // HUD.
             hud.ShowStick(controls.StickOn && state == State.Play, controls.StickBase, controls.StickKnob);
-            hud.SetBubbleWorld(views.CooperHead);
-            if (state == State.Play && me.alive) runLongest = Mathf.Max(runLongest, me.Length);
+            hud.SetBubbleWorld(bubbleFromSami ? wild.SamiHead : views.CooperHead);
+            if (state == State.Play && me.alive)
+            {
+                runLongest = Mathf.Max(runLongest, me.Length);
+                if (RealRun && world.Mode == Mode.Normal && me.Tier >= MEGA_TIER && !P.mega) { P.mega = true; P.Save(); }
+            }
             if (state != State.Title)
             {
                 hud.Sync(world, cam, headOf, realDt);
@@ -308,15 +417,20 @@ namespace Telfer.Game
             else synth.SetMusicLevel(2);
         }
 
+        const int MEGA_TIER = 4;
+        bool bubbleFromSami;
+
         void OpenCards()
         {
             state = State.Cards;
             synth.Play("levelUp");
             synth.Duck(true);
-            hud.ShowCards(world.Me.cards, world.Me, Choose);
+            hud.ShowCards(world.Me.cards, world.Me, Choose, P.gems);
         }
 
         // ------------------------------------------------------------------ events into juice
+
+        static readonly string[] MagicNames = { "Stag's Blessing!", "Rainbow Rush!", "Owl Eyes!", "Royal Ribbit!", "Fox Trick!", "Pixie Dust!", "Acorn Hoard!", "Wisp Gold!" };
 
         void HandleEvents()
         {
@@ -387,7 +501,7 @@ namespace Telfer.Game
                             rig.Punch(1);
                             Fx.I.Confetti(snakeViews[0].HeadPos, 110, 9);
                             Fx.I.Ring(snakeViews[0].HeadPos, new Color(1f, 0.85f, 0.3f), 9, 0.9f);
-                            hud.ShowTier(e.tier, Hud.NextGulps(e.tier));
+                            hud.ShowTier(e.tier, Hud.NextGulps(world.Stage, e.tier));
                         }
                         break;
                     case EventType.Bonk:
@@ -407,6 +521,7 @@ namespace Telfer.Game
                             synth.Play("bonkedRival");
                             rig.Shake(0.3f);
                             hud.Pop(at + Vector3.up * 1.5f, "Bonk! +80", new Color(1f, 0.6f, 0.9f), 50, 1.4f);
+                            EarnGem(at);
                         }
                         break;
                     case EventType.Helmet:
@@ -423,16 +538,91 @@ namespace Telfer.Game
                         if (mine) { synth.Play("whoosh"); rig.Shake(0.2f); }
                         break;
                     case EventType.Sneeze:
-                        Fx.I.Dust(at, 1);
+                        Fx.I.Embers(at);
+                        if (mine) { synth.Play("ouch"); hud.Pop(at + Vector3.up, "Hot!", new Color(1f, 0.55f, 0.3f), 40); }
+                        if (e.by == 0 && live) EarnGem(at);
+                        break;
+                    case EventType.Power:
+                    {
+                        var caster = world.Snakes[e.who];
+                        var from = snakeViews[e.who].HeadPos;
+                        switch (e.power)
+                        {
+                            case UpgradeId.Laser: Fx.I.Laser(from, W.Dir(e.heading), e.range); if (mine || Near(at)) synth.Play("laser", mine ? 1 : 0.4f); break;
+                            case UpgradeId.Stink: Fx.I.Stink(at, e.range); if (mine || Near(at)) synth.Play("stink", mine ? 1 : 0.4f); break;
+                            case UpgradeId.Zap: Fx.I.Zap(at, e.range); if (mine || Near(at)) synth.Play("zap", mine ? 1 : 0.4f); break;
+                            case UpgradeId.Freeze: Fx.I.Frost(at, e.range * 0.5f); if (mine || Near(at)) synth.Play("freeze", mine ? 1 : 0.4f); break;
+                        }
+                        if (mine) rig.Shake(0.12f);
+                        break;
+                    }
+                    case EventType.Hit:
+                        if (mine)
+                        {
+                            hud.Pop(at + Vector3.up * 1.2f, e.freeze ? "Brrr!" : "Zapped!", e.freeze ? new Color(0.6f, 0.9f, 1f) : new Color(1f, 0.6f, 0.4f), 42);
+                            synth.Play("ouch");
+                            rig.Shake(0.3f);
+                        }
+                        if (e.by == 0 && live) EarnGem(at);
+                        break;
+                    case EventType.Howl:
+                        if (live && Near(at)) synth.Play("growl", 0.7f);
+                        break;
+                    case EventType.Chomp:
+                        wild.Chomp(at);
+                        Fx.I.Stars(at, 8);
+                        if (mine)
+                        {
+                            synth.Play("chomp");
+                            rig.Shake(0.55f);
+                            atmo.Hit(0.7f);
+                            hud.Pop(at + Vector3.up * 1.3f, e.predator == PredatorKind.Bear ? "Chomp!" : "Snap!", new Color(1f, 0.5f, 0.45f), 46);
+                        }
+                        break;
+                    case EventType.Lob:
+                        wild.Throw(at);
+                        break;
+                    case EventType.Pelt:
+                        Fx.I.Dust(at, 0.6f);
+                        if (mine) { synth.Play("bump"); rig.Shake(0.15f); hud.Pop(at + Vector3.up, "Oops!", new Color(1f, 0.75f, 0.5f), 36); }
+                        break;
+                    case EventType.Kiss:
+                        Fx.I.Hearts(at);
+                        if (mine)
+                        {
+                            synth.Play("kiss");
+                            hud.Pop(at + Vector3.up, "Aww!", new Color(1f, 0.6f, 0.8f), 40);
+                            if (e.gem) EarnGem(at);
+                        }
+                        break;
+                    case EventType.Magic:
+                        Fx.I.Magic(at, MeshKit.Hex(Creatures.SPECS[(int)e.creature].glow));
+                        if (mine)
+                        {
+                            synth.Play("magic");
+                            slowmoFor = 0.5f;
+                            atmo.TierUp();
+                            rig.Punch(0.7f);
+                            hud.Banner(MagicNames[(int)e.creature], Icons.Creature(e.creature));
+                            EarnGem(at, e.gems);
+                        }
                         break;
                     case EventType.Say:
-                        if (live) hud.Say(e.text, views.CooperHead);
+                        if (live)
+                        {
+                            bubbleFromSami = e.sami;
+                            if (e.sami) wild.SamiTalks();
+                            hud.Say(e.text, e.sami ? wild.SamiHead : views.CooperHead);
+                        }
                         break;
                     case EventType.BumpWall:
                         if (mine) { synth.Play("bump", 0.7f); rig.Shake(0.08f); }
                         break;
                     case EventType.BumpCooper:
                         if (mine) { synth.Play("boing"); rig.Shake(0.2f); }
+                        break;
+                    case EventType.BumpKid:
+                        if (mine) { synth.Play("boing", 0.6f); hud.Pop(at + Vector3.up, "Oops!", Color.white, 34); }
                         break;
                 }
             }
@@ -448,7 +638,7 @@ namespace Telfer.Game
         {
             var me = world.Me;
             bool watching = state != State.Title && me.alive;
-            foreach (var o in scenery.Occluders)
+            foreach (var o in Occluders)
             {
                 bool hidden = watching && me.x > o.minX - 1 && me.x < o.maxX + 1 && me.z > o.northZ - o.reach && me.z < o.southZ + 0.5f;
                 float want = hidden ? 0.3f : 1;
@@ -465,21 +655,30 @@ namespace Telfer.Game
             }
         }
 
-        /// <summary>The things that part the grass on the Green: snakes, animals and Mr Cooper.</summary>
+        /// <summary>The sixteen things nearest the camera's focus that part the grass: snakes, animals, people.</summary>
         void Pushers()
         {
-            int n = 0;
-            var g = School.GREEN;
-            bool Near(float x, float z) => Mathf.Abs(x - g.x) < g.w / 2 + 2 && Mathf.Abs(z - g.z) < g.d / 2 + 2;
-            void Add(float x, float z, float r) { if (n < 16 && Near(x, z)) pushers[n++] = new Vector4(x, 0, -z, r); }
+            pushPool.Clear();
+            var f = rig.transform.position + rig.transform.forward * rig.FocusDistance;
+            void Add(float x, float z, float r)
+            {
+                float d = (x - f.x) * (x - f.x) + (-z - f.z) * (-z - f.z);
+                if (d < 900) pushPool.Add((d, new Vector4(x, 0, -z, r)));
+            }
             foreach (var s in world.Snakes)
             {
                 if (!s.alive) continue;
                 Add(s.x, s.z, s.Radius * 1.4f);
-                for (int i = 0; i < s.bodyCount && n < 16; i += 3) Add(s.body[i * 2], s.body[i * 2 + 1], s.Radius * 1.2f);
+                for (int i = 0; i < s.bodyCount; i += 3) Add(s.body[i * 2], s.body[i * 2 + 1], s.Radius * 1.2f);
             }
             foreach (var a in world.Animals) Add(a.x, a.z, a.Spec.radius * 1.2f);
+            foreach (var k in world.Kids) Add(k.x, k.z, 0.4f);
+            foreach (var p in world.Predators) Add(p.x, p.z, p.Spec.radius * 1.2f);
+            foreach (var c in world.Creatures) if (c.respawnIn <= 0) Add(c.x, c.z, c.Spec.radius);
             Add(world.Cooper.x, world.Cooper.z, 0.5f);
+            pushPool.Sort((a, b) => a.d.CompareTo(b.d));
+            int n = Mathf.Min(16, pushPool.Count);
+            for (int i = 0; i < n; i++) pushers[i] = pushPool[i].p;
             Atmosphere.SetPushers(pushers, n);
         }
 

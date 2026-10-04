@@ -75,8 +75,8 @@ namespace Telfer.UI
             return tex;
         }
 
-        public static Texture2D Animal(AnimalKind k) => Of("animal-" + k, Models.Animal(k), Mats.VertexGlossy);
-        public static Texture2D Food(FoodKind k) => Of("food-" + k, Models.Food(k), Mats.VertexGlossy);
+        public static Texture2D Animal(AnimalKind k) => Of("animal-" + k, ModelsWild.ForestAnimal(k), Mats.VertexGlossy);
+        public static Texture2D Food(FoodKind k) => Of("food-" + k, ModelsWild.ForestFood(k), Mats.VertexGlossy);
 
         public static Texture2D Trophy => Of("trophy", Build(k =>
         {
@@ -114,6 +114,51 @@ namespace Telfer.UI
         }), Mats.VertexGlossy, 0, 5);
 
         static Mesh Build(System.Action<MeshKit> f) { var k = new MeshKit(); f(k); return k.ToMesh(); }
+
+        public static Texture2D Creature(CreatureKind k) => Of("creature-" + k, ModelsWild.Creature(k), Mats.VertexGlossy, -30, 18);
+
+        /// <summary>A coiled snake wearing a skin (and optionally a hat): the Tuck Shop's pictures.</summary>
+        public static Texture2D Skin(string skinId, string hatId)
+        {
+            var item = Telfer.Meta.Catalogue.FindSkin(skinId);
+            string key = "skin-" + item.id + "-" + (hatId ?? "none");
+            if (cache.ContainsKey(key)) return cache[key];
+            var k = new MeshKit();
+            var pat = item.pattern;
+            for (int i = 0; i < 30; i++)
+            {
+                float a = i * 0.36f, r = 0.32f + i * 0.02f;
+                k.C = MeshKit.Hex(pat[(i / 2) % pat.Length]);
+                k.Sphere(new Vector3(Mathf.Cos(a) * r, 0.16f, Mathf.Sin(a) * r), 0.17f - i * 0.002f, 12, 8);
+            }
+            // The head, looking up out of the coil.
+            var head = Matrix4x4.TRS(new Vector3(0, 0.42f, 0.05f), Quaternion.Euler(-25, 0, 0), Vector3.one * 0.3f);
+            k.M = head;
+            k.Tint(item.head).Sphere(new Vector3(0, 0.08f, 0.15f), new Vector3(1.1f, 0.86f, 1.32f), 16, 12);
+            foreach (int s in new[] { -1, 1 })
+            {
+                k.Tint(0xffffff).Sphere(new Vector3(s * 0.5f, 0.72f, 0.42f), 0.5f, 12, 10);
+                k.Tint(0x15181d).Sphere(new Vector3(s * 0.5f, 0.82f, 0.72f), 0.28f, 10, 8);
+                k.Tint(0xffffff).Sphere(new Vector3(s * 0.42f, 0.95f, 0.92f), 0.08f, 6, 4);
+            }
+            var hat = string.IsNullOrEmpty(hatId) ? null : Hats.Mesh(hatId);
+            if (hat != null)
+            {
+                var hk = new MeshKit();
+                hk.V.AddRange(hat.vertices); hk.N.AddRange(hat.normals); hk.Col.AddRange(hat.colors); hk.UV.AddRange(hat.uv); hk.T.AddRange(hat.triangles);
+                k.Append(hk);
+            }
+            k.M = Matrix4x4.identity;
+            var mesh = k.ToMesh("skin-preview");
+            return Of(key, mesh, Mats.VertexGlossy, -20, 28, 256);
+        }
+
+        /// <summary>A hat on its own, for the shop's hat tab.</summary>
+        public static Texture2D Hat(string hatId)
+        {
+            var m = Hats.Mesh(hatId);
+            return m == null ? null : Of("hat-" + hatId, m, Mats.VertexGlossy, -25, 25);
+        }
 
         public static Texture2D Upgrade(UpgradeId id) =>
             Of("upgrade-" + id, UpgradeMesh(id), Mats.VertexGlossy, id == UpgradeId.Tongue ? 10 : -30, id == UpgradeId.Tongue ? 62 : 24, 256);
@@ -222,6 +267,60 @@ namespace Telfer.UI
                     k.Tint(0xffffff).Sphere(new Vector3(0.08f, 0.72f, 0.66f), 0.06f, 8, 6);
                     k.Tint(0xe7f5ff).Sphere(new Vector3(0.35f, 1.0f, 0), new Vector3(0.32f, 0.05f, 0.18f), 12, 6);
                     k.Tint(0xe7f5ff).Sphere(new Vector3(-0.35f, 1.0f, 0), new Vector3(0.32f, 0.05f, 0.18f), 12, 6);
+                    break;
+                case UpgradeId.Laser:
+                    // Two goggly eyes firing red beams.
+                    foreach (float x in new[] { -0.26f, 0.26f })
+                    {
+                        var eye = new Vector3(x, 0.85f, 0);
+                        // The icon camera looks from -z, so the eyes face that way and the beams fan out sideways.
+                        k.Tint(0xffffff).Sphere(eye, 0.24f, 16, 12);
+                        k.Tint(0xe03131).Sphere(eye + new Vector3(0.06f, -0.02f, -0.19f), 0.11f, 10, 8);
+                        k.Tint(0xff6b6b).Capsule(eye + new Vector3(0.08f, -0.04f, -0.24f), eye + new Vector3(1.05f, -0.6f, -0.4f), 0.08f, 8);
+                        k.Tint(0xfff5f5).Capsule(eye + new Vector3(0.08f, -0.04f, -0.26f), eye + new Vector3(1.04f, -0.59f, -0.42f), 0.035f, 6);
+                    }
+                    break;
+                case UpgradeId.Stink:
+                    // A green pong cloud with flies buzzing round it.
+                    k.Tint(0x94d82d).Sphere(new Vector3(0, 0.6f, 0), new Vector3(0.42f, 0.36f, 0.4f), 16, 12);
+                    k.Tint(0x82c91e).Sphere(new Vector3(-0.38f, 0.45f, 0.05f), 0.28f, 14, 10);
+                    k.Tint(0x82c91e).Sphere(new Vector3(0.38f, 0.48f, -0.02f), 0.3f, 14, 10);
+                    k.Tint(0xa9e34b).Sphere(new Vector3(0.1f, 0.92f, 0.05f), 0.26f, 14, 10);
+                    k.Tint(0xa9e34b).Sphere(new Vector3(-0.2f, 0.82f, -0.1f), 0.22f, 12, 8);
+                    foreach (var f in new[] { new Vector3(0.62f, 1.05f, 0.2f), new Vector3(-0.6f, 1.0f, 0.25f), new Vector3(0.2f, 1.3f, 0.3f) })
+                    {
+                        k.Tint(0x343a40).Sphere(f, 0.06f, 8, 6);
+                        k.Tint(0xe7f5ff).Sphere(f + new Vector3(0, 0.07f, 0), new Vector3(0.08f, 0.03f, 0.05f), 8, 4);
+                    }
+                    break;
+                case UpgradeId.Zap:
+                    // A lightning bolt inside a crackling blue ring.
+                    k.M = Matrix4x4.TRS(new Vector3(0, 0.75f, 0), Quaternion.Euler(90, 0, 0), Vector3.one);
+                    k.Tint(0x4dabf7).Torus(Vector3.zero, 0.62f, 0.07f, 28, 8, 360);
+                    // Zig, zag: a slanted stroke, a step across, another slanted stroke.
+                    k.M = Matrix4x4.TRS(new Vector3(0.14f, 1.02f, 0), Quaternion.Euler(0, 0, -24), Vector3.one);
+                    k.Tint(0xffd43b).Box(Vector3.zero, new Vector3(0.2f, 0.56f, 0.16f));
+                    k.M = Matrix4x4.TRS(new Vector3(0.02f, 0.76f, 0), Quaternion.identity, Vector3.one);
+                    k.Tint(0xffd43b).Box(Vector3.zero, new Vector3(0.46f, 0.14f, 0.16f));
+                    k.M = Matrix4x4.TRS(new Vector3(-0.1f, 0.5f, 0), Quaternion.Euler(0, 0, -24), Vector3.one);
+                    k.Tint(0xfcc419).Box(Vector3.zero, new Vector3(0.18f, 0.56f, 0.16f));
+                    k.M = Matrix4x4.identity;
+                    break;
+                case UpgradeId.Freeze:
+                    // A chunky snowflake: six arms, each with a pair of little branches.
+                    for (int i = 0; i < 6; i++)
+                    {
+                        k.M = Matrix4x4.TRS(new Vector3(0, 0.8f, 0), Quaternion.Euler(0, 0, i * 60), Vector3.one);
+                        k.Tint(0x74c0fc).Box(new Vector3(0, 0.33f, 0), new Vector3(0.11f, 0.66f, 0.12f));
+                        foreach (float s in new[] { -1f, 1f })
+                        {
+                            k.M = Matrix4x4.TRS(new Vector3(0, 0.8f, 0), Quaternion.Euler(0, 0, i * 60), Vector3.one)
+                                * Matrix4x4.TRS(new Vector3(s * 0.1f, 0.48f, 0), Quaternion.Euler(0, 0, s * -45), Vector3.one);
+                            k.Tint(0xa5d8ff).Box(Vector3.zero, new Vector3(0.08f, 0.26f, 0.1f));
+                        }
+                    }
+                    k.M = Matrix4x4.identity;
+                    k.Tint(0xe7f5ff).Sphere(new Vector3(0, 0.8f, 0), new Vector3(0.18f, 0.18f, 0.14f), 12, 8);
                     break;
                 default:
                     // Snack Pack: a fat sandwich.

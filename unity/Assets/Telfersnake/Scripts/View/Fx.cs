@@ -160,6 +160,75 @@ namespace Telfer.View
             }
         }
 
+        public void Embers(Vector3 pos)
+        {
+            Spray(embers, pos + Vector3.up * 0.4f, new Color(1, 0.55f, 0.15f), 14, 2.2f, 0.35f, 1.4f);
+            Spray(puffs, pos + Vector3.up * 0.3f, new Color(0.35f, 0.32f, 0.3f, 0.6f), 6, 1.2f, 0.7f, 0.5f);
+        }
+
+        /// <summary>Laser Eyes: a hot red beam from the eyes, dead ahead.</summary>
+        public void Laser(Vector3 from, Vector3 dir, float range)
+        {
+            var e = new ParticleSystem.EmitParams();
+            for (int i = 0; i < 46; i++)
+            {
+                float t = i / 45f;
+                e.position = from + Vector3.up * 0.2f + dir * range * t + Random.insideUnitSphere * 0.05f;
+                e.velocity = Random.insideUnitSphere * 0.3f;
+                e.startSize = Mathf.Lerp(0.55f, 0.3f, t);
+                e.startColor = Color.Lerp(new Color(1, 0.25f, 0.2f), new Color(1, 0.85f, 0.6f), Random.value * 0.4f);
+                e.startLifetime = 0.25f + t * 0.1f;
+                sparkles.Emit(e, 1);
+            }
+            Spray(sparkles, from + dir * range, new Color(1, 0.4f, 0.3f), 12, 3, 0.4f, 1);
+        }
+
+        public void Stink(Vector3 pos, float radius)
+        {
+            Spray(puffs, pos + Vector3.up * 0.4f, new Color(0.55f, 0.75f, 0.25f, 0.65f), 18, radius * 0.8f, 1.3f, 0.6f, 1, 1.6f);
+            Spray(puffs, pos + Vector3.up * 0.3f, new Color(0.75f, 0.85f, 0.35f, 0.5f), 10, radius * 0.5f, 0.9f, 0.4f, 1, 1.2f);
+        }
+
+        public void Zap(Vector3 pos, float radius)
+        {
+            Ring(pos, new Color(0.45f, 0.75f, 1f), radius * 1.1f, 0.35f);
+            Ring(pos, Color.white, radius * 0.6f, 0.25f);
+            var e = new ParticleSystem.EmitParams();
+            for (int i = 0; i < 30; i++)
+            {
+                float a = Random.Range(0, Mathf.PI * 2);
+                e.position = pos + new Vector3(Mathf.Cos(a), 0.3f, Mathf.Sin(a)) * radius * Random.Range(0.3f, 1);
+                e.velocity = Vector3.up * Random.Range(1, 3);
+                e.startSize = Random.Range(0.25f, 0.5f);
+                e.startColor = Color.Lerp(new Color(0.5f, 0.8f, 1f), Color.white, Random.value);
+                e.startLifetime = Random.Range(0.2f, 0.4f);
+                sparkles.Emit(e, 1);
+            }
+        }
+
+        public void Frost(Vector3 pos, float radius)
+        {
+            Ring(pos, new Color(0.7f, 0.95f, 1f), radius * 1.6f, 0.5f);
+            Spray(sparkles, pos + Vector3.up * 0.6f, new Color(0.75f, 0.95f, 1f), 26, 3, 0.45f, 1.2f);
+            Spray(puffs, pos + Vector3.up * 0.3f, new Color(0.85f, 0.95f, 1f, 0.7f), 10, 1.5f, 1, 0.4f);
+        }
+
+        public void Hearts(Vector3 pos)
+        {
+            Spray(sparkles, pos + Vector3.up * 0.8f, new Color(1f, 0.5f, 0.75f), 16, 2.2f, 0.5f, 1.4f);
+            Spray(crumbs, pos + Vector3.up * 0.6f, new Color(1f, 0.6f, 0.8f), 10, 2.5f, 0.2f, 1.6f);
+        }
+
+        /// <summary>A creature's magic bursting over the snake that caught it.</summary>
+        public void Magic(Vector3 pos, Color c)
+        {
+            Ring(pos, c, 7, 0.9f);
+            Ring(pos, Color.white, 4, 0.6f);
+            Spray(sparkles, pos + Vector3.up * 0.8f, Color.Lerp(c, Color.white, 0.3f), 60, 5, 0.6f, 1.6f);
+            Spray(sparkles, pos + Vector3.up * 0.8f, Color.white, 25, 3, 0.5f, 2);
+            Confetti(pos, 50, 6);
+        }
+
         /// <summary>A flat expanding ring on the ground.</summary>
         public void Ring(Vector3 pos, Color c, float size, float life)
         {

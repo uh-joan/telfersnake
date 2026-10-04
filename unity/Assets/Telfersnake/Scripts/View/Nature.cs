@@ -14,51 +14,76 @@ namespace Telfer.View
         Mesh tuft;
         Mesh[] flowers;
         Material grassMat;
-        readonly List<Matrix4x4[]> tuftBatches = new List<Matrix4x4[]>();
-        readonly List<(Mesh mesh, Matrix4x4[] m)> flowerBatches = new List<(Mesh, Matrix4x4[])>();
-        RenderParams grassParams, flowerParams;
+        /// <summary>Tufts and flowers in 10 m chunks, each drawn with its own bounds so off-screen chunks are culled.</summary>
+        readonly List<(Mesh mesh, Matrix4x4[] m, RenderParams rp)> batches = new List<(Mesh, Matrix4x4[], RenderParams)>();
+        const float CHUNK = 10;
 
-        public void Build()
+        /// <summary>The school's Green: a dense lawn in its rounded box, with a worn path across it.</summary>
+        public void BuildSchool()
         {
-            tuft = TuftMesh();
-            grassMat = new Material(Mats.GrassShader) { enableInstancing = true };
-            grassMat.SetFloat("_Sway", 0.035f);
-            flowers = new[] { FlowerMesh(0xffffff, 0xffd43b), FlowerMesh(0xffd43b, 0xf08c00), FlowerMesh(0xf783ac, 0xfff3bf), FlowerMesh(0x9775fa, 0xfff3bf), FlowerMesh(0xff6b6b, 0x2b2d42) };
-            var rng = new System.Random(5);
             var g = School.GREEN;
-            var tufts = new List<Matrix4x4>();
-            var fl = new List<Matrix4x4>[flowers.Length];
-            for (int i = 0; i < fl.Length; i++) fl[i] = new List<Matrix4x4>();
             float x0 = g.x - g.w / 2, z0 = g.z - g.d / 2;
-            const float step = 0.26f;
-            for (float x = x0 + 0.1f; x < x0 + g.w - 0.1f; x += step)
-                for (float z = z0 + 0.1f; z < z0 + g.d - 0.1f; z += step)
+            Build(x0, z0, x0 + g.w, z0 + g.d, 0.26f, 0.035f, 5, (px, pz) =>
+            {
+                if (!InsideRounded(px, pz, g, 2.4f)) return 0;
+                foreach (var t in School.TREES) if ((px - t.x) * (px - t.x) + (pz - t.z) * (pz - t.z) < (t.r + 0.15f) * (t.r + 0.15f)) return 0;
+                float pathX = Mathf.Lerp(x0 + 8, x0 + 10, (pz - z0) / g.d);
+                float onPath = Mathf.Clamp01(1 - Mathf.Abs(px - pathX) / 0.6f);
+                float edge = Mathf.Clamp01(Mathf.Min(Mathf.Min(px - x0, x0 + g.w - px), Mathf.Min(pz - z0, z0 + g.d - pz)) / 1.2f);
+                return Mathf.Lerp(0.55f, 1, edge) * (1 - onPath * 0.6f);
+            });
+        }
+
+        /// <summary>
+        /// A lawn over a rectangle (sim metres). `amount(x, z)` is 0 for bare ground up to 1 for a full,
+        /// tall tuft; in between the grass thins and shortens.
+        /// </summary>
+        public void Build(float x0, float z0, float x1, float z1, float step, float flowerChance, int seed, System.Func<float, float, float> amount)
+        {
+            if (tuft == null)
+            {
+                tuft = TuftMesh();
+                grassMat = new Material(Mats.GrassShader) { enableInstancing = true };
+                grassMat.SetFloat("_Sway", 0.035f);
+                flowers = new[] { FlowerMesh(0xffffff, 0xffd43b), FlowerMesh(0xffd43b, 0xf08c00), FlowerMesh(0xf783ac, 0xfff3bf), FlowerMesh(0x9775fa, 0xfff3bf), FlowerMesh(0xff6b6b, 0x2b2d42) };
+            }
+            var rng = new System.Random(seed);
+            var chunks = new Dictionary<long, List<Matrix4x4>>();
+            var flowerChunks = new Dictionary<long, List<Matrix4x4>>[flowers.Length];
+            for (int i = 0; i < flowers.Length; i++) flowerChunks[i] = new Dictionary<long, List<Matrix4x4>>();
+            long Key(float x, float z) => ((long)Mathf.FloorToInt(x / CHUNK) << 32) ^ (uint)Mathf.FloorToInt(z / CHUNK);
+            void Put(Dictionary<long, List<Matrix4x4>> d, long k, Matrix4x4 m) { if (!d.TryGetValue(k, out var l)) d[k] = l = new List<Matrix4x4>(); l.Add(m); }
+            float scaleUp = step / 0.26f;
+            for (float x = x0 + 0.1f; x < x1 - 0.1f; x += step)
+                for (float z = z0 + 0.1f; z < z1 - 0.1f; z += step)
                 {
                     float px = x + (float)(rng.NextDouble() - 0.5) * step, pz = z + (float)(rng.NextDouble() - 0.5) * step;
-                    if (!InsideRounded(px, pz, g, 2.4f)) continue;
-                    bool nearTrunk = false;
-                    foreach (var t in School.TREES) if ((px - t.x) * (px - t.x) + (pz - t.z) * (pz - t.z) < (t.r + 0.15f) * (t.r + 0.15f)) nearTrunk = true;
-                    if (nearTrunk) continue;
-                    // The worn path across the Green grows shorter, sparser grass.
-                    float pathX = Mathf.Lerp(x0 + 8, x0 + 10, (pz - z0) / g.d);
-                    float onPath = Mathf.Clamp01(1 - Mathf.Abs(px - pathX) / 0.6f);
-                    if (rng.NextDouble() < onPath * 0.7) continue;
-                    float edge = Mathf.Clamp01(Mathf.Min(Mathf.Min(px - x0, x0 + g.w - px), Mathf.Min(pz - z0, z0 + g.d - pz)) / 1.2f);
-                    float s = Mathf.Lerp(0.55f, 1.0f, edge) * (0.75f + (float)rng.NextDouble() * 0.5f) * (1 - onPath * 0.5f);
-                    tufts.Add(Matrix4x4.TRS(W.P(px, pz), Quaternion.Euler(0, (float)rng.NextDouble() * 360, 0), new Vector3(s, s * (0.8f + (float)rng.NextDouble() * 0.5f), s)));
-                    if (rng.NextDouble() < 0.035)
+                    float a = amount(px, pz);
+                    if (a <= 0 || rng.NextDouble() > 0.3 + a) continue;
+                    float s = a * (0.75f + (float)rng.NextDouble() * 0.5f) * Mathf.Lerp(1, scaleUp, 0.6f);
+                    long k = Key(px, pz);
+                    Put(chunks, k, Matrix4x4.TRS(W.P(px, pz), Quaternion.Euler(0, (float)rng.NextDouble() * 360, 0), new Vector3(s * scaleUp * 0.8f, s * (0.8f + (float)rng.NextDouble() * 0.5f), s * scaleUp * 0.8f)));
+                    Count++;
+                    if (rng.NextDouble() < flowerChance * a)
                     {
-                        int k = rng.Next(flowers.Length);
-                        float fs = 0.8f + (float)rng.NextDouble() * 0.5f;
-                        fl[k].Add(Matrix4x4.TRS(W.P(px + 0.05f, pz), Quaternion.Euler(0, (float)rng.NextDouble() * 360, 0), Vector3.one * fs));
+                        int f = rng.Next(flowers.Length);
+                        Put(flowerChunks[f], k, Matrix4x4.TRS(W.P(px + 0.05f, pz), Quaternion.Euler(0, (float)rng.NextDouble() * 360, 0), Vector3.one * (0.8f + (float)rng.NextDouble() * 0.5f)));
                     }
                 }
-            for (int i = 0; i < tufts.Count; i += 1000) tuftBatches.Add(tufts.GetRange(i, Mathf.Min(1000, tufts.Count - i)).ToArray());
-            for (int i = 0; i < flowers.Length; i++) if (fl[i].Count > 0) flowerBatches.Add((flowers[i], fl[i].ToArray()));
-
-            grassParams = new RenderParams(grassMat) { shadowCastingMode = ShadowCastingMode.Off, receiveShadows = true, worldBounds = new Bounds(W.P(g.x, g.z), new Vector3(g.w + 4, 4, g.d + 4)) };
-            flowerParams = new RenderParams(Mats.VertexWind) { shadowCastingMode = ShadowCastingMode.Off, receiveShadows = true, worldBounds = grassParams.worldBounds };
-            Count = tufts.Count;
+            void Emit(Mesh mesh, Material mat, Dictionary<long, List<Matrix4x4>> d)
+            {
+                foreach (var kv in d)
+                {
+                    var list = kv.Value;
+                    var b = new Bounds(list[0].GetPosition(), Vector3.one);
+                    foreach (var m in list) b.Encapsulate(m.GetPosition());
+                    b.Expand(new Vector3(1.5f, 2, 1.5f));
+                    var rp = new RenderParams(mat) { shadowCastingMode = ShadowCastingMode.Off, receiveShadows = true, worldBounds = b };
+                    for (int i = 0; i < list.Count; i += 1000) batches.Add((mesh, list.GetRange(i, Mathf.Min(1000, list.Count - i)).ToArray(), rp));
+                }
+            }
+            Emit(tuft, grassMat, chunks);
+            for (int i = 0; i < flowers.Length; i++) Emit(flowers[i], Mats.VertexWind, flowerChunks[i]);
         }
 
         public int Count { get; private set; }
@@ -71,9 +96,7 @@ namespace Telfer.View
 
         void Update()
         {
-            if (tuft == null) return;
-            foreach (var b in tuftBatches) Graphics.RenderMeshInstanced(grassParams, tuft, 0, b);
-            foreach (var (mesh, m) in flowerBatches) Graphics.RenderMeshInstanced(flowerParams, mesh, 0, m);
+            foreach (var (mesh, m, rp) in batches) Graphics.RenderMeshInstanced(rp, mesh, 0, m);
         }
 
         /// <summary>Seven curved blades from one root; uv.y runs root (0) to tip (1).</summary>
@@ -138,13 +161,15 @@ namespace Telfer.View
         readonly List<Flyer> flyers = new List<Flyer>();
         ParticleSystem pollen;
 
-        public void Build()
+        public void Build(Stage stage)
         {
             var rng = new System.Random(77);
+            bool common = stage.Id == StageId.Common;
             uint[] wings = { 0xffd43b, 0xff922b, 0x74c0fc, 0xf783ac, 0xffffff, 0xb197fc };
             for (int i = 0; i < 9; i++)
             {
-                var home = i < 6 ? W.P(School.GREEN.x + (float)(rng.NextDouble() - 0.5) * 16, School.GREEN.z + (float)(rng.NextDouble() - 0.5) * 9)
+                var home = common ? W.P(-30 + (float)rng.NextDouble() * 70, -20 + (float)rng.NextDouble() * 60)
+                         : i < 6 ? W.P(School.GREEN.x + (float)(rng.NextDouble() - 0.5) * 16, School.GREEN.z + (float)(rng.NextDouble() - 0.5) * 9)
                                  : W.P(-28 + (float)rng.NextDouble() * 10, -30 + (float)rng.NextDouble() * 6);
                 flyers.Add(MakeButterfly(home, wings[i % wings.Length], (float)rng.NextDouble() * 10));
             }
@@ -166,7 +191,7 @@ namespace Telfer.View
             main.maxParticles = 400;
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             var em = pollen.emission; em.rateOverTime = 30;
-            var sh = pollen.shape; sh.shapeType = ParticleSystemShapeType.Box; sh.scale = new Vector3(70, 5, 70); sh.position = new Vector3(0, 3, 0);
+            var sh = pollen.shape; sh.shapeType = ParticleSystemShapeType.Box; sh.scale = common ? new Vector3(110, 5, 100) : new Vector3(70, 5, 70); sh.position = common ? W.P(0, 10, 3) : new Vector3(0, 3, 0);
             var noise = pollen.noise; noise.enabled = true; noise.strength = 0.3f; noise.frequency = 0.2f;
             var col = pollen.colorOverLifetime; col.enabled = true;
             var grad = new Gradient();

@@ -13,7 +13,7 @@ namespace Telfer.UI
         public static Font Font => font ? font : (font = Resources.Load<Font>("Fredoka-Bold") ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
 
         static readonly Dictionary<int, Sprite> rounded = new Dictionary<int, Sprite>();
-        static Sprite circle, ring, bolt, softShadow, play, star;
+        static Sprite circle, ring, bolt, softShadow, play, star, gem;
 
         /// <summary>A white rounded-rect sprite, 9-sliced, with an anti-aliased edge.</summary>
         public static Sprite Rounded(int radius)
@@ -95,6 +95,9 @@ namespace Telfer.UI
 
         public static Sprite Bolt => bolt ? bolt : (bolt = Draw(128, (u, v) => Poly(u, v, new[] { new Vector2(0.15f, 0.95f), new Vector2(-0.5f, -0.05f), new Vector2(-0.02f, -0.05f), new Vector2(-0.2f, -0.95f), new Vector2(0.55f, 0.15f), new Vector2(0.05f, 0.15f) })));
         public static Sprite Play => play ? play : (play = Draw(128, (u, v) => Poly(u, v, new[] { new Vector2(-0.45f, 0.7f), new Vector2(0.75f, 0), new Vector2(-0.45f, -0.7f) }) - 0.06f));
+        /// <summary>A cut blue gem: a crown over a pointed pavilion.</summary>
+        public static Sprite Gem => gem ? gem : (gem = Draw(128, (u, v) => Poly(u, v, new[] { new Vector2(-0.9f, 0.3f), new Vector2(-0.45f, 0.8f), new Vector2(0.45f, 0.8f), new Vector2(0.9f, 0.3f), new Vector2(0, -0.9f) }) - 0.04f));
+
         public static Sprite Star => star ? star : (star = Draw(128, (u, v) =>
         {
             var pts = new Vector2[10];

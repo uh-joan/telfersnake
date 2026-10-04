@@ -18,6 +18,18 @@ Shader "Telfer/Snake"
         _Flash ("Flash", Range(0,1)) = 0
         _Gold ("Gold", Range(0,1)) = 0
         _XRay ("X-Ray Silhouette", Range(0,1)) = 0
+        _PCount ("Pattern Colours (0 = chevrons)", Float) = 0
+        _P0 ("P0", Color) = (1,1,1,1)
+        _P1 ("P1", Color) = (1,1,1,1)
+        _P2 ("P2", Color) = (1,1,1,1)
+        _P3 ("P3", Color) = (1,1,1,1)
+        _P4 ("P4", Color) = (1,1,1,1)
+        _P5 ("P5", Color) = (1,1,1,1)
+        _P6 ("P6", Color) = (1,1,1,1)
+        _P7 ("P7", Color) = (1,1,1,1)
+        _Ghost ("Ghost (dither)", Range(0,1)) = 0
+        _Ice ("Frozen", Range(0,1)) = 0
+        _Rainbow ("Rainbow", Range(0,1)) = 0
         _XRayColor ("X-Ray Colour", Color) = (1,1,1,1)
     }
 
@@ -41,7 +53,30 @@ Shader "Telfer/Snake"
             float _Gold;
             float _XRay;
             float4 _XRayColor;
+            float _PCount;
+            float4 _P0, _P1, _P2, _P3, _P4, _P5, _P6, _P7;
+            float _Ghost, _Ice, _Rainbow;
         CBUFFER_END
+
+        half3 PatternColour(float seg)
+        {
+            int n = max(1, (int)_PCount);
+            int i = (int)fmod(max(seg, 0.0), (float)n);
+            half3 c = _P0.rgb;
+            c = i == 1 ? _P1.rgb : c; c = i == 2 ? _P2.rgb : c; c = i == 3 ? _P3.rgb : c;
+            c = i == 4 ? _P4.rgb : c; c = i == 5 ? _P5.rgb : c; c = i == 6 ? _P6.rgb : c; c = i == 7 ? _P7.rgb : c;
+            return c;
+        }
+
+        void GhostClip(float4 positionCS)
+        {
+            if (_Ghost > 0.001)
+            {
+                float2 p = floor(fmod(positionCS.xy, 4.0));
+                float4x4 bayer = float4x4(0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
+                clip((1.0 - _Ghost) - (bayer[(int)p.x][(int)p.y] + 0.5) / 16.0);
+            }
+        }
         ENDHLSL
 
         Pass
@@ -95,6 +130,7 @@ Shader "Telfer/Snake"
 
             half4 frag(Varyings i) : SV_Target
             {
+                GhostClip(i.positionCS);
                 float along = i.uv.x;
                 float around = i.uv.y;
                 float r = max(_Radius, 0.15);
@@ -114,9 +150,24 @@ Shader "Telfer/Snake"
 
                 half belly = smoothstep(0.62, 0.8, spine);
                 half3 col = _BodyColor.rgb;
-                col = lerp(col, _StripeColor.rgb, band * pattern);
-                col = lerp(col, _StripeColor.rgb * 1.05, dots * pattern * 0.85);
-                col *= 1.0 - edge * 0.25 * pattern;
+                if (_PCount > 0.5)
+                {
+                    // A Tuck Shop skin: repeating colour bands, each a body-segment long, gently chevroned.
+                    float seg = floor((along + spine * r * 0.7) / max(0.3, r * 1.7));
+                    col = lerp(col, PatternColour(seg), pattern);
+                }
+                else
+                {
+                    col = lerp(col, _StripeColor.rgb, band * pattern);
+                    col = lerp(col, _StripeColor.rgb * 1.05, dots * pattern * 0.85);
+                    col *= 1.0 - edge * 0.25 * pattern;
+                }
+                if (_Rainbow > 0.001)
+                {
+                    float h = frac(along * 0.12 - _Time.y * 0.6);
+                    half3 rb = saturate(abs(frac(h + float3(0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0);
+                    col = lerp(col, rb * 0.9 + 0.1, _Rainbow * 0.75 * pattern);
+                }
                 col = lerp(col, _BellyColor.rgb, belly * pattern);
                 col *= i.color.rgb;
 
@@ -141,6 +192,7 @@ Shader "Telfer/Snake"
                 // Golden shimmer (the Dragon, or a golden skin).
                 half3 gold = half3(1.0, 0.78, 0.25);
                 col = lerp(col, gold * (0.8 + 0.4 * (1.0 - seam)), _Gold);
+                col = lerp(col, half3(0.7, 0.9, 1.0), _Ice * 0.75);
 
                 TelferSurface sf;
                 sf.albedo = col;
@@ -153,7 +205,7 @@ Shader "Telfer/Snake"
                 sf.rimPower = 2.6;
                 float pulse = 0.5 + 0.5 * sin(along * 2.2 - _Time.y * 22.0);
                 sf.emission = (_StripeColor.rgb * 0.6 + _BodyColor.rgb * 0.4) * _Glow * (0.35 + 0.9 * pulse * pulse)
-                            + _Flash * half3(1.2, 1.2, 1.1);
+                            + _Flash * half3(1.2, 1.2, 1.1) + _Ice * half3(0.2, 0.35, 0.5) + _Rainbow * col * 0.35;
                 sf.occlusion = 1.0;
                 sf.translucency = 0.08;
 

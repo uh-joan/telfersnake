@@ -178,6 +178,16 @@ namespace Telfer.Audio
             for (int i = 0; i < 8; i++) { var b = new Buf(0.15f); Tone(b, 0, 880 * Math.Pow(2, i / 12.0), 0.09, Wave.Sine, 0.1f); Clip("star" + i, b); }
             { var b = new Buf(0.5f); Hiss(b, 0, 0.06, 5000, 8000, 0.12f, 4); Tone(b, 0.05, 1568, 0.3, Wave.Sine, 0.13f); Tone(b, 0.14, 2093, 0.3, Wave.Sine, 0.13f); Clip("chaChing", b); }
 
+            { var b = new Buf(0.2f); Tone(b, 0, 220, 0.14, Wave.Sine, 0.12f, 180); Clip("nope", b); }
+            { var b = new Buf(0.5f); Tone(b, 0, 70, 0.4, Wave.Saw, 0.18f, 150); Tone(b, 0.05, 110, 0.32, Wave.Square, 0.08f, 200); Hiss(b, 0, 0.3, 900, 300, 0.1f, 1.5); Clip("growl", b); }
+            { var b = new Buf(0.45f); Hiss(b, 0, 0.12, 1800, 400, 0.3f, 2); Tone(b, 0, 180, 0.2, Wave.Square, 0.2f, 70); Tone(b, 0.12, 120, 0.2, Wave.Square, 0.14f, 60); Clip("chomp", b); }
+            { var b = new Buf(0.35f); Tone(b, 0, 1800, 0.25, Wave.Saw, 0.08f, 600); Tone(b, 0, 2400, 0.2, Wave.Square, 0.05f, 900); Clip("laser", b); }
+            { var b = new Buf(0.6f); Hiss(b, 0, 0.5, 400, 150, 0.25f, 0.7); Tone(b, 0, 90, 0.45, Wave.Saw, 0.08f, 60, 8, 12); Clip("stink", b); }
+            { var b = new Buf(0.45f); for (int i = 0; i < 6; i++) Tone(b, i * 0.04, 900 + i * 180, 0.06, Wave.Square, 0.07f, 300); Hiss(b, 0, 0.3, 6000, 2000, 0.12f, 2); Clip("zap", b); }
+            { var b = new Buf(0.6f); double[] fs = { 2093, 2637, 3136, 2637 }; for (int i = 0; i < 4; i++) Tone(b, i * 0.05, fs[i], 0.3, Wave.Sine, 0.08f); Hiss(b, 0, 0.4, 8000, 4000, 0.06f, 3); Clip("freeze", b); }
+            { var b = new Buf(0.4f); Tone(b, 0, 900, 0.08, Wave.Sine, 0.12f, 1400); Tone(b, 0.1, 1200, 0.18, Wave.Sine, 0.1f, 1600); Clip("kiss", b); }
+            { var b = new Buf(1.4f); double[] fs = { 523, 659, 784, 1047, 1319, 1568, 2093 }; for (int i = 0; i < fs.Length; i++) Tone(b, i * 0.07, fs[i], 0.5, Wave.Sine, 0.1f, 0, 8, 6); Hiss(b, 0.2, 1.0, 5000, 10000, 0.05f, 0.5); Clip("magic", b); }
+
             BuildMusic();
         }
 
@@ -273,6 +283,9 @@ namespace Telfer.Audio
         /// <summary>0 = lead and bass; each size tier adds a layer (arps, hats, drums, sparkle).</summary>
         public void SetMusicLevel(int level) => musicLevel = level;
         public void Duck(bool on) => ducked = on;
+        bool commonPlace;
+        /// <summary>The Common softens the theme: no hi-hats, gentler drums, more sparkle.</summary>
+        public void SetPlace(bool common) => commonPlace = common;
 
         void Update()
         {
@@ -281,6 +294,7 @@ namespace Telfer.Audio
             for (int i = 0; i < music.Length; i++)
             {
                 float want = i == 0 || musicLevel >= i ? 1 : 0;
+                if (commonPlace) want *= i == 2 ? 0.2f : i == 3 ? 0.55f : i == 4 ? 1.4f : 0.85f;
                 music[i].volume = Mathf.MoveTowards(music[i].volume, want * master, Time.unscaledDeltaTime * 0.8f);
             }
         }

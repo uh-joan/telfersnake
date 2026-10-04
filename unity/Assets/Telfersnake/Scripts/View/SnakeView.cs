@@ -41,7 +41,12 @@ namespace Telfer.View
         public bool isPlayer;
         public Vector3 HeadPos { get; private set; }
 
-        public SnakeView(Snake s, Transform parent, bool player)
+        uint[] trail;
+        Transform hat, halo;
+        bool hatSpins;
+        float trailIn;
+
+        public SnakeView(Snake s, Transform parent, bool player, uint[] pattern = null, string hatId = null, uint[] trailPalette = null)
         {
             snake = s;
             isPlayer = player;
@@ -78,6 +83,31 @@ namespace Telfer.View
             tongue = BuildTongue();
             helmet = BuildHelmet();
             dragon = BuildDragon();
+            Dress(pattern, hatId, trailPalette);
+        }
+
+        /// <summary>A Tuck Shop look: skin pattern colours, a hat on the head, a trail behind.</summary>
+        public void Dress(uint[] pattern, string hatId, uint[] trailPalette)
+        {
+            if (pattern != null && pattern.Length > 0)
+            {
+                bodyMat.SetFloat("_PCount", Mathf.Min(8, pattern.Length));
+                for (int i = 0; i < 8; i++) bodyMat.SetColor("_P" + i, MeshKit.Hex(pattern[i % pattern.Length]));
+                headMat.SetFloat("_PCount", 0);
+            }
+            if (hat) Object.Destroy(hat.gameObject);
+            hat = null;
+            var mesh = string.IsNullOrEmpty(hatId) ? null : Hats.Mesh(hatId);
+            if (mesh != null)
+            {
+                var go = new GameObject("hat", typeof(MeshFilter), typeof(MeshRenderer));
+                go.transform.SetParent(head, false);
+                go.GetComponent<MeshFilter>().sharedMesh = mesh;
+                go.GetComponent<MeshRenderer>().sharedMaterial = Mats.VertexGlossy;
+                hat = go.transform;
+                hatSpins = Hats.Spins(hatId);
+            }
+            trail = trailPalette != null && trailPalette.Length > 0 ? trailPalette : null;
         }
 
         static void ApplyLook(Material m, SnakeLook look)
@@ -393,6 +423,33 @@ namespace Telfer.View
             tongue.localRotation = Quaternion.Euler(0, Mathf.Sin(time * 40) * 6 * flick, 0);
 
             helmet.gameObject.SetActive(s.helmetReady);
+            if (hat) { hat.gameObject.SetActive(!s.helmetReady); if (hatSpins) hat.localRotation = Quaternion.Euler(0, time * 240, 0); }
+
+            // Magic: a halo after the Stag's Blessing, sparkles pulled in by Pixie Dust.
+            bool haloOn = s.HasMagic(MagicId.Halo);
+            if (haloOn && halo == null)
+            {
+                var hk = new MeshKit();
+                hk.Tint(0xffe066).Torus(Vector3.zero, 0.75f, 0.09f, 28, 8);
+                var hg = new GameObject("halo", typeof(MeshFilter), typeof(MeshRenderer));
+                hg.transform.SetParent(head, false);
+                hg.transform.localPosition = new Vector3(0, 1.6f, -0.05f);
+                hg.GetComponent<MeshFilter>().sharedMesh = RunAssets.Track(hk.ToMesh("halo"));
+                hg.GetComponent<MeshRenderer>().sharedMaterial = Mats.Cached("haloMat", () => { var m = Mats.Toon(Color.white, 1.5f, 0.9f, 1); m.SetColor("_EmissionColor", new Color(1.2f, 0.9f, 0.3f)); return m; });
+                halo = hg.transform;
+            }
+            if (halo) { halo.gameObject.SetActive(haloOn); halo.localRotation = Quaternion.Euler(10, time * 60, 0); }
+            if (s.HasMagic(MagicId.Magnet) && Random.value < dt * 30)
+                Fx.I.Trail(HeadPos + Random.onUnitSphere * 3 + Vector3.up, new Color(0.3f, 0.95f, 1f));
+            if (trail != null && s.speedFactor > 0.2f)
+            {
+                trailIn -= dt;
+                if (trailIn <= 0)
+                {
+                    trailIn = 0.04f;
+                    Fx.I.Trail(BodyPoint(s.Length * 0.92f) + Random.insideUnitSphere * s.Radius * 0.6f, MeshKit.Hex(trail[Random.Range(0, trail.Length)]));
+                }
+            }
             bool isDragon = s.Tier >= 5;
             dragon.gameObject.SetActive(isDragon);
 
@@ -419,6 +476,15 @@ namespace Telfer.View
             bodyMat.SetFloat("_Glow", glow);
             bodyMat.SetFloat("_Flash", flash);
             bodyMat.SetFloat("_Gold", isDragon ? 0.0f : 0);
+            float ghost = s.HasMagic(MagicId.Hidden) ? 0.55f : 0;
+            float ice = s.frozenFor > 0 ? 1 : 0;
+            float rainbow = s.HasMagic(MagicId.Rainbow) ? 1 : 0;
+            foreach (var m in new[] { bodyMat, headMat })
+            {
+                m.SetFloat("_Ghost", ghost);
+                m.SetFloat("_Ice", Mathf.Lerp(m.GetFloat("_Ice"), ice, 1 - Mathf.Exp(-dt * 12)));
+                m.SetFloat("_Rainbow", rainbow);
+            }
             headMat.SetFloat("_Glow", glow * 0.5f);
             headMat.SetFloat("_Flash", flash);
         }
