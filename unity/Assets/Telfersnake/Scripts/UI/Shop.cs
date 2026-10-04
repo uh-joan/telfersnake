@@ -19,7 +19,8 @@ namespace Telfer.UI
         static readonly Color GemBlue = new Color(0.35f, 0.7f, 1f);
         static readonly Color Green = new Color(0.3f, 0.75f, 0.29f);
 
-        RectTransform layer, grid;
+        RectTransform layer, grid, frame, box, stageRt, previewRt, walletRt, view;
+        readonly RectTransform[] tabRts = new RectTransform[3];
         RawImage preview;
         Text stars, gems;
         ItemKind tab = ItemKind.Skin;
@@ -36,7 +37,9 @@ namespace Telfer.UI
             layer = UiKit.Fill(root, "Shop");
             var dim = UiKit.Panel(layer, "dim", new Color(0.05f, 0.08f, 0.18f, 0.62f), 0);
             dim.raycastTarget = true;
-            var box = UiKit.Rect(layer, "box", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1440, 800));
+            // The box sits in a frame that Layout moves and scales (the box itself flips in).
+            frame = UiKit.Rect(layer, "frame", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+            box = UiKit.Rect(frame, "box", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1440, 800));
             box.gameObject.AddComponent<CardIntro>();
             UiKit.Shadow(box, 36, 0.45f);
             UiKit.Panel(box, "bg", Cream, 48);
@@ -45,12 +48,12 @@ namespace Telfer.UI
             UiKit.Label(title, "t", "Tuck Shop", 64, Ink, TextAnchor.MiddleLeft);
 
             // You, in your current look, on a little stage.
-            var stage = UiKit.Rect(box, "stage", new Vector2(0, 0), new Vector2(0, 0), new Vector2(0, 0), new Vector2(40, 40), new Vector2(380, 560));
+            var stage = stageRt = UiKit.Rect(box, "stage", new Vector2(0, 0), new Vector2(0, 0), new Vector2(0, 0), new Vector2(40, 40), new Vector2(380, 560));
             UiKit.Panel(stage, "bg", new Color(1f, 0.6f, 0.75f, 0.35f), 40);
-            var pv = UiKit.Rect(stage, "you", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 60), new Vector2(340, 340));
+            var pv = previewRt = UiKit.Rect(stage, "you", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 60), new Vector2(340, 340));
             preview = pv.gameObject.AddComponent<RawImage>();
             pv.gameObject.AddComponent<Bob>().Amount = 6;
-            var wallet = UiKit.Rect(stage, "wallet", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 24), new Vector2(330, 70));
+            var wallet = walletRt = UiKit.Rect(stage, "wallet", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 24), new Vector2(330, 70));
             UiKit.Panel(wallet, "bg", Cream, 35);
             var ws = UiKit.Image(wallet, "star", UiKit.Star, Yellow);
             Place(ws, new Vector2(38, 0), 46);
@@ -66,7 +69,7 @@ namespace Telfer.UI
             for (int i = 0; i < 3; i++)
             {
                 var k = (ItemKind)i;
-                var rt = UiKit.Rect(box, names[i], new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(460 + i * 210, -30), new Vector2(190, 70));
+                var rt = tabRts[i] = UiKit.Rect(box, names[i], new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(460 + i * 210, -30), new Vector2(190, 70));
                 var b = UiKit.Button(rt, "btn", Cream, 35, () => { tab = k; Audio.Synth.I?.Play("pick"); Fill(); });
                 tabs[i] = b.GetComponent<Image>();
                 UiKit.Label(b.transform, "t", names[i], 32, Ink);
@@ -77,9 +80,7 @@ namespace Telfer.UI
             UiKit.Label(cb.transform, "x", "X", 40, Color.white);
 
             // The scrolling grid.
-            var view = UiKit.Rect(box, "view", new Vector2(0, 0), new Vector2(1, 1), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-            view.offsetMin = new Vector2(450, 40);
-            view.offsetMax = new Vector2(-40, -120);
+            view = UiKit.Rect(box, "view", new Vector2(0, 0), new Vector2(1, 1), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
             var vimg = view.gameObject.AddComponent<Image>();
             vimg.color = new Color(0, 0, 0, 0.04f);
             view.gameObject.AddComponent<Mask>().showMaskGraphic = true;
@@ -95,7 +96,36 @@ namespace Telfer.UI
             scroll.horizontal = false;
             scroll.movementType = ScrollRect.MovementType.Elastic;
             scroll.scrollSensitivity = 40;
+            Layout(root.GetComponent<Fit>());
             Fill();
+        }
+
+        /// <summary>
+        /// Fit the shop to the screen: you on the left of the grid when it is wide, across the top
+        /// (with the tabs under you) when it is tall.
+        /// </summary>
+        public void Layout(Fit fit)
+        {
+            if (!layer || fit == null) return;
+            bool tall = fit.Portrait;
+            var safe = fit.Safe.size;
+            var size = tall ? new Vector2(Mathf.Min(880, safe.x - 20), Mathf.Min(1640, safe.y - 30)) : new Vector2(1440, 800);
+            if (frame.Find("box-shadow") is RectTransform sh) sh.sizeDelta = size + (sh.sizeDelta - box.sizeDelta);
+            box.sizeDelta = size;
+            float stageW = size.x - 80;
+            stageRt.anchorMin = stageRt.anchorMax = stageRt.pivot = tall ? new Vector2(0, 1) : Vector2.zero;
+            stageRt.anchoredPosition = tall ? new Vector2(40, -120) : new Vector2(40, 40);
+            stageRt.sizeDelta = tall ? new Vector2(stageW, 280) : new Vector2(380, 560);
+            var pv = tall ? new Vector2(-stageW / 4, 0) : new Vector2(0, 60);
+            previewRt.anchoredPosition = pv;
+            previewRt.GetComponent<Bob>().Home = pv;
+            previewRt.sizeDelta = Vector2.one * (tall ? 270 : 340);
+            walletRt.anchoredPosition = tall ? new Vector2(stageW / 4, 105) : new Vector2(0, 24);
+            for (int i = 0; i < 3; i++) tabRts[i].anchoredPosition = tall ? new Vector2(40 + i * 210, -430) : new Vector2(460 + i * 210, -30);
+            view.offsetMin = new Vector2(tall ? 40 : 450, 40);
+            view.offsetMax = new Vector2(-40, tall ? -520 : -120);
+            frame.anchoredPosition = fit.Safe.center - fit.Units / 2;
+            frame.localScale = Vector3.one * Mathf.Min(1, (safe.x - 30) / (size.x + 20), (safe.y - 20) / (size.y + 20));
         }
 
         static void Place(Graphic g, Vector2 pos, float size)

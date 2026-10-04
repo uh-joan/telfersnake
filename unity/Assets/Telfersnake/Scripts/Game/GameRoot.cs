@@ -108,10 +108,22 @@ namespace Telfer.Game
             controls = new Controls();
             headOf = i => snakeViews[i].HeadPos;
             block = new MaterialPropertyBlock();
-            Shots.BeforeRender = () => { if (state != State.Title) hud.Sync(world, rig.Cam, headOf, 0); };
+            Shots.BeforeRender = () => { rig.Refit(); if (state != State.Title) hud.Sync(world, rig.Cam, headOf, 0); };
             NewWorld(P.Mode, P.Stage, true);
             rig.TitleOrbit(0);
             hud.RefreshTitle();
+        }
+
+        /// <summary>
+        /// From the WebGL page: the safe area (notches, the home bar) as "left,bottom,right,top" insets,
+        /// each a fraction of the screen, since Screen.safeArea does not know it in a browser.
+        /// </summary>
+        public void SafeInsets(string csv)
+        {
+            var v = csv.Split(',');
+            if (v.Length != 4) return;
+            float F(int i) => float.TryParse(v[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var f) ? Mathf.Clamp(f, 0, 0.3f) : 0;
+            Fit.SafeFrac = new Rect(F(0), F(1), 1 - F(0) - F(2), 1 - F(1) - F(3));
         }
 
         // ------------------------------------------------------------------ places

@@ -61,6 +61,20 @@
       }, (p) => { fill.style.width = Math.round(10 + p * 90) + "%"; })
       .then((unity) => {
         window.unityInstance = unity;
+        // Screen.safeArea knows nothing of notches in a browser: measure them in CSS and pass them on.
+        const probe = document.createElement("div");
+        probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;" +
+          "left:env(safe-area-inset-left);bottom:env(safe-area-inset-bottom);right:env(safe-area-inset-right);top:env(safe-area-inset-top)";
+        document.body.appendChild(probe);
+        const insets = () => {
+          const s = getComputedStyle(probe), w = innerWidth || 1, h = innerHeight || 1;
+          const f = (v, d) => (parseFloat(v) || 0) / d;
+          unity.SendMessage("Telfersnake", "SafeInsets",
+            [f(s.left, w), f(s.bottom, h), f(s.right, w), f(s.top, h)].map((n) => n.toFixed(4)).join(","));
+        };
+        insets();
+        addEventListener("resize", () => setTimeout(insets, 100));
+        addEventListener("orientationchange", () => setTimeout(insets, 300));
         fill.style.width = "100%";
         setTimeout(() => loader.classList.add("gone"), 900);
       })

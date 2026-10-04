@@ -172,7 +172,8 @@ namespace Telfer.View
         Vector3 focus, focusVel;
         float dist = 20, distVel, trauma, fovKick, punch;
         public bool Orbit;
-        float orbitAngle;
+        float orbitAngle, orbitDist = 62, length;
+        bool orbiting;
 
         public void Build()
         {
@@ -199,19 +200,33 @@ namespace Telfer.View
         public void Snap(Vector3 target, float length)
         {
             focus = target;
+            orbiting = false;
+            this.length = length;
             dist = DistanceFor(length);
             Apply(0, 0);
         }
 
-        float DistanceFor(float length)
+        float DistanceFor(float length) => Mathf.Min(52, 21 + length * 0.45f) * Pull;
+
+        /// <summary>
+        /// How much further back to sit on a narrow screen. The view's width shrinks with the aspect, so
+        /// a phone held upright pulls back by the square root of how much narrower than 4:3 it is: about
+        /// 1.7x on a phone, where it sees nearly half as wide as a TV and twice as far ahead.
+        /// </summary>
+        float Pull => Mathf.Sqrt(Mathf.Max(1, 1.35f / Cam.aspect));
+
+        /// <summary>The screen changed shape (or a capture is about to be taken): jump to the distance for it.</summary>
+        public void Refit()
         {
-            float aspect = Cam.aspect;
-            float portrait = Mathf.Lerp(1, 1.55f, Mathf.Clamp01((1.35f - aspect) / 0.8f));
-            return Mathf.Min(52, 21 + length * 0.45f) * portrait;
+            dist = orbiting ? orbitDist * Pull : DistanceFor(length);
+            if (orbiting) TitleOrbit(0, focus, orbitDist);
+            else Apply(0, Time.time);
         }
 
         public void Follow(Vector3 head, Vector3 velocity, float length, bool dashing, float dt)
         {
+            orbiting = false;
+            this.length = length;
             var target = head + velocity * 0.35f;
             focus = Vector3.SmoothDamp(focus, target, ref focusVel, 0.22f, Mathf.Infinity, dt);
             dist = Mathf.SmoothDamp(dist, DistanceFor(length), ref distVel, 0.8f, Mathf.Infinity, dt);
@@ -223,9 +238,11 @@ namespace Telfer.View
 
         public void TitleOrbit(float dt, Vector3 centre, float distance)
         {
+            orbiting = true;
+            orbitDist = distance;
             orbitAngle += dt * 4;
             focus = Vector3.Lerp(focus, centre, 1 - Mathf.Exp(-dt * 0.8f));
-            dist = Mathf.Lerp(dist, distance, 1 - Mathf.Exp(-dt * 0.8f));
+            dist = Mathf.Lerp(dist, distance * Pull, 1 - Mathf.Exp(-dt * 0.8f));
             var rot = Quaternion.Euler(38, orbitAngle, 0);
             transform.position = focus + rot * new Vector3(0, 0, -dist);
             transform.rotation = rot;

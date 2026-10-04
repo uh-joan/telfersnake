@@ -146,13 +146,14 @@ namespace Telfer.UI
         }
 
         /// <summary>A soft drop shadow behind a rect, for depth.</summary>
-        public static Image Shadow(RectTransform target, float spread = 18, float alpha = 0.28f, Vector2? offset = null)
+        /// <summary>A soft drop shadow behind target; `round` for circular buttons, where the sliced blob would show square corners.</summary>
+        public static Image Shadow(RectTransform target, float spread = 18, float alpha = 0.28f, Vector2? offset = null, bool round = false)
         {
             var rt = Rect(target.parent, target.name + "-shadow", target.anchorMin, target.anchorMax, target.pivot, target.anchoredPosition + (offset ?? new Vector2(0, -8)), target.sizeDelta + Vector2.one * spread * 2);
             rt.SetSiblingIndex(target.GetSiblingIndex());
             var img = rt.gameObject.AddComponent<Image>();
             img.sprite = SoftShadow;
-            img.type = UnityEngine.UI.Image.Type.Sliced;
+            img.type = round ? UnityEngine.UI.Image.Type.Simple : UnityEngine.UI.Image.Type.Sliced;
             img.color = new Color(0, 0, 0, alpha);
             img.raycastTarget = false;
             return img;
@@ -195,16 +196,58 @@ namespace Telfer.UI
 
         public static Canvas Canvas(string name, int order)
         {
-            var go = new GameObject(name, typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            var go = new GameObject(name, typeof(Canvas), typeof(GraphicRaycaster), typeof(Fit));
             var cv = go.GetComponent<Canvas>();
             cv.renderMode = RenderMode.ScreenSpaceOverlay;
             cv.sortingOrder = order;
-            var sc = go.GetComponent<CanvasScaler>();
-            sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            sc.referenceResolution = new Vector2(1600, 900);
-            sc.matchWidthOrHeight = 0.6f;
+            go.GetComponent<Fit>().Apply();
             return cv;
         }
+    }
+
+    /// <summary>
+    /// Sizes a canvas for any screen. Landscape keeps the 1600x900 design (scaled 60% by height, 40% by
+    /// width, as the old CanvasScaler did); a tall screen is never less than 900 units wide, so a phone
+    /// held upright gets a 900-wide canvas and nothing is clipped at the sides. Also tracks the safe
+    /// area (notches, the home bar) and says when the shape changes: rotation, a resized window.
+    /// </summary>
+    public sealed class Fit : MonoBehaviour
+    {
+        /// <summary>Dev captures: lay out as if the screen were this many pixels.</summary>
+        public static Vector2Int? Size;
+        /// <summary>The safe area as fractions of the screen, when Screen.safeArea does not know it (WebGL, captures).</summary>
+        public static Rect? SafeFrac;
+
+        const float MIN_WIDE = 900;
+        public Vector2 Units { get; private set; }
+        /// <summary>The safe area, in canvas units.</summary>
+        public Rect Safe { get; private set; }
+        public bool Portrait => Units.y > Units.x;
+        public event Action Changed;
+        Canvas cv;
+
+        public static void ApplyAll() { foreach (var f in FindObjectsByType<Fit>()) f.Apply(); }
+
+        public void Apply()
+        {
+            if (!cv) cv = GetComponent<Canvas>();
+            Vector2 px = Size.HasValue ? (Vector2)Size.Value : new Vector2(Screen.width, Screen.height);
+            px = Vector2.Max(px, Vector2.one);
+            float scale = Mathf.Pow(px.x / 1600, 0.4f) * Mathf.Pow(px.y / 900, 0.6f);
+            scale = Mathf.Min(scale, px.x / MIN_WIDE);
+            var safePx = SafeFrac.HasValue
+                ? new Rect(SafeFrac.Value.x * px.x, SafeFrac.Value.y * px.y, SafeFrac.Value.width * px.x, SafeFrac.Value.height * px.y)
+                : Size.HasValue ? new Rect(Vector2.zero, px) : Screen.safeArea;
+            var units = px / scale;
+            var safe = new Rect(safePx.position / scale, safePx.size / scale);
+            if (!Mathf.Approximately(cv.scaleFactor, scale)) cv.scaleFactor = scale;
+            if ((units - Units).sqrMagnitude < 0.01f && safe == Safe) return;
+            Units = units;
+            Safe = safe;
+            Changed?.Invoke();
+        }
+
+        void Update() => Apply();
     }
 
     /// <summary>Buttons squash when pressed and wobble when hovered: everything feels like a toy.</summary>
