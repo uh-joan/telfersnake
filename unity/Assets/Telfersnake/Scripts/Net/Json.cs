@@ -186,6 +186,82 @@ namespace Telfer.Net
 
         /// <summary>Element i of a number row, 0 when missing or not a number.</summary>
         public static double At(List<object> row, int i) => row != null && i < row.Count && row[i] is double n ? n : 0;
+
+        // ------------------------------------------------------------ writing
+
+        /// <summary>Any value Parse can return (plus int, long and float) back as JSON, nested included.</summary>
+        public static string Write(object value)
+        {
+            var sb = new StringBuilder(256);
+            WriteValue(sb, value);
+            return sb.ToString();
+        }
+
+        static void WriteValue(StringBuilder sb, object v)
+        {
+            switch (v)
+            {
+                case null: sb.Append("null"); break;
+                case string s: Quote(sb, s); break;
+                case bool b: sb.Append(b ? "true" : "false"); break;
+                case double d: Number(sb, d); break;
+                case float f: Number(sb, f); break;
+                case int i: sb.Append(i.ToString(CultureInfo.InvariantCulture)); break;
+                case long l: sb.Append(l.ToString(CultureInfo.InvariantCulture)); break;
+                case Dictionary<string, object> obj:
+                    sb.Append('{');
+                    bool first = true;
+                    foreach (var kv in obj)
+                    {
+                        if (!first) sb.Append(',');
+                        first = false;
+                        Quote(sb, kv.Key);
+                        sb.Append(':');
+                        WriteValue(sb, kv.Value);
+                    }
+                    sb.Append('}');
+                    break;
+                case System.Collections.IEnumerable list:
+                    sb.Append('[');
+                    bool firstItem = true;
+                    foreach (var item in list)
+                    {
+                        if (!firstItem) sb.Append(',');
+                        firstItem = false;
+                        WriteValue(sb, item);
+                    }
+                    sb.Append(']');
+                    break;
+                default: Quote(sb, v.ToString()); break;
+            }
+        }
+
+        static void Number(StringBuilder sb, double d)
+        {
+            if (double.IsNaN(d) || double.IsInfinity(d)) d = 0;
+            sb.Append(d.ToString("R", CultureInfo.InvariantCulture));
+        }
+
+        internal static void Quote(StringBuilder sb, string s)
+        {
+            sb.Append('"');
+            foreach (char c in s)
+            {
+                switch (c)
+                {
+                    case '"': sb.Append("\\\""); break;
+                    case '\\': sb.Append("\\\\"); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    default:
+                        if (c < 0x20) sb.Append("\\u").Append(((int)c).ToString("x4", CultureInfo.InvariantCulture));
+                        else sb.Append(c);
+                        break;
+                }
+            }
+            sb.Append('"');
+        }
     }
 
     /// <summary>Writes one flat JSON object: <c>new JsonWriter().Str("t","in").Num("q",4).End()</c>.</summary>
@@ -207,24 +283,8 @@ namespace Telfer.Net
         public JsonWriter Str(string k, string v)
         {
             Key(k);
-            if (v == null) { sb.Append("null"); return this; }
-            sb.Append('"');
-            foreach (char c in v)
-            {
-                switch (c)
-                {
-                    case '"': sb.Append("\\\""); break;
-                    case '\\': sb.Append("\\\\"); break;
-                    case '\n': sb.Append("\\n"); break;
-                    case '\r': sb.Append("\\r"); break;
-                    case '\t': sb.Append("\\t"); break;
-                    default:
-                        if (c < 0x20) sb.Append("\\u").Append(((int)c).ToString("x4", CultureInfo.InvariantCulture));
-                        else sb.Append(c);
-                        break;
-                }
-            }
-            sb.Append('"');
+            if (v == null) sb.Append("null");
+            else Json.Quote(sb, v);
             return this;
         }
 
