@@ -13,6 +13,8 @@
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-title" content="Telfersnake" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Straight to HD for players who picked it last time (the switch on the home screen). -->
+    <script src="/version.js"></script>
   </head>
   <body>
     <!-- The players are young children: every screen is picture-first with short labels (a word or
@@ -113,6 +115,12 @@
       </div>
 
       <div id="start" class="screen show">
+        <!-- Classic or HD: the same snake, stars and Tuck Shop in both. -->
+        <div id="version" role="radiogroup" aria-label="Which game">
+          <button class="ver" data-version="classic" role="radio" aria-checked="true"><span>🐍</span><em>Classic</em></button>
+          <button class="ver" data-version="hd" role="radio" aria-checked="false"><span class="sparkle">✨</span><b>HD</b></button>
+          <i class="nah-note">Not on this device</i>
+        </div>
         <h1>Telfer<span>snake</span></h1>
 
         <div id="me-card">

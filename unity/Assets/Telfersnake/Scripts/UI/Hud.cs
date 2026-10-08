@@ -202,6 +202,9 @@ namespace Telfer.UI
             chipName = UiKit.Label(nb.transform, "t", "", 30, Ink, TextAnchor.MiddleLeft);
             ((RectTransform)chipName.transform).offsetMin = new Vector2(70, 0); ((RectTransform)chipName.transform).offsetMax = new Vector2(-14, 0);
 
+            // Classic or HD, bottom right: across from the Tuck Shop.
+            if (VersionSwitch.Available) VersionSwitch.Build(t);
+
             var hint = UiKit.Rect(t, "hint", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 26), new Vector2(900, 40));
             UiKit.Label(hint, "t", "Telferscot Primary  ·  Unity HD", 24, new Color(1, 1, 1, 0.75f), TextAnchor.MiddleCenter, 1.5f);
             return t;

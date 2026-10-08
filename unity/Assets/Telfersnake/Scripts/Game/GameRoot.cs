@@ -229,6 +229,7 @@ namespace Telfer.Game
             worn = Outfit;
             hud.ShowTitle(false);
             var me = world.Me;
+            rig.Zoom = world.Stage.Id == StageId.Common ? CameraRig.COMMON_ZOOM : 1;
             rig.Snap(W.P(me.x, me.z), me.Length);
             synth.SetMusicLevel(0);
             Fx.I.Ring(W.P(me.x, me.z), Color.white, 4, 0.6f);
@@ -349,6 +350,7 @@ namespace Telfer.Game
                 hud.Banner("The Common!", null);
             }
             var me = world.Me;
+            rig.Zoom = world.Stage.Id == StageId.Common ? CameraRig.COMMON_ZOOM : 1;
             rig.Snap(W.P(me.x, me.z), me.Length);
             synth.Play("bell");
             synth.SetMusicLevel(0);
