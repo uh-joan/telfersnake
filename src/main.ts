@@ -28,6 +28,7 @@ import { CREATURES } from './sim/creatures';
 import { asMode, godUnlocked, type Mode, rulesFor } from './sim/modes';
 import { asStage, type StageId } from './sim/stage';
 import { stageFor } from './sim/stages';
+import { mountVersionSwitch } from './ui/versionSwitch';
 import { MEGA_TIER, TIERS } from './sim/snake';
 import { POWER_GEM_COST, POWER_IDS, UPGRADES } from './sim/upgrades';
 import type { WorldView } from './sim/view';
@@ -977,6 +978,7 @@ refreshWallet();
 $('start-name').textContent = save.name;
 $('best-score').textContent = String(save.bestScore);
 $('build').textContent = __BUILD__;
+mountVersionSwitch(() => wakeAudio()?.pick(), () => writeSave(save));
 hud.teachDash = !save.dashed; // the dash button introduces itself until it has been used once
 applyAudio();
 

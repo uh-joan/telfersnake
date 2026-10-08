@@ -62,6 +62,21 @@
       @keyframes bob { 50% { transform: translateY(-9px) rotate(-1deg); } }
       @keyframes slither { to { background-position: 28px 0; } }
       @keyframes tongue { 0%, 70%, 100% { transform: scaleX(0); } 78%, 92% { transform: scaleX(1); } 85% { transform: scaleX(.6) rotate(8deg); } }
+      /* The scenery arrives, so a switch from Classic (whose sky matches this one) lands softly. */
+      #land { animation: rise .8s cubic-bezier(.2,.9,.3,1) both; }
+      #sun { animation: fade .9s ease both .1s; }
+      #hint { animation: fade .6s ease both .3s; }
+      @keyframes rise { from { transform: translateY(40%); } }
+      @keyframes fade { from { opacity: 0; } }
+
+      /* Back to Classic: its sky (the classic game's page colour) grows from the finger. */
+      #warp { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+        background: #9fd8f5; clip-path: circle(0 at var(--x) var(--y)); transition: clip-path .5s cubic-bezier(.6,0,.35,1); }
+      #warp.open { clip-path: circle(150vmax at var(--x) var(--y)); }
+      #warp .warp-logo { font: 900 clamp(44px, 14vw, 84px) ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", system-ui, sans-serif;
+        color: #fff; letter-spacing: -1px; -webkit-text-stroke: 3px #1d2433; paint-order: stroke fill; text-shadow: 0 6px 0 rgba(0,0,0,.25); }
+      #warp .warp-logo b { color: #8be36a; }
+
       /* Upright phones: a shorter strip of land, so the street and the school still fit across. */
       @media (max-aspect-ratio: 3/4) { #land { height: 30%; } #middle { padding-bottom: 8vh; } }
       @media (prefers-reduced-motion: reduce) { #loader *, #loader *::after { animation: none !important; } }

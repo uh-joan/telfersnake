@@ -15,6 +15,32 @@
     // Older or locked-down browser: it plays when the ringer is on.
   }
 
+  // Classic or HD: opening HD makes it the version to come back to (key shared with the classic
+  // game's src/ui/versionSwitch.ts and public/version.js, which opens it straight away next time).
+  const VERSION_KEY = "telfersnake.version";
+  try { localStorage.setItem(VERSION_KEY, "hd"); } catch (e) { /* not remembered, still works */ }
+
+  // The switch on the HD title calls this: the classic game's sky grows from the finger (x, y as
+  // fractions of the screen, from the bottom left), then the page changes under it.
+  window.telferSwitchToClassic = (x, y) => {
+    try { localStorage.setItem(VERSION_KEY, "classic"); } catch (e) { /* still switches */ }
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const sky = document.createElement("div");
+    sky.id = "warp";
+    sky.innerHTML = '<div class="warp-logo">Telfer<b>snake</b></div>';
+    sky.style.setProperty("--x", (x * 100).toFixed(1) + "%");
+    sky.style.setProperty("--y", ((1 - y) * 100).toFixed(1) + "%");
+    document.body.appendChild(sky);
+    requestAnimationFrame(() => requestAnimationFrame(() => sky.classList.add("open")));
+    setTimeout(() => location.replace(new URL("../", location.href).href), reduced ? 120 : 520);
+  };
+  // Back from Classic through the browser's page cache: no sky left over.
+  addEventListener("pageshow", (e) => {
+    if (!e.persisted) return;
+    document.getElementById("warp")?.remove();
+    try { localStorage.setItem(VERSION_KEY, "hd"); } catch (err) { /* fine */ }
+  });
+
   // The bar is a snake: as it grows past a snack, the snack is eaten.
   const snacks = [...document.querySelectorAll(".snack")].map((el) => ({ el, at: parseFloat(el.style.left) }));
   const grow = (percent) => {

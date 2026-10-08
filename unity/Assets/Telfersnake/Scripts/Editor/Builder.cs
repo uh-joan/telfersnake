@@ -41,6 +41,8 @@ namespace Telfer.EditorTools
             // Each build gets new file names, so a browser never mixes a cached old build with a new page.
             PlayerSettings.WebGL.nameFilesAsHashes = true;
             PlayerSettings.WebGL.template = "PROJECT:Telfersnake";
+            // The page's own loading screen is the welcome: no engine splash after it (allowed on every plan since Unity 6).
+            PlayerSettings.SplashScreen.show = false;
             AssetDatabase.SaveAssets();
             Debug.Log("[Telfersnake] project set up");
         }

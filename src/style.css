@@ -1598,3 +1598,232 @@ small {
 @media (prefers-reduced-motion: reduce) {
   #unlock-splash { display: none; }
 }
+
+/* ---------- Classic or HD: the switch on the home screen, and the sky that carries you over ---------- */
+
+@font-face {
+  font-family: Fredoka;
+  src: url('/hd/TemplateData/Fredoka-Bold.ttf');
+  font-weight: 700;
+  font-display: block;
+}
+
+#version {
+  position: absolute;
+  top: var(--top);
+  right: var(--right);
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(6px);
+}
+
+/* The knob: white under Classic, sliding over to gold under HD. */
+#version::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  height: calc(100% - 8px);
+  border-radius: 99px;
+  background: #fff;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.16);
+  transition: transform 0.22s cubic-bezier(0.3, 1.5, 0.55, 1), background 0.22s;
+}
+
+#version.to-hd::before {
+  transform: translateX(100%);
+  background: linear-gradient(#ffe066, #ffc61a);
+}
+
+#version .ver {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 94px;
+  padding: 8px 14px;
+  border: 0;
+  background: none;
+  color: #fff;
+  font: 900 15px var(--font);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition: color 0.22s, transform 0.12s;
+}
+
+#version .ver:active {
+  transform: scale(0.94);
+}
+
+#version .ver em {
+  font-style: normal;
+}
+
+#version .ver[aria-checked='true'] {
+  color: var(--ink);
+  text-shadow: none;
+}
+
+/* HD: a gold badge that catches the light now and then, to be noticed without shouting. */
+#version .ver b {
+  position: relative;
+  overflow: hidden;
+  padding: 1px 7px;
+  border-radius: 7px;
+  background: #ffd43b;
+  color: var(--ink);
+  font-size: 14px;
+  text-shadow: none;
+  transform: rotate(-6deg);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.22);
+}
+
+#version .ver b::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.85) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: hd-shine 3.2s ease-in-out infinite 1s;
+}
+
+#version .sparkle {
+  display: inline-block;
+  animation: twinkle 1.6s ease-in-out infinite;
+}
+
+@keyframes hd-shine {
+  0%, 70% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+
+@keyframes twinkle {
+  50% { transform: scale(0.7) rotate(20deg); opacity: 0.6; }
+}
+
+/* No WebGL 2: HD is greyed, and a tap wobbles the switch and says why. */
+#version .ver.nope {
+  opacity: 0.5;
+}
+
+#version .nah-note {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  padding: 5px 11px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: #fff;
+  font: 900 12px var(--font);
+  font-style: normal;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#version.nah {
+  animation: nah 0.4s ease-in-out;
+}
+
+#version.nah .nah-note {
+  animation: note 2s ease forwards;
+}
+
+@keyframes nah {
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+@keyframes note {
+  10%, 80% { opacity: 1; transform: translateY(0); }
+  0% { opacity: 0; transform: translateY(-4px); }
+  100% { opacity: 0; }
+}
+
+/* The HD loading screen's opening frame (unity/Assets/WebGLTemplates/Telfersnake/index.html),
+   grown from the finger: when /hd/ takes over, the picture does not change. */
+#warp {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: linear-gradient(#5fb8f5 0%, #9fd8ff 55%, #dff3ff 100%);
+  clip-path: circle(0 at var(--x) var(--y));
+  transition: clip-path 0.5s cubic-bezier(0.6, 0, 0.35, 1);
+}
+
+#warp.open {
+  clip-path: circle(150vmax at var(--x) var(--y));
+}
+
+#warp .warp-middle {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  padding: 0 16px 14vh;
+}
+
+#warp .warp-logo {
+  font-family: Fredoka, var(--font);
+  font-size: min(15vw, 124px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  color: #fff;
+  text-shadow: 0 7px 0 rgba(20, 40, 70, 0.35), 0 0 34px rgba(255, 255, 255, 0.5);
+}
+
+#warp .warp-logo b {
+  color: #7ddc5c;
+  font-weight: 700;
+  text-shadow: 0 7px 0 rgba(10, 60, 20, 0.55);
+}
+
+#warp .warp-logo sup {
+  display: inline-block;
+  margin-left: 0.2em;
+  padding: 0.1em 0.45em;
+  border-radius: 0.5em;
+  background: #ffd43b;
+  color: #222638;
+  font-size: 0.28em;
+  vertical-align: super;
+  transform: rotate(-8deg);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.2);
+}
+
+#warp .warp-bar {
+  width: min(80vw, 560px);
+  height: 46px;
+  border-radius: 23px;
+  background: rgba(30, 70, 40, 0.28);
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.25), 0 2px 0 rgba(255, 255, 255, 0.45);
+}
+
+@media (max-aspect-ratio: 3/4) {
+  #warp .warp-middle {
+    padding-bottom: 8vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #version::before,
+  #warp {
+    transition: none;
+  }
+  #version .ver b::after,
+  #version .sparkle {
+    animation: none;
+  }
+}

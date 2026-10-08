@@ -206,7 +206,17 @@ namespace Telfer.View
             Apply(0, 0);
         }
 
-        float DistanceFor(float length) => Mathf.Min(52, 21 + length * 0.45f) * Pull;
+        float DistanceFor(float length) => Mathf.Min(52, 21 + length * 0.45f) * Pull * Zoom;
+
+        /// <summary>
+        /// How far the place sits the camera, as a share of the usual. The Common is a wide open meadow
+        /// where, at the school's distance, a bear or a wolf (which notice a snake 16 and 13 m away) is
+        /// in view long before it matters. 0.82 shows a third less ground: a new snake sees about 10 m
+        /// ahead on a wide screen instead of 12, so the wild can come from just off screen (the minimap
+        /// still shows it), while the snake and what it eats stay a friendly size.
+        /// </summary>
+        public float Zoom = 1;
+        public const float COMMON_ZOOM = 0.82f;
 
         /// <summary>
         /// How much further back to sit on a narrow screen. The view's width shrinks with the aspect, so
