@@ -6,8 +6,8 @@ using Touch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 namespace Telfer.Game
 {
     /// <summary>
-    /// One thumb (or one mouse) is enough. Touch: drag anywhere for a floating joystick, a second
-    /// finger dashes. Mouse: the snake chases the pointer, hold a button to dash. Keys: WASD or
+    /// One thumb (or one mouse) is enough. Touch: drag anywhere for a floating joystick; tap then
+    /// press-and-hold anywhere to dash (keep dragging to steer while it bursts), or a second finger. Mouse: the snake chases the pointer, hold a button to dash. Keys: WASD or
     /// arrows, space to dash. Gamepad: left stick, south button or trigger to dash.
     /// Output is a direction in screen space (x right, y up), which with the camera's fixed
     /// north-up view is also a compass direction.
@@ -26,6 +26,16 @@ namespace Telfer.Game
         Vector2 lastMouse;
         int stickFinger = -1;
         public bool DashButtonHeld;
+
+        // Tap-then-hold dashes, as in the web game (controls.ts): a quick touch that barely moved is a
+        // tap, and a press that starts soon after and close by bursts until that finger lifts.
+        const float TAP_MAX_TIME = 0.25f, TAP_MAX_MOVE = 24, DOUBLE_TAP_TIME = 0.32f, DOUBLE_TAP_RADIUS = 90;
+        bool dashTouch, movedFar;
+        float tapAt = -99;
+        Vector2 tapPos;
+
+        /// <summary>CSS pixels to screen pixels, so the web game's thresholds feel the same here.</summary>
+        static float Px => Screen.dpi > 0 ? Mathf.Max(1, Screen.dpi / 96f) : 1;
 
         public Controls()
         {
@@ -69,7 +79,14 @@ namespace Telfer.Game
                 foreach (var t in Touch.activeTouches)
                 {
                     fingers++;
-                    if (stickFinger < 0 && t.phase == UnityEngine.InputSystem.TouchPhase.Began && !uiBlocking && !DashButtonHeld) stickFinger = t.finger.index;
+                    if (stickFinger < 0 && t.phase == UnityEngine.InputSystem.TouchPhase.Began && !uiBlocking && !DashButtonHeld)
+                    {
+                        stickFinger = t.finger.index;
+                        float now = Time.unscaledTime;
+                        dashTouch = now - tapAt < DOUBLE_TAP_TIME && (t.screenPosition - tapPos).magnitude < DOUBLE_TAP_RADIUS * Px;
+                        tapAt = -99;
+                        movedFar = false;
+                    }
                     if (t.finger.index == stickFinger) stick = t;
                 }
                 if (stick.HasValue)
@@ -82,14 +99,27 @@ namespace Telfer.Game
                     if (d.magnitude > max) StickBase = t.screenPosition - d.normalized * max;
                     StickKnob = t.screenPosition;
                     if (d.magnitude > 10) Steer = d.normalized;
-                    if (t.phase == UnityEngine.InputSystem.TouchPhase.Ended || t.phase == UnityEngine.InputSystem.TouchPhase.Canceled) stickFinger = -1;
-                    if (fingers >= 2) Dash = true;
+                    if (d.magnitude > TAP_MAX_MOVE * Px) movedFar = true;
+                    if (dashTouch || fingers >= 2) Dash = true;
+                    if (t.phase == UnityEngine.InputSystem.TouchPhase.Ended || t.phase == UnityEngine.InputSystem.TouchPhase.Canceled)
+                    {
+                        // A quick touch that stayed put is a tap: the next press, if it comes at once, bursts.
+                        float held = (float)(t.time - t.startTime);
+                        if (t.phase == UnityEngine.InputSystem.TouchPhase.Ended && !dashTouch && !movedFar && held < TAP_MAX_TIME)
+                        {
+                            tapAt = Time.unscaledTime;
+                            tapPos = t.screenPosition;
+                        }
+                        dashTouch = false;
+                        stickFinger = -1;
+                    }
                 }
-                else stickFinger = -1;
+                else { stickFinger = -1; dashTouch = false; }
                 mouseIdle = 99;
                 return;
             }
             stickFinger = -1;
+            dashTouch = false;
 
             // Mouse: follow the pointer while it is in use.
             var mouse = Mouse.current;

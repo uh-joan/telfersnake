@@ -34,10 +34,28 @@ elif [ "${SKIP_HD:-}" != 1 ]; then
 fi
 
 echo "→ copying to ${BOX}:${DEPLOY_PATH}…"
-ssh "$BOX" "mkdir -p '${DEPLOY_PATH}'"
-# No -z: the builds are already compressed, and macOS's openrsync can stall compressing big files.
-rsync -a --delete --include='/dist/***' --include='/dist-server/***' --include='/deploy/***' \
-  --include='/Dockerfile' --include='/.dockerignore' --exclude='*' ./ "${BOX}:${DEPLOY_PATH}/"
+# Packed into one tar, sent in 1 MB pieces on fresh connections and retried, then unpacked beside
+# the old copy and swapped in. Long uploads to the box have been cut off part-way (around 4 MB, with
+# rsync, tar-over-ssh and scp alike), so nothing relies on one long stream.
+SHIP=(dist dist-server deploy Dockerfile .dockerignore)
+PACK="$(mktemp -d)"
+trap 'rm -rf "$PACK"' EXIT
+COPYFILE_DISABLE=1 tar --no-mac-metadata -cf "$PACK/ship.tar" "${SHIP[@]}"
+(cd "$PACK" && split -b 1m ship.tar part. && rm ship.tar)
+ssh "$BOX" "rm -rf /tmp/telfersnake-ship && mkdir -p /tmp/telfersnake-ship"
+for part in "$PACK"/part.*; do
+  for try in 1 2 3 4 5; do
+    scp -q -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3 "$part" "${BOX}:/tmp/telfersnake-ship/" && break
+    [ "$try" = 5 ] && { echo "✗ could not upload $(basename "$part")"; exit 1; }
+    echo "  … retrying $(basename "$part")"; sleep 2
+  done
+done
+ssh "$BOX" "set -e
+  mkdir -p '${DEPLOY_PATH}' && cd '${DEPLOY_PATH}'
+  rm -rf .incoming && mkdir .incoming
+  cat /tmp/telfersnake-ship/part.* | tar -xf - -C .incoming --no-same-owner 2>/dev/null
+  rm -rf /tmp/telfersnake-ship ${SHIP[*]}
+  mv .incoming/* .incoming/.dockerignore . && rmdir .incoming"
 
 echo "→ rebuilding and restarting the container…"
 ssh "$BOX" "cd '${DEPLOY_PATH}' && CADDY_NET='${CADDY_NET}' STATS_TOKEN='${STATS_TOKEN:-}' docker compose -f deploy/compose.yml up -d --build && docker image prune -f >/dev/null"

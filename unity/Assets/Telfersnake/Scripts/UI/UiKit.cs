@@ -9,6 +9,13 @@ namespace Telfer.UI
     /// <summary>Builds UGUI from code: rounded panels, chunky outlined labels, springy buttons.</summary>
     public static class UiKit
     {
+        /// <summary>
+        /// The sheet behind every pop-up (Tuck Shop, pause, results, name): a sky blue, so the white
+        /// cards and tiles on it, and the pale skins on those, stand out.
+        /// </summary>
+        public static readonly Color Sheet = new Color(0.66f, 0.83f, 0.97f);
+        /// <summary>The pale disc an item sits on, so even a white snake shows on a white card.</summary>
+        public static readonly Color Well = new Color(0.86f, 0.92f, 0.99f);
         static Font font;
         public static Font Font => font ? font : (font = Resources.Load<Font>("Fredoka-Bold") ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
 

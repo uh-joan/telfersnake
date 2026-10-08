@@ -399,7 +399,7 @@ namespace Telfer.UI
         {
             var rt = dashRt = UiKit.Rect(game, "dash", new Vector2(1, 0), new Vector2(1, 0), new Vector2(0.5f, 0.5f), new Vector2(-120, 120), new Vector2(150, 150));
             UiKit.Shadow(rt, 20, 0.3f, null, true);
-            var img = UiKit.Panel(rt, "btn", new Color(1, 1, 1, 0.82f), 75);
+            var img = dashImg = UiKit.Panel(rt, "btn", DashIdle, 75);
             img.raycastTarget = true;
             var bolt = UiKit.Image(img.transform, "bolt", UiKit.Bolt, new Color(1f, 0.72f, 0.1f));
             ((RectTransform)bolt.transform).offsetMin = new Vector2(30, 30); ((RectTransform)bolt.transform).offsetMax = new Vector2(-30, -30);
@@ -412,6 +412,16 @@ namespace Telfer.UI
             On(EventTriggerType.PointerExit, () => { Pad.DashHeld = false; img.transform.localScale = Vector3.one; });
             // Only shown on touch screens.
             rt.gameObject.SetActive(UnityEngine.InputSystem.Touchscreen.current != null || Application.isMobilePlatform);
+        }
+
+        Image dashImg;
+        static readonly Color DashIdle = new Color(1, 1, 1, 0.82f), DashOn = new Color(1f, 0.9f, 0.35f, 0.95f);
+
+        /// <summary>Light the button while bursting, whichever way it started (button, tap-then-hold, second finger).</summary>
+        public void ShowDashing(bool on)
+        {
+            if (dashImg) dashImg.color = on ? DashOn : DashIdle;
+            if (stickBase) stickBase.color = on ? new Color(1f, 0.85f, 0.3f, 0.75f) : new Color(1, 1, 1, 0.5f);
         }
 
         void BuildStick()
@@ -456,7 +466,7 @@ namespace Telfer.UI
             dim.raycastTarget = true;
             var box = pauseBox = UiKit.Rect(p, "box", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(460, 520));
             UiKit.Shadow(box, 30, 0.35f);
-            UiKit.Panel(box, "bg", Cream, 40);
+            UiKit.Panel(box, "bg", UiKit.Sheet, 40);
             var t = UiKit.Rect(box, "t", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -20), new Vector2(400, 80));
             UiKit.Label(t, "t", "Paused", 56, Ink);
             Button(box, new Vector2(0, 110), "Play", Green, () => OnResume?.Invoke());
@@ -770,7 +780,7 @@ namespace Telfer.UI
             var box = resultBox = UiKit.Rect(resultFrame, "box", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(980, 640));
             box.gameObject.AddComponent<CardIntro>();
             UiKit.Shadow(box, 34, 0.4f);
-            UiKit.Panel(box, "bg", Cream, 50);
+            UiKit.Panel(box, "bg", UiKit.Sheet, 50);
             var t = UiKit.Rect(box, "title", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -26), new Vector2(800, 100));
             UiKit.Label(t, "t", "Home time!", 78, Ink);
             var tiles = new (Texture2D icon, string value, string label)[]
@@ -781,7 +791,7 @@ namespace Telfer.UI
             for (int i = 0; i < tiles.Length; i++)
             {
                 var tile = resultTiles[i] = UiKit.Rect(box, "tile", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2((i - 1.5f) * 225, -140), new Vector2(205, 250));
-                UiKit.Panel(tile, "bg", new Color(0, 0, 0, 0.05f), 30);
+                UiKit.Panel(tile, "bg", Color.white, 30);
                 var ic = UiKit.Rect(tile, "icon", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -6), new Vector2(130, 130));
                 ic.gameObject.AddComponent<RawImage>().texture = tiles[i].icon;
                 ic.gameObject.AddComponent<Bob>().Amount = 4;
@@ -931,7 +941,7 @@ namespace Telfer.UI
             dim.raycastTarget = true;
             var box = nameBox = UiKit.Rect(p, "box", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(620, 400));
             UiKit.Shadow(box, 30, 0.35f);
-            UiKit.Panel(box, "bg", Cream, 40);
+            UiKit.Panel(box, "bg", UiKit.Sheet, 40);
             var t = UiKit.Rect(box, "t", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -20), new Vector2(560, 80));
             UiKit.Label(t, "t", "Your name", 52, Ink);
 
