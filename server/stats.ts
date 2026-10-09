@@ -49,6 +49,8 @@ interface Stats {
   gemsEarned: number;
   starsBanked: number;
   unlocks: number;
+  /** Tickets bought, by place (a beacon without one is from before London: the Common). */
+  unlocksByStage: Record<string, number>;
   buys: { count: number; starSpent: number; gemSpent: number; byItem: Record<string, number> };
   sells: { count: number; starRefund: number; gemRefund: number; byItem: Record<string, number> };
   daily: Record<string, { sessions: number; runs: number }>;
@@ -62,6 +64,7 @@ function fresh(): Stats {
     score: tally(), length: tally(), duration: tally(),
     gulps: 0, bonks: 0, gemsEarned: 0, starsBanked: 0,
     unlocks: 0,
+    unlocksByStage: {},
     buys: { count: 0, starSpent: 0, gemSpent: 0, byItem: {} },
     sells: { count: 0, starRefund: 0, gemRefund: 0, byItem: {} },
     daily: {},
@@ -122,6 +125,7 @@ export function record(ev: Record<string, unknown>): void {
       break;
     case 'unlock':
       stats.unlocks++;
+      bump(stats.unlocksByStage, clampStr(ev.stage) || 'common');
       break;
     case 'buy': {
       const price = clampInt(ev.price, 0, 1e5);

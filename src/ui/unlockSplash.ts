@@ -1,8 +1,8 @@
 /**
- * The one-off "you cracked into the Common" splash. Wordless and purely decorative: a golden
- * padlock rattles and shatters into shards and sparks, then leaves, petals and butterflies bloom
- * outward on a burst of sunbeams before it all clears to reveal the park. Fires once, when the
- * Common is first unlocked. Built and torn down on the spot; it never touches the sim.
+ * The one-off unlock splashes, wordless and purely decorative. The Common's: a golden padlock
+ * rattles and shatters into shards and sparks, then leaves, petals and butterflies bloom outward on
+ * a burst of sunbeams before it all clears to reveal the park. London's is the Golden Ticket (below).
+ * Each fires once, when its place is first unlocked. Built and torn down on the spot; never touches the sim.
  */
 
 const LOCK_SVG = `
@@ -23,13 +23,12 @@ const LOCK_SVG = `
 const BITS = ['🍃', '🌿', '🌸', '🌼', '🍁', '🍂', '🌷'];
 const rnd = (a: number, b: number): number => a + Math.random() * (b - a);
 
-/** Play the splash over the current screen; `onDone` fires once it has cleaned itself up. */
-export function playCommonUnlock(onDone?: () => void): void {
+/** The splash's stage: a full-screen host, and a burst point that particles fly out from. */
+function makeSplash(inner: string): { host: HTMLElement; fly: (el: HTMLElement, minR: number, maxR: number) => void; make: (cls: string, text?: string) => HTMLElement; spread: number } {
   const host = document.createElement('div');
   host.id = 'unlock-splash';
-  host.innerHTML = `<div class="us-veil"></div><div class="us-rays"></div><div class="us-flash"></div>${LOCK_SVG}<div class="us-burst"></div>`;
+  host.innerHTML = `${inner}<div class="us-burst"></div>`;
   const burst = host.querySelector('.us-burst') as HTMLElement;
-
   const spread = Math.min(window.innerWidth, window.innerHeight);
   const fly = (el: HTMLElement, minR: number, maxR: number): void => {
     const a = rnd(0, Math.PI * 2);
@@ -45,6 +44,21 @@ export function playCommonUnlock(onDone?: () => void): void {
     burst.appendChild(el);
     return el;
   };
+  return { host, fly, make, spread };
+}
+
+/** Show `host` for `ms`, then tidy it away. */
+function run(host: HTMLElement, ms: number, onDone?: () => void): void {
+  document.body.appendChild(host);
+  window.setTimeout(() => {
+    host.remove();
+    onDone?.();
+  }, ms);
+}
+
+/** Play the splash over the current screen; `onDone` fires once it has cleaned itself up. */
+export function playCommonUnlock(onDone?: () => void): void {
+  const { host, fly, make, spread } = makeSplash(`<div class="us-veil"></div><div class="us-rays"></div><div class="us-flash"></div>${LOCK_SVG}`);
 
   for (let i = 0; i < 16; i++) fly(make('us-shard'), 0.28 * spread, 0.62 * spread);
   for (let i = 0; i < 26; i++) {
@@ -63,10 +77,40 @@ export function playCommonUnlock(onDone?: () => void): void {
     f.style.setProperty('--x', `${rnd(-42, 42)}vw`);
     f.style.animationDelay = `${0.85 + rnd(0, 0.5)}s`;
   }
+  run(host, 3000, onDone);
+}
 
-  document.body.appendChild(host);
-  window.setTimeout(() => {
-    host.remove();
-    onDone?.();
-  }, 3000);
+// ---------------------------------------------------------------- London: the Golden Ticket
+
+/** Big Ben in silhouette: tower, clock face, belfry and spire. */
+const BEN_SVG = `
+<svg class="ul-ben" viewBox="0 0 60 200" aria-hidden="true">
+  <path d="M30 2 L38 40 H22 Z" fill="#1d2433"/>
+  <rect x="20" y="40" width="20" height="16" fill="#1d2433"/>
+  <rect x="16" y="56" width="28" height="34" rx="2" fill="#1d2433"/>
+  <circle cx="30" cy="73" r="10" fill="#fff3c4"/>
+  <path d="M30 73 V66 M30 73 H35" stroke="#1d2433" stroke-width="2" stroke-linecap="round"/>
+  <rect x="18" y="90" width="24" height="110" fill="#1d2433"/>
+</svg>`;
+
+const LONDON_BITS = ['🇬🇧', '💂', '🎡', '☕', '🚌', '⭐', '👑'];
+
+/**
+ * London's Golden Ticket, wordless like the Common's: a golden ticket slides up to a gate, the
+ * gate beeps green and swings open, a little Tube train whooshes through, and Big Ben rises with a
+ * BONG and a burst of London bits. The sounds are the caller's (Sfx.goldenTicket), timed to match.
+ */
+export function playLondonUnlock(onDone?: () => void): void {
+  const { host, fly, make, spread } = makeSplash(
+    '<div class="us-veil ul-veil"></div><div class="us-rays ul-late"></div><div class="us-flash ul-late"></div>' +
+      `${BEN_SVG}<div class="ul-gate"><i class="ul-paddle"></i><i class="ul-paddle ul-r"></i><b class="ul-light"></b></div>` +
+      '<div class="ul-ticket">👑</div><div class="ul-train">🚇</div>',
+  );
+  for (let i = 0; i < 24; i++) {
+    const b = make('us-bit', LONDON_BITS[(Math.random() * LONDON_BITS.length) | 0]);
+    fly(b, 0.22 * spread, 0.82 * spread);
+    b.style.fontSize = `${rnd(22, 40)}px`;
+    b.style.animationDelay = `${1.8 + rnd(0, 0.35)}s`;
+  }
+  run(host, 3600, onDone);
 }
