@@ -1,7 +1,7 @@
 import { makeHit, resolveCircle, turnToward, wrapAngle } from './collide';
 import type { Circle } from './layout';
 import type { Terrain } from './stage';
-import { waterAt } from './water';
+import { flowAt, waterAt } from './water';
 import { type CardId, refreshStats, SNACK_MASS, type UpgradeId, xpForLevel } from './upgrades';
 
 export interface Input {
@@ -41,6 +41,8 @@ export const MEGA_TIER = 4;
 const TRAIL_STEP = 0.1; // metres between stored trail points
 const TRAIL_CAP = 4096;
 const DASH_BOOST = 1.6;
+/** Scratch for the river's current at the head. */
+const FLOW = { x: 0, z: 0 };
 const DASH_COST = 0.8; // mass per second
 const DASH_MIN_MASS = 2;
 const MAX_RADIUS = 1.1;
@@ -378,8 +380,9 @@ export class Snake {
       const river = waterAt(terrain, this.x, this.z);
       this.swimming = river !== null;
       if (river) {
-        nx += river.drift.x * dt;
-        nz += river.drift.z * dt;
+        flowAt(river, this.x, this.z, FLOW);
+        nx += FLOW.x * dt;
+        nz += FLOW.z * dt;
       }
     }
 

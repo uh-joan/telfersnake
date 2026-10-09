@@ -10,7 +10,7 @@ import { type Food, type FoodKind, FOOD_VALUE, GOLDEN_MULTIPLIER, placeFood } fr
 import { type Hazard, type HazardKind, makeHazards, type Pellet, PELLET_LIFE_TICKS, placeHazard } from './hazards';
 import { type Circle, inBox, SCHOOL } from './layout';
 import { Rng } from './rng';
-import type { Stage } from './stage';
+import type { Stage, Terrain } from './stage';
 import { type Input, Snake, type SnakeLook, TIERS } from './snake';
 import { type CardId, type PowerId, rollCards, type UpgradeId } from './upgrades';
 import { inWater } from './water';
@@ -119,6 +119,9 @@ export type GameEvent =
   | { type: 'magic'; kind: CreatureKind; who: number; x: number; z: number; gems: number }
   | { type: 'bump'; who: number; what: 'wall' | 'cooper' | 'kid' };
 
+/** Terrain with only bounds and solids: water counts as open. */
+const dryTerrain = (t: Terrain): Terrain => ({ bounds: t.bounds, solidBoxes: t.solidBoxes, solidCircles: t.solidCircles });
+
 /**
  * The whole game state. Advances in fixed steps from inputs alone: no rendering, no DOM,
  * no wall-clock time, no Math.random. That keeps it ready to run on a server for multiplayer.
@@ -163,6 +166,8 @@ export class World {
 
   private readonly bots = new Map<Snake, Bot>();
   private readonly p = { x: 0, z: 0 };
+  /** The stage with its rivers taken out (just the solids), for things that may cross water. */
+  private dryStage: Terrain | null = null;
   /** Miss Sami's little natter with the mum: when she next says something, if the stage has her. */
   private samiSayIn = 3;
   /** Which difficulty this world runs at: rival personalities, food count, whether bots get upgrades. */
@@ -1080,6 +1085,7 @@ export class World {
     const reach = Math.max(s.magnet, s.hasMagic('magnet') ? PIXIE_MAGNET : 0);
     if (reach <= 0) return;
     const r2 = reach * reach;
+    const solids = this.stage.water ? (this.dryStage ??= dryTerrain(this.stage)) : this.stage;
     const pull = (o: { x: number; z: number }) => {
       const dx = s.x - o.x;
       const dz = s.z - o.z;
@@ -1089,8 +1095,9 @@ export class World {
       const move = Math.min(d, MAGNET_PULL * dt);
       const nx = o.x + (dx / d) * move;
       const nz = o.z + (dz / d) * move;
-      // Fences and benches still count: food stops at them instead of sliding through.
-      if (!isFree(this.stage, nx, nz, 0.25, this.hazards)) return;
+      // Fences and benches still count: food stops at them instead of sliding through. Water
+      // does not: a swimmer's magnet pulls pellets across the river (and bank food out to it).
+      if (!isFree(solids, nx, nz, 0.25, this.hazards)) return;
       o.x = nx;
       o.z = nz;
     };

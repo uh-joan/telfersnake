@@ -44,6 +44,8 @@ interface Occluder {
  */
 const DEPTH_ONLY = new THREE.MeshBasicMaterial({ colorWrite: false, transparent: true, depthWrite: true });
 const FADED = 0.3;
+/** A landmark part smaller than this (bounding radius, m) casts no shadow. */
+const SMALL_PART = 1.5;
 
 /**
  * A 1 m voxel grid of where the landmark has stuff: every triangle's bounding box, filled in.
@@ -180,7 +182,12 @@ export function makeLondon(maxAnisotropy: number, maxTextureSize = 4096, camera?
       if (!mesh.isMesh) return;
       for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) materials.push(m);
       if ((mesh.material as THREE.Material).side === THREE.BackSide) outlines.push(mesh);
-      else meshes.push(mesh);
+      else {
+        // Small bits (flags, pods, ravens, hands) cost a shadow-pass draw each for a speck of shade.
+        if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+        if (mesh.geometry.boundingSphere!.radius < SMALL_PART) mesh.castShadow = false;
+        meshes.push(mesh);
+      }
     });
     const cols = Math.ceil(box.max.x - box.min.x) + 1;
     const rows = Math.ceil(box.max.z - box.min.z) + 1;
@@ -206,7 +213,7 @@ export function makeLondon(maxAnisotropy: number, maxTextureSize = 4096, camera?
     t += dt;
     thames.update(t);
     for (const b of builds) b.animate?.(t, dt);
-    labels.update(x, z, t);
+    labels.update(x, z, t, dt);
     for (const o of occluders) {
       const c = camera?.position;
       const hidden = blocks(o, x, z, c);

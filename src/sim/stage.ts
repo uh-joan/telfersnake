@@ -32,7 +32,7 @@ export interface Spot {
   z: number;
 }
 
-/** A river: a ribbon `width` metres wide along `path` (west to east), its current pushing by `drift` m/s. */
+/** A river: a ribbon `width` metres wide along `path` (west to east); its current runs downstream along the path at |`drift`| m/s. */
 export interface WaterZone {
   path: readonly Spot[];
   width: number;

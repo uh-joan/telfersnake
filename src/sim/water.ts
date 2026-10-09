@@ -6,6 +6,9 @@ import type { Spot, Terrain, WaterZone } from './stage';
  * takes any of these branches: the school and the Common play exactly as before.
  */
 
+/** The unit direction (west → east, the path's order) of the segment nearestOnPath last chose. */
+const tangent: Spot = { x: 1, z: 0 };
+
 /** The nearest point on a ribbon's centre line to (x, z), written to `out`; returns the squared distance. */
 function nearestOnPath(path: readonly Spot[], x: number, z: number, out: Spot): number {
   let best = Infinity;
@@ -23,6 +26,11 @@ function nearestOnPath(path: readonly Spot[], x: number, z: number, out: Spot): 
       best = d2;
       out.x = qx;
       out.z = qz;
+      const len = Math.sqrt(len2);
+      if (len > 0) {
+        tangent.x = dx / len;
+        tangent.z = dz / len;
+      }
     }
   }
   return best;
@@ -63,6 +71,18 @@ export function shoreNormal(w: WaterZone, x: number, z: number, out: Spot): Spot
   const d = Math.hypot(dx, dz);
   out.x = d > 1e-6 ? dx / d : 0;
   out.z = d > 1e-6 ? dz / d : 1;
+  return out;
+}
+
+/**
+ * The current at (x, z): the river's drift speed, pointing downstream along its nearest stretch
+ * (so it follows the bends instead of pushing swimmers into a bank). Written to `out`.
+ */
+export function flowAt(w: WaterZone, x: number, z: number, out: Spot): Spot {
+  nearestOnPath(w.path, x, z, q);
+  const speed = Math.hypot(w.drift.x, w.drift.z);
+  out.x = tangent.x * speed;
+  out.z = tangent.z * speed;
   return out;
 }
 

@@ -118,7 +118,7 @@ function ribbonTexture(text: string): { texture: THREE.CanvasTexture; aspect: nu
 export interface Labels {
   group: THREE.Group;
   /** Bob gently, and fade out the ones far from the snake at (x, z). */
-  update(x: number, z: number, t: number): void;
+  update(x: number, z: number, t: number, dt: number): void;
 }
 
 const _p = new THREE.Vector3();
@@ -147,7 +147,8 @@ export function makeLabels(spots: readonly { id: LandmarkId; x: number; y: numbe
   });
   return {
     group,
-    update(x, z, t) {
+    update(x, z, t, dt) {
+      const ease = 1 - Math.exp(-dt * 9);
       if (camera) _s.set(x, 1, z).project(camera);
       sprites.forEach((l, i) => {
         const p = l.sprite.position;
@@ -174,7 +175,7 @@ export function makeLabels(spots: readonly { id: LandmarkId; x: number; y: numbe
           _p.set(p.x, y, p.z).project(camera);
           if (Math.abs(_p.x - _s.x) < HALF_W && _s.y - _p.y > -0.02 && _s.y - _p.y < HALF_H * 2 + 0.04) o *= 0.25;
         }
-        l.mat.opacity += (o - l.mat.opacity) * 0.15;
+        l.mat.opacity += (o - l.mat.opacity) * ease;
         l.sprite.visible = l.mat.opacity > 0.01;
         p.y = y + Math.sin(t * 1.3 + i * 1.7) * 0.25;
       });

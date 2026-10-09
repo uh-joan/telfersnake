@@ -98,6 +98,9 @@ export function build(): LandmarkBuild {
   const height = new Float32Array(p.count);
   for (let i = 0; i < p.count; i++) { angle[i] = Math.atan2(p.getX(i), p.getZ(i)); height[i] = p.getY(i); }
   let lit = false;
+  // Only sweep the colours while the pickle is actually drawn (three skips this when it is culled).
+  let seen = false;
+  mesh.onBeforeRender = () => { seen = true; };
 
   return {
     group,
@@ -109,6 +112,8 @@ export function build(): LandmarkBuild {
         if (lit) { arr.set(base); color.needsUpdate = true; lit = false; }
         return;
       }
+      if (!seen) return;
+      seen = false;
       lit = true;
       const at = -1.3 + (cycle / 2.2) * 2.6; // sweeps west → east across the face we see
       const fade = Math.sin((cycle / 2.2) * Math.PI);

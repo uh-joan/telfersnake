@@ -33,7 +33,7 @@ import { Rng } from '../src/sim/rng';
 import { STAGE_IDS, type Stage, type StageId, type Terrain } from '../src/sim/stage';
 import { stageFor } from '../src/sim/stages';
 import type { Input } from '../src/sim/snake';
-import { inWater } from '../src/sim/water';
+import { flowAt, inWater } from '../src/sim/water';
 import { STEP, World } from '../src/sim/world';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -335,8 +335,9 @@ function swimRatio(stage: Stage): number {
     const wet = inWater(stage, x0, z0) && inWater(stage, s.x, s.z);
     wetTicks = wet ? wetTicks + 1 : 0;
     if (wetTicks < 60 || s.touchingWall) continue; // let the paddle ease in first
-    const mx = s.x - x0 - river.drift.x * STEP;
-    const mz = s.z - z0 - river.drift.z * STEP;
+    const flow = flowAt(river, x0, z0, { x: 0, z: 0 });
+    const mx = s.x - x0 - flow.x * STEP;
+    const mz = s.z - z0 - flow.z * STEP;
     sum += Math.hypot(mx, mz) / (pace * STEP);
     n++;
   }

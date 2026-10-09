@@ -75,7 +75,11 @@ export class Stage {
     cam.right = cam.top = SHADOW_BOX;
     cam.near = 1;
     cam.far = 200;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    // A phone (touch, a low pixel ratio, or a small texture limit) gets a quarter of the texels:
+    // the soft PCF edge hides the difference, and the shadow pass costs far less fill.
+    const small = navigator.maxTouchPoints > 0 || window.devicePixelRatio < 1.5 || this.renderer.capabilities.maxTextureSize < 8192;
+    const size = small ? 1024 : 2048;
+    this.sun.shadow.mapSize.set(size, size);
     this.sun.shadow.radius = 3;
     this.sun.shadow.bias = -0.0006;
     this.sun.shadow.normalBias = 0.03;
