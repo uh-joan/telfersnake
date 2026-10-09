@@ -124,6 +124,8 @@ export interface Animal {
   busy: number;
   /** London: the food index a gull or pelican is going for; -1 when a gull is flying off with it. */
   target: number;
+  /** The `born` tick of that food when it was picked: if it changes, the food was eaten and moved. */
+  targetBorn: number;
   /** Where it was put down: London's lake birds wander back toward it. */
   homeX: number;
   homeZ: number;
@@ -168,7 +170,7 @@ export function placeAnimal(a: Animal, w: World, clear: number): void {
 }
 
 export function makeAnimal(kind: AnimalKind): Animal {
-  return { kind, x: 0, z: 0, heading: 0, speed: 0, mode: 'rest', travel: 0, born: 0, want: 0, timer: 0, boopCooldown: 0, dazed: 0, charged: false, chargeFor: 0, busy: 0, target: -1, homeX: 0, homeZ: 0 };
+  return { kind, x: 0, z: 0, heading: 0, speed: 0, mode: 'rest', travel: 0, born: 0, want: 0, timer: 0, boopCooldown: 0, dazed: 0, charged: false, chargeFor: 0, busy: 0, target: -1, targetBorn: 0, homeX: 0, homeZ: 0 };
 }
 
 function nearestFlockmate(a: Animal, w: World): Animal | null {
@@ -340,6 +342,7 @@ function eyeFood(a: Animal, w: World): void {
   }
   a.mode = 'swoop';
   a.target = best;
+  a.targetBorn = w.foods[best].born;
   a.chargeFor = GIVE_UP;
 }
 
@@ -359,7 +362,7 @@ function swoop(a: Animal, w: World, dt: number, dx: number, dz: number): void {
   }
   const f = w.foods[a.target];
   const d = Math.hypot(f.x - a.x, f.z - a.z);
-  if (a.chargeFor <= 0 || d > GULL_EYE + 2) {
+  if (a.chargeFor <= 0 || f.born !== a.targetBorn || d > GULL_EYE + 2) {
     // Someone else got there first, or it is out of reach: never mind.
     a.mode = 'rest';
     a.timer = 1;

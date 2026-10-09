@@ -16,7 +16,8 @@
  * sealed pocket with swimming allowed; both banks still joined when only the bridges cross), check
  * the arrival spot is free, and time a scripted swim (×0.5 of land speed, ± 0.05). With London's zoo
  * they count swan gulps (must be none), gull/pelican raids (must happen, and land on the map), the
- * animals' cries and the cuppas, and script a Dragon nosing a swan and a Tea Time combo. `--baseline` records what
+ * animals' cries and the cuppas, and script a Dragon nosing a swan, a Tea Time combo, and a huge
+ * mouth that must get exactly one Tea Time (never a chain off its own cake stand). `--baseline` records what
  * `main` already does (the school's bots do sometimes nose a wall for a few seconds), so a later
  * run fails only when a count gets worse; a stage with no record must be spotless.
  *
@@ -380,7 +381,7 @@ function tallyZoo(w: World, zoo: Zoo, outside: (x: number, z: number) => boolean
  * Two scripted London moments: a Dragon-sized snake nosing a swan (a boop, never a gulp), and a
  * snake fed a sandwich, a scone and a sponge in a row (TEA TIME, with a cake stand of treats).
  */
-function londonScripted(stage: Stage): { swan: string; tea: string } {
+function londonScripted(stage: Stage): { swan: string; tea: string; bigMouth: number } {
   const w = new World(3, undefined, rulesFor('normal'), stage);
   const s = w.snake;
   s.mass = 800; // the Dragon
@@ -413,7 +414,27 @@ function londonScripted(stage: Stage): { swan: string; tea: string } {
     for (const e of t.events) if (e.type === 'teatime') tea = 'TEA TIME';
     t.events.length = 0;
   }
-  return { swan: gulps ? `${gulps} gulps!` : boops ? 'boop, no gulp' : 'never met', tea };
+  // A huge mouth (reach 3.85) must not swallow its own cake stand into Tea Time after Tea Time.
+  const b = new World(5, undefined, rulesFor('normal'), stage);
+  const big = b.snake;
+  big.mass = 600;
+  let teaTimes = 0;
+  for (let tick = 0; tick < 300; tick++) {
+    if (b.cards) b.choose(0);
+    big.reachBonus = 0;
+    big.reachBonus = 3.85 - big.biteReach;
+    big.immune = 10;
+    if (tick < 3) {
+      const f = b.foods[0];
+      f.kind = (['sandwich', 'scone', 'sponge'] as const)[tick];
+      f.x = big.x + Math.cos(big.heading) * 0.3;
+      f.z = big.z + Math.sin(big.heading) * 0.3;
+    }
+    b.step({ x: Math.cos(big.heading), z: Math.sin(big.heading), active: true, dash: false });
+    for (const e of b.events) if (e.type === 'teatime') teaTimes++;
+    b.events.length = 0;
+  }
+  return { swan: gulps ? `${gulps} gulps!` : boops ? 'boop, no gulp' : 'never met', tea, bigMouth: teaTimes };
 }
 
 function invariants(id: StageId, seeds: number, baseline: boolean): number {
@@ -565,6 +586,7 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
     const scripted = londonScripted(stage);
     row('swan vs a Dragon', scripted.swan, scripted.swan === 'boop, no gulp');
     row('scripted tea time', scripted.tea, scripted.tea === 'TEA TIME');
+    row('tea times, reach 3.85', scripted.bigMouth, scripted.bigMouth === 1);
   }
   console.log(`  ${'longest stall'.padEnd(22)} ${(longest / 60).toFixed(1).padStart(7)}s`);
   row('kinds seen', `${want.size - missing.length}/${want.size}`, missing.length === 0);

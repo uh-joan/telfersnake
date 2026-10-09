@@ -42,6 +42,8 @@ const TEA_TIME_WITHIN = 20;
 /** ...brings out the cake stand: this many treats around you, and a bonus. */
 const TEA_TIME_TREATS = 8;
 const TEA_TIME_BONUS = 150;
+/** Seconds after a Tea Time when bites do not count toward another (the cake stand is not a fresh tea). */
+const TEA_TIME_COOL = 3;
 const TEA_STAND: readonly FoodKind[] = ['scone', 'sponge', 'sandwich', 'strawberry'];
 /** Miss Sami, out on the Common with a mum: warm, whimsical, accurate. Bubbles only, like Mr Cooper. */
 const SAMI_LINES = [
@@ -350,6 +352,9 @@ export class World {
         continue;
       }
       s.tickMagic(dt);
+      // London's timers run down whether or not the snake is moving.
+      if (s.teaFor > 0) s.teaFor -= dt;
+      if (s.teaCool > 0) s.teaCool -= dt;
       const bot = this.bots.get(s);
       if (s.awayFor > 0) {
         s.awayFor -= dt;
@@ -373,10 +378,7 @@ export class World {
       s.slowed = Math.hypot(s.x - c.x, s.z - c.z) < COOPER_AURA;
       let pace = s.slowed ? SLOW_FACTOR : 1;
       if (this.stage.water && inWater(this.stage, s.x, s.z)) pace *= SWIM_FACTOR;
-      if (s.teaFor > 0) {
-        s.teaFor -= dt;
-        pace *= TEA_ZOOM;
-      }
+      if (s.teaFor > 0) pace *= TEA_ZOOM;
       s.speedFactor += (pace - s.speedFactor) * Math.min(1, dt * 4);
       s.update(input, dt, !s.slowed, this.stage, this.snakeSolids);
 
@@ -1079,6 +1081,7 @@ export class World {
 
   /** Sandwich, then scone, then sponge, inside TEA_TIME_WITHIN seconds (other food in between is fine). */
   private teaTime(s: Snake, kind: FoodKind): void {
+    if (s.teaCool > 0) return;
     const step = TEA_TIME.indexOf(kind);
     if (step === 0) {
       s.teaStep = 1;
@@ -1092,6 +1095,7 @@ export class World {
     s.teaStep++;
     if (s.teaStep < TEA_TIME.length) return;
     s.teaStep = 0;
+    s.teaCool = TEA_TIME_COOL;
     s.score += TEA_TIME_BONUS;
     this.cakeStand(s);
     this.events.push({ type: 'teatime', who: s.id, x: s.x, z: s.z });
@@ -1100,10 +1104,11 @@ export class World {
   /** Bring a ring of afternoon-tea treats out around the snake (food borrowed from elsewhere on the map). */
   private cakeStand(s: Snake): void {
     let i = 0;
+    const ring = Math.max(3, s.biteReach + 1.5); // out of reach, so the stand is not swallowed in one gulp
     for (let n = 0; n < TEA_TIME_TREATS; n++) {
       const a = (n / TEA_TIME_TREATS) * Math.PI * 2 + s.heading;
-      const x = s.x + Math.cos(a) * 3;
-      const z = s.z + Math.sin(a) * 3;
+      const x = s.x + Math.cos(a) * ring;
+      const z = s.z + Math.sin(a) * ring;
       if (!isFree(this.stage, x, z, 0.5, this.hazards)) continue;
       // Borrow the next food that is not already close by.
       while (i < this.foods.length && (this.foods[i].x - s.x) ** 2 + (this.foods[i].z - s.z) ** 2 < 100) i++;
@@ -1306,6 +1311,7 @@ export class World {
     this.dropIn(s);
     s.alive = true;
     s.immune = RESPAWN_GRACE;
+    s.teaStep = s.teaCool = 0;
     s.speedFactor = 1;
     s.touchingWall = s.wasTouchingWall = false;
     this.events.push({ type: 'respawn', who: s.id, x: s.x, z: s.z });
