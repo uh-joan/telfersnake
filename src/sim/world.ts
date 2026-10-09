@@ -1,5 +1,5 @@
 import { ANIMALS, type Animal, type AnimalKind, makeAnimal, placeAnimal, updateAnimal } from './animals';
-import { makePredators, type Predator, PREDATORS } from './predators';
+import { makePredators, type Predator, type PredatorKind, PREDATORS } from './predators';
 import { KID_RADIUS, KIDS, type Kid, makeKids, type Projectile, type ProjectileKind } from './kids';
 import { type Creature, type CreatureKind, CREATURES, creatureSpot, makeCreatures } from './creatures';
 import { Bot, MORE_RIVALS, type Personality } from './bot';
@@ -100,7 +100,7 @@ export type GameEvent =
   /** A wolf about to sprint: its warning howl. */
   | { type: 'howl'; x: number; z: number }
   /** A predator bit a snake: puff at the victim, who loses mass like a rock bonk. */
-  | { type: 'chomp'; kind: 'bear' | 'wolf'; who: number; x: number; z: number }
+  | { type: 'chomp'; kind: PredatorKind; who: number; x: number; z: number }
   /** A power was cast: FX at the caster. */
   | { type: 'power'; who: number; kind: PowerId; x: number; z: number; heading: number; range: number }
   /** A rival was shrunk or frozen by a power (or bonk): puff at the victim; `by` earns the gem. */

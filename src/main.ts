@@ -83,13 +83,15 @@ const upgradeFx = new UpgradeFx();
 // The travelling actors (Cooper, bees, upgrade FX, sparkles) stay in the scene; each stage's
 // ground + fixed scenery is swapped in and out (and cached) as you move between school and Common.
 stage.scene.add(cooperView.group, beeView.mesh, upgradeFx.group, sparkles.mesh, trailView.group);
-/** Swap the warden figure (head teacher vs park keeper) when the stage changes. */
+/** Swap the warden figure (head teacher vs park keeper) when the stage changes; hide it where there is none. */
 function mountWarden(): void {
   const persona = world.stage.cooper?.persona ?? 'cooper';
+  cooperView.group.visible = world.stage.cooper !== null;
   if (cooperView.persona === persona) return;
   stage.scene.remove(cooperView.group);
   disposeTree(cooperView.group);
   cooperView = new CooperView(persona);
+  cooperView.group.visible = world.stage.cooper !== null;
   stage.scene.add(cooperView.group);
 }
 const sceneryCache = new Map<StageId, School>();

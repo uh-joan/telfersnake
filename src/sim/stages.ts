@@ -1,5 +1,6 @@
 import { COMMON } from './commonLayout';
 import { SCHOOL } from './layout';
+import { LONDON } from './londonLayout';
 import type { Stage, StageId } from './stage';
 
 /**
@@ -9,6 +10,7 @@ import type { Stage, StageId } from './stage';
 export const STAGES: Record<StageId, Stage> = {
   school: SCHOOL,
   common: COMMON,
+  london: LONDON,
 };
 
 export const stageFor = (id: StageId): Stage => STAGES[id] ?? SCHOOL;

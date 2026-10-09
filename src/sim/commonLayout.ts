@@ -109,6 +109,7 @@ export const COMMON: Stage = {
   },
   sanctuary: null,
   hazardArea: null, // no rocks here: the Common's dangers move
+  hazardKinds: [],
   // The park keeper, Mr Bramble: patrols the meadow, and snakes near him drop to a walk.
   cooper: {
     spawn: { x: 12, z: 8 },
@@ -145,6 +146,9 @@ export const COMMON: Stage = {
   kids: ['runner', 'naughty', 'nice', 'runner', 'naughty', 'nice', 'runner', 'naughty'],
   // A few shy fantastic creatures haunt the woods and the Glade (which four is a lucky-day roll).
   creatureCount: 4,
+  // The roster, spelled out in CREATURE_KINDS' original order: the weighted pick walks this list,
+  // so appending London's creatures to CREATURE_KINDS must not change which four turn up here.
+  creatureKinds: ['stag', 'unicorn', 'owl', 'frog', 'kitsune', 'pixie', 'squirrel', 'wisp'],
   // The Common is big, so seat four more rivals: nine snakes solo, ten in a shared room.
   extraRivals: 4,
   // Miss Sami and a mum, nattering on the grass just off the Telfer Road mouth.

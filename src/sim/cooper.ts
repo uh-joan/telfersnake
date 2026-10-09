@@ -66,20 +66,23 @@ export interface CooperLines {
 /** Mr Cooper's own lines (the default for a stage that doesn't name its own). */
 export const COOPER_LINES: CooperLines = { general: LINES_GENERAL, near: LINES_NEAR, big: LINES_BIG, bump: LINES_BUMP };
 
+/** Who the warden is: Mr Cooper at school, Mr Bramble the park keeper, or Mr Cooper as a London Bobby. */
+export type WardenPersona = 'cooper' | 'keeper' | 'bobby';
+
 /** What a stage needs to place its warden: where they start, their beat, and (optionally) their own lines. */
 export interface WardenConfig {
   spawn: Spot;
   beat: Bounds;
   lines?: CooperLines;
-  /** Which figure the renderer draws: the head teacher, or the park keeper. */
-  persona?: 'cooper' | 'keeper';
+  /** Which figure the renderer draws: the head teacher, the park keeper, or London's Bobby. */
+  persona?: WardenPersona;
 }
 
 export class Cooper {
   /** False on a stage that has no warden: then it does nothing and is not drawn. */
   readonly active: boolean;
-  /** Which figure to draw (head teacher or park keeper). */
-  readonly persona: 'cooper' | 'keeper';
+  /** Which figure to draw (head teacher, park keeper or Bobby). */
+  readonly persona: WardenPersona;
   private readonly lines: CooperLines;
   private readonly spawn: Spot;
   private readonly beat: Bounds;

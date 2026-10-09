@@ -25,7 +25,6 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isFree } from '../src/sim/collide';
 import { CREATURE_KINDS, type CreatureKind } from '../src/sim/creatures';
-import { HAZARD_KINDS } from '../src/sim/hazards';
 import { MODES, type Mode, rulesFor } from '../src/sim/modes';
 import { Rng } from '../src/sim/rng';
 import { STAGE_IDS, type Stage, type StageId } from '../src/sim/stage';
@@ -224,10 +223,9 @@ function expectedKinds(stage: Stage): Set<string> {
   for (const a of stage.animals) out.add('animal:' + a);
   for (const p of stage.predators) if (p.count > 0) out.add('predator:' + p.kind);
   for (const k of stage.kids) out.add('kid:' + k);
-  const rosters = stage as { creatureKinds?: readonly CreatureKind[]; hazardKinds?: readonly string[] };
-  const creatures: readonly CreatureKind[] = stage.creatureCount > 0 ? (rosters.creatureKinds ?? CREATURE_KINDS) : [];
+  const creatures: readonly CreatureKind[] = stage.creatureCount > 0 ? (stage.creatureKinds ?? CREATURE_KINDS) : [];
   for (const c of creatures) out.add('creature:' + c);
-  if (stage.hazardArea) for (const h of rosters.hazardKinds ?? HAZARD_KINDS) out.add('hazard:' + h);
+  if (stage.hazardArea) for (const h of stage.hazardKinds) out.add('hazard:' + h);
   return out;
 }
 

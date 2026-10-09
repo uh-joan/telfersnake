@@ -154,12 +154,17 @@ export const hazardRow = (h: Hazard): HazardRow => [HAZARD_KINDS.indexOf(h.kind)
 export const cooperRow = (c: CooperState): CooperRow => [r2(c.x), r2(c.z), r3(c.heading), r2(c.speed), r2(c.talking)];
 export const animalKindIndex = (a: Animal) => ANIMAL_KINDS.indexOf(a.kind);
 
-/** Events that are only about one player go only to that player; the rest everyone sees. */
+/**
+ * Events that are only about one player go only to that player; the rest everyone sees. Anything
+ * missing from this list reaches the whole room, so each new per-player event must join it as it is
+ * added (London's `guard`, `royal`, `ride`, `warp` and `launch` will): otherwise one child's gem
+ * fanfare would play on every phone. Only events that carry a `who` can be listed.
+ */
+const PER_SEAT: ReadonlySet<Extract<GameEvent, { who: number }>['type']> = new Set([
+  'cards', 'bump', 'boop', 'ouch', 'pellet', 'tier', 'helmet', 'pelt', 'kiss', 'magic',
+] as const);
+
 export function eventIsFor(e: GameEvent, seat: number): boolean {
-  switch (e.type) {
-    case 'cards': case 'bump': case 'boop': case 'ouch': case 'pellet': case 'tier': case 'helmet': case 'pelt': case 'kiss': case 'magic':
-      return e.who === seat;
-    default:
-      return true;
-  }
+  if (!(PER_SEAT as ReadonlySet<string>).has(e.type)) return true;
+  return 'who' in e && e.who === seat;
 }

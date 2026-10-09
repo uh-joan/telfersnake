@@ -1,10 +1,21 @@
 import * as THREE from 'three';
+import type { StageId } from '../sim/stage';
 
 const SKY = 0x9fd8f5;
-/** Each stage's own light: the school's bright noon, the Common's warmer late-afternoon haze. */
-const ATMOSPHERE = {
-  school: { sky: 0x9fd8f5, fog: [70, 170] as const, hemiSky: 0xffffff, hemiGround: 0x8a8f7a, hemi: 1.9, sun: 0xfff2d6, sunI: 2.2 },
-  common: { sky: 0xcfe6c0, fog: [55, 150] as const, hemiSky: 0xf6e9c8, hemiGround: 0x6f7a52, hemi: 1.75, sun: 0xffe6b0, sunI: 2.35 },
+interface Atmosphere {
+  sky: number;
+  fog: readonly [number, number];
+  hemiSky: number;
+  hemiGround: number;
+  hemi: number;
+  sun: number;
+  sunI: number;
+}
+/** Each stage's own light: the school's bright noon, the Common's warmer late-afternoon haze, London's crisp, cool morning. */
+const ATMOSPHERE: Record<StageId, Atmosphere> = {
+  school: { sky: 0x9fd8f5, fog: [70, 170], hemiSky: 0xffffff, hemiGround: 0x8a8f7a, hemi: 1.9, sun: 0xfff2d6, sunI: 2.2 },
+  common: { sky: 0xcfe6c0, fog: [55, 150], hemiSky: 0xf6e9c8, hemiGround: 0x6f7a52, hemi: 1.75, sun: 0xffe6b0, sunI: 2.35 },
+  london: { sky: 0xc4dcef, fog: [75, 190], hemiSky: 0xf2f6ff, hemiGround: 0x8e8f92, hemi: 1.85, sun: 0xfff7ea, sunI: 2.2 },
 };
 const TILT = (58 * Math.PI) / 180;
 const FOV_LANDSCAPE = 42;
@@ -27,7 +38,7 @@ export class Stage {
   private readonly hemi: THREE.HemisphereLight;
   private readonly sun: THREE.DirectionalLight;
   /** The current stage's clear-weather atmosphere; the weather system dims and greys it from here. */
-  private baseAtmo: { sky: number; fog: readonly [number, number]; hemiSky: number; hemiGround: number; hemi: number; sun: number; sunI: number } = ATMOSPHERE.school;
+  private baseAtmo: Atmosphere = ATMOSPHERE.school;
   private readonly skyTmp = new THREE.Color();
   private readonly greyTmp = new THREE.Color(0x8a8f96);
   private readonly focus = new THREE.Vector3();
@@ -51,8 +62,8 @@ export class Stage {
     this.resize();
   }
 
-  /** Give each stage its own light and haze: the school's bright noon, the Common's warm afternoon. */
-  setAtmosphere(id: 'school' | 'common'): void {
+  /** Give each stage its own light and haze: the school's bright noon, the Common's warm afternoon, London's cool morning. */
+  setAtmosphere(id: StageId): void {
     const a = ATMOSPHERE[id];
     this.baseAtmo = a;
     (this.scene.background as THREE.Color).setHex(a.sky);
