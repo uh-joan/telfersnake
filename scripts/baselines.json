@@ -1,0 +1,32 @@
+{
+  "school/easy/3600/1": "c54f5fec",
+  "school/normal/3600/1": "ac7b5475",
+  "school/god/3600/1": "b36d59c9",
+  "common/easy/3600/1": "d7660465",
+  "common/normal/3600/1": "30e01d04",
+  "common/god/3600/1": "ad4a60b9",
+  "invariants/school/40": {
+    "inSolid": 0,
+    "outOfBounds": 0,
+    "stuck": 18,
+    "tooMany": 0
+  },
+  "invariants/common/40": {
+    "inSolid": 5,
+    "outOfBounds": 0,
+    "stuck": 8,
+    "tooMany": 0
+  },
+  "invariants/school/8": {
+    "inSolid": 0,
+    "outOfBounds": 0,
+    "stuck": 2,
+    "tooMany": 0
+  },
+  "invariants/common/8": {
+    "inSolid": 0,
+    "outOfBounds": 0,
+    "stuck": 1,
+    "tooMany": 0
+  }
+}
