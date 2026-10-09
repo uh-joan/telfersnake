@@ -168,6 +168,18 @@ export function loadSave(): Save {
 }
 
 /**
+ * Catch up on what another tab has unlocked since this one loaded (the sticky flags only), so a
+ * stale tab never sells a child a ticket they already hold.
+ */
+export function refreshSave(save: Save): void {
+  const disk = readDisk();
+  save.commonUnlocked ||= disk.commonUnlocked;
+  save.commonSeen ||= disk.commonSeen;
+  save.londonUnlocked ||= disk.londonUnlocked;
+  save.londonSeen ||= disk.londonSeen;
+}
+
+/**
  * Save without clobbering another tab: a second tab on the same tablet holds an older snapshot,
  * and writing it back whole would silently undo a child's stars and purchases. So only this
  * tab's changes are applied on top of whatever is on disk now.
@@ -202,11 +214,14 @@ export function writeSave(save: Save): void {
     };
     // Whatever else is stored (fields from a newer version) is kept: ours are written over the top.
     // London's fields go to their own key, never into the main one.
+    // London's key goes first: it only ever grows, so writing it again is harmless. If the main write
+    // then fails, the stars were not taken and this tab's delta is still pending (synced* unchanged),
+    // so the next save applies it exactly once; the ticket is never paid for without being kept.
+    const london = { unlocked: merged.londonUnlocked, seen: merged.londonSeen, stamps: merged.stamps, postcards: merged.postcards };
+    localStorage.setItem(LONDON_KEY, JSON.stringify({ ...readRaw(LONDON_KEY), ...london }));
     const main: Record<string, unknown> = { ...readRaw(KEY), ...merged };
     for (const f of LONDON_FIELDS) delete main[f];
     localStorage.setItem(KEY, JSON.stringify(main));
-    const london = { unlocked: merged.londonUnlocked, seen: merged.londonSeen, stamps: merged.stamps, postcards: merged.postcards };
-    localStorage.setItem(LONDON_KEY, JSON.stringify({ ...readRaw(LONDON_KEY), ...london }));
     // Only once it is safely on disk does this tab adopt the merged picture.
     Object.assign(save, merged);
     syncedStars = merged.stars;

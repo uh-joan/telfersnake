@@ -3,7 +3,7 @@ import { Music } from './audio/music';
 import { Sfx } from './audio/sfx';
 import { Controls } from './input/controls';
 import { skinLook, starsFor } from './meta/catalogue';
-import { type AudioMode, loadSave, type Save, writeSave } from './meta/save';
+import { type AudioMode, loadSave, refreshSave, type Save, writeSave } from './meta/save';
 import { cleanName, randomName } from './meta/names';
 import { Connection, type Outfit } from './net/client';
 import { AnimalView } from './render/animalView';
@@ -964,6 +964,7 @@ function shakeChip(id: StageId): void {
 
 /** Tapping a locked place buys its ticket the first time (if you can), then selects it. */
 function chooseStage(id: StageId): void {
+  refreshSave(save); // another tab may have bought this ticket already: never charge twice
   const p = PLACES[id];
   let justUnlocked = false;
   if (!p.unlocked(save)) {
