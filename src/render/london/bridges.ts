@@ -100,16 +100,16 @@ function millennium(): THREE.Group {
 
 /** Tower Bridge's deck: sky-blue girders, a grey road, and the seam where the two bascules meet. */
 function towerDeck(): THREE.Group {
-  const { w, d } = TOWER_BRIDGE; // runs north–south (along z)
+  const { w, d } = TOWER_BRIDGE; // runs east–west (along x)
   const parts = [
     box(w, TOP - BASE - 0.2, d, PALETTE.skyBlue, 0, BASE + 0.2, 0),
-    box(w - 0.8, 0.02, d, 0xd8d3c8, 0, TOP - 0.01, 0),
-    box(w - 0.8, 0.025, 0.12, PALETTE.ink, 0, TOP - 0.005, 0),
+    box(w, 0.02, d - 0.8, 0xd8d3c8, 0, TOP - 0.01, 0),
+    box(0.12, 0.025, d - 0.8, PALETTE.ink, 0, TOP - 0.005, 0),
   ];
   for (const s of [-1, 1]) {
-    parts.push(box(0.3, 0.16, d, PALETTE.skyBlue, s * (w / 2 - 0.15), TOP, 0));
+    parts.push(box(w, 0.16, 0.3, PALETTE.skyBlue, 0, TOP, s * (d / 2 - 0.15)));
     // Rivet-bands down the girder face, so it reads as painted iron.
-    for (let z = -d / 2 + 1; z < d / 2; z += 2) parts.push(box(0.05, TOP - BASE - 0.3, 0.12, PALETTE.navy, s * (w / 2 + 0.01), BASE + 0.25, z));
+    for (let x = -w / 2 + 1; x < w / 2; x += 2) parts.push(box(0.12, TOP - BASE - 0.3, 0.05, PALETTE.navy, x, BASE + 0.25, s * (d / 2 + 0.01)));
   }
   const g = new THREE.Group();
   g.add(inked(parts, 0.05));

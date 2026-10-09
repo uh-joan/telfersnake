@@ -24,11 +24,16 @@ const BOUNDS = LONDON_BOUNDS;
 
 // ---------------------------------------------------------------- the river and its bridges
 
-/** The Thames, west → east: it runs north past Westminster, then bends away east (plan §3). */
+/**
+ * The Thames, west → east: it runs north past Westminster, bends away east, then (folded to fit the
+ * sheet) swings south past the Tower and out of the map's bottom edge, so Tower Bridge spans it
+ * east–west and the camera, looking north, sees the bridge side-on (plan §3).
+ */
 export const THAMES: WaterZone = {
   path: [
     { x: -85, z: 20 }, { x: -55, z: 24 }, { x: -36, z: 16 }, { x: -24, z: 2 }, { x: -18, z: -10 },
-    { x: 0, z: -14 }, { x: 20, z: -8 }, { x: 42, z: 4 }, { x: 62, z: 8 }, { x: 85, z: 6 },
+    { x: 0, z: -14 }, { x: 20, z: -8 }, { x: 42, z: 4 }, { x: 56, z: 9 }, { x: 63, z: 18 },
+    { x: 65, z: 30 }, { x: 66, z: 44 }, { x: 66, z: 65 },
   ],
   width: 14,
   drift: { x: 0.4, z: 0 },
@@ -38,8 +43,8 @@ export const THAMES: WaterZone = {
 export const WESTMINSTER_BRIDGE: Box = { x: -24, z: 2, w: 28, d: 6 };
 /** The Millennium Bridge: a thin footbridge from Bankside north to St Paul's. */
 export const MILLENNIUM_BRIDGE: Box = { x: 24, z: -6, w: 4, d: 22 };
-/** Tower Bridge's deck (the towers stand either side of it, in the river). */
-export const TOWER_BRIDGE: Box = { x: 74, z: 7, w: 6, d: 24 };
+/** Tower Bridge's deck, east–west across the river's southward run (the towers stand on it, in the river). */
+export const TOWER_BRIDGE: Box = { x: 65, z: 30, w: 24, d: 6 };
 export const BRIDGES: Box[] = [WESTMINSTER_BRIDGE, MILLENNIUM_BRIDGE, TOWER_BRIDGE];
 
 // ---------------------------------------------------------------- the twelve landmarks (footprints)
@@ -63,11 +68,11 @@ export const ST_PAULS_DOME: Circle = { x: 30, z: -42, r: 4.5 };
 export const ST_PAULS_NAVE: Box = { x: 21, z: -42, w: 10, d: 5 };
 /** The Tower of London: its curtain wall (the White Keep stands inside). */
 export const TOWER: Box = { x: 62, z: -16, w: 14, d: 12 };
-/** Tower Bridge's two towers, each a pair of legs straddling the deck, out in the river. */
-export const TOWER_BRIDGE_TOWERS: Spot[] = [{ x: 74, z: 3 }, { x: 74, z: 11 }];
+/** Tower Bridge's two towers (west and east), each a pair of legs straddling the deck, out in the river. */
+export const TOWER_BRIDGE_TOWERS: Spot[] = [{ x: 59.8, z: 30 }, { x: 70.2, z: 30 }];
 const TOWER_LEGS: Box[] = TOWER_BRIDGE_TOWERS.flatMap((t) => [
-  { x: t.x - 4.2, z: t.z, w: 2.4, d: 3 },
-  { x: t.x + 4.2, z: t.z, w: 2.4, d: 3 },
+  { x: t.x, z: t.z - 4.2, w: 3, d: 2.4 },
+  { x: t.x, z: t.z + 4.2, w: 3, d: 2.4 },
 ]);
 /** The Shard: a glass spike on a square base, south of the river. */
 export const SHARD: Box = { x: 52, z: 42, w: 6, d: 6 };
@@ -130,7 +135,9 @@ export const ROADS: Road[] = [
   { id: 'whitehall', path: [{ x: -12, z: -42 }, { x: -24, z: -26 }, { x: -34, z: -14 }], width: 4 },
   { id: 'embankment', path: [{ x: -36, z: -14 }, { x: -18, z: -22 }, { x: 0, z: -24 }, { x: 22, z: -20 }, { x: 44, z: -9 }, { x: 74, z: -6 }], width: 4 },
   { id: 'southbank', path: [{ x: -8, z: 4 }, { x: -18, z: 14 }, { x: -30, z: 26 }, { x: -50, z: 34 }], width: 4 },
-  { id: 'borough', path: [{ x: -8, z: 4 }, { x: 4, z: 6 }, { x: 22, z: 20 }, { x: 40, z: 28 }, { x: 74, z: 20 }], width: 4 },
+  { id: 'borough', path: [{ x: -8, z: 4 }, { x: 4, z: 6 }, { x: 22, z: 20 }, { x: 40, z: 28 }, { x: 53, z: 30 }], width: 4 },
+  // Over Tower Bridge and up the east bank to the Embankment.
+  { id: 'towerbridge', path: [{ x: 77, z: 30 }, { x: 80, z: 16 }, { x: 78, z: 2 }, { x: 74, z: -6 }], width: 4 },
   { id: 'kensington', path: [{ x: -84, z: -8 }, { x: -56, z: -10 }, { x: -48, z: -12 }, { x: -36, z: -14 }], width: 4 },
 ];
 
