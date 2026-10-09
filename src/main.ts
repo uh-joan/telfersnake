@@ -99,7 +99,7 @@ let scenery: School | null = null;
 function mountScenery(id: StageId): void {
   let next = sceneryCache.get(id);
   if (!next) {
-    next = makeStageScene(id, stage.maxAnisotropy);
+    next = makeStageScene(id, stage.maxAnisotropy, stage.maxTextureSize);
     sceneryCache.set(id, next);
   }
   if (scenery === next) return;

@@ -1,72 +1,108 @@
 import * as THREE from 'three';
-import { HYDE_PARK, LONDON_BOUNDS, ST_JAMES, THAMES } from '../../sim/londonLayout';
+import { LANDMARKS } from '../../sim/londonLayout';
 import type { School } from '../school';
+import { makeBridges } from './bridges';
+import { makeFurniture } from './furniture';
+import { makePaperMap, SHEET } from './ground';
+import { makeLabels } from './labels';
+import { LANDMARK_BUILDERS, type LandmarkBuild, type LandmarkId } from './landmarks';
+import { makeThames } from './water';
 
 /**
- * London's ground, A0 placeholder: the cream paper map with the parks and a flat blue Thames painted
- * on, so the place can be played end to end. The real paper-map painter, the water mesh and the
- * twelve landmarks replace this in A1 (docs/LEVEL3-LONDON-PLAN.md §4.3). `reveal` is a no-op: nothing
- * stands tall enough yet to hide the snake.
+ * London: the paper tourist map come to life (docs/LEVEL3-LONDON.md §2, plan §4.3). Assembles the
+ * painted ground, the Thames, the bridges, the twelve landmarks with their ribbons, and the street
+ * furniture. `reveal` runs every frame: it drives the water and every landmark's animation, and fades
+ * any tall landmark that stands between the camera (south of the snake) and the snake.
  */
 
-const B = LONDON_BOUNDS;
-const W = B.maxX - B.minX; // 170
-const H = B.maxZ - B.minZ; // 130
-const S = 8; // canvas pixels per metre: plenty for flat paper
-const px = (x: number) => (x - B.minX) * S;
-const pz = (z: number) => (z - B.minZ) * S;
-
-function paintPaper(maxAnisotropy: number): THREE.Mesh {
-  const canvas = document.createElement('canvas');
-  canvas.width = W * S;
-  canvas.height = H * S;
-  const c = canvas.getContext('2d')!;
-  c.fillStyle = '#f3ead2';
-  c.fillRect(0, 0, canvas.width, canvas.height);
-  c.fillStyle = '#a9d48a';
-  for (const b of [HYDE_PARK, ST_JAMES]) c.fillRect(px(b.x - b.w / 2), pz(b.z - b.d / 2), b.w * S, b.d * S);
-
-  // The river: an ink edge, the blue, then a few white wave lines down the middle.
-  const river = () => {
-    c.beginPath();
-    THAMES.path.forEach((p, i) => (i === 0 ? c.moveTo(px(p.x), pz(p.z)) : c.lineTo(px(p.x), pz(p.z))));
-  };
-  c.lineJoin = 'round';
-  c.strokeStyle = '#2f4a6b';
-  c.lineWidth = (THAMES.width + 0.6) * S;
-  river();
-  c.stroke();
-  c.strokeStyle = '#6fb6ea';
-  c.lineWidth = THAMES.width * S;
-  river();
-  c.stroke();
-  c.strokeStyle = 'rgba(255,255,255,0.7)';
-  c.lineWidth = 0.25 * S;
-  c.setLineDash([2 * S, 3 * S]);
-  river();
-  c.stroke();
-  c.setLineDash([]);
-
-  // A thin ink border round the sheet.
-  c.strokeStyle = '#3a3226';
-  c.lineWidth = 0.5 * S;
-  c.strokeRect(0, 0, canvas.width, canvas.height);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = maxAnisotropy;
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshLambertMaterial({ map: texture }));
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.set((B.minX + B.maxX) / 2, 0, (B.minZ + B.maxZ) / 2);
-  return mesh;
+/** A tall landmark's ground footprint and how far north of it the camera loses sight of the ground. */
+interface Occluder {
+  minX: number;
+  maxX: number;
+  northZ: number;
+  southZ: number;
+  shadow: number;
+  materials: THREE.Material[];
+  outlines: THREE.Object3D[];
 }
 
-export function makeLondon(maxAnisotropy: number): School {
+export function makeLondon(maxAnisotropy: number, maxTextureSize = 4096): School {
   const group = new THREE.Group();
-  // The table the map lies on, out past the edge of the paper.
-  const table = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshLambertMaterial({ color: 0xb9a888 }));
-  table.rotation.x = -Math.PI / 2;
-  table.position.set((B.minX + B.maxX) / 2, -0.05, (B.minZ + B.maxZ) / 2);
-  group.add(table, paintPaper(maxAnisotropy));
-  return { group, reveal: () => {} };
+
+  // The table the map lies on: a frame round the sheet (no table under it, so the river channel shows).
+  const table = new THREE.Shape();
+  table.moveTo(-450, -450);
+  table.lineTo(450, -450);
+  table.lineTo(450, 450);
+  table.lineTo(-450, 450);
+  table.closePath();
+  const hole = new THREE.Path();
+  hole.moveTo(SHEET.minX, SHEET.minZ);
+  hole.lineTo(SHEET.minX, SHEET.maxZ);
+  hole.lineTo(SHEET.maxX, SHEET.maxZ);
+  hole.lineTo(SHEET.maxX, SHEET.minZ);
+  hole.closePath();
+  table.holes.push(hole);
+  const tableMesh = new THREE.Mesh(new THREE.ShapeGeometry(table), new THREE.MeshLambertMaterial({ color: 0xb9a888, side: THREE.DoubleSide }));
+  tableMesh.rotation.x = Math.PI / 2; // shape y → world z
+  tableMesh.position.y = -0.05;
+
+  const thames = makeThames();
+  group.add(tableMesh, makePaperMap(maxAnisotropy, maxTextureSize), thames.group, makeBridges(), makeFurniture());
+
+  // ---- the twelve landmarks, each built round its own origin and set down at its `at`
+  const builds: LandmarkBuild[] = [];
+  const occluders: Occluder[] = [];
+  const labelSpots: { id: LandmarkId; x: number; y: number; z: number }[] = [];
+  const box = new THREE.Box3();
+  for (const l of LANDMARKS) {
+    const id = l.id as LandmarkId;
+    const b = LANDMARK_BUILDERS[id]();
+    b.group.position.set(l.at.x, 0, l.at.z);
+    group.add(b.group);
+    builds.push(b);
+    labelSpots.push({ id, x: l.at.x, y: b.labelY, z: l.at.z });
+    if (!b.tall) continue;
+    b.group.updateMatrixWorld(true);
+    box.setFromObject(b.group);
+    const materials: THREE.Material[] = [];
+    const outlines: THREE.Object3D[] = [];
+    b.group.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) materials.push(m);
+      if ((mesh.material as THREE.Material).side === THREE.BackSide) outlines.push(mesh);
+    });
+    occluders.push({
+      minX: box.min.x, maxX: box.max.x, northZ: box.min.z, southZ: box.max.z,
+      // The camera looks north and down at about 58°: a wall hides about 0.65 of its height behind it.
+      shadow: box.max.y * 0.65 + 1,
+      materials,
+      outlines,
+    });
+  }
+
+  const labels = makeLabels(labelSpots);
+  group.add(labels.group);
+
+  let t = 0;
+  const reveal = (x: number, z: number, dt: number) => {
+    t += dt;
+    thames.update(t);
+    for (const b of builds) b.animate?.(t, dt);
+    labels.update(x, z, t);
+    for (const o of occluders) {
+      const hidden = x > o.minX - 1 && x < o.maxX + 1 && z > o.northZ - o.shadow && z < o.southZ + 1;
+      const want = hidden ? 0.3 : 1;
+      for (const m of o.materials) {
+        m.opacity += (want - m.opacity) * (1 - Math.exp(-dt * 8));
+        m.transparent = m.opacity < 0.99;
+        m.depthWrite = !m.transparent;
+      }
+      // The ink hull would draw a dark ghost through a see-through landmark: hide it while faded.
+      const inked = o.materials[0].opacity > 0.9;
+      for (const h of o.outlines) h.visible = inked;
+    }
+  };
+  return { group, reveal };
 }
