@@ -6,6 +6,9 @@ import type { Stage } from './stage';
 export const FOOD_KINDS = [
   'burger', 'sausage', 'cookie', 'broccoli', 'carrot', 'apple',
   'mushroom', 'tomato', 'berry', 'acorn',
+  // London's menu (Level 3), appended so the protocol's indices stay put.
+  'fishchips', 'scone', 'sponge', 'sandwich', 'pie', 'sausageroll', 'crumpet', 'strawberry',
+  'jellybaby', 'bagel', 'biscuit', 'tea',
 ] as const;
 export type FoodKind = (typeof FOOD_KINDS)[number];
 
@@ -21,7 +24,22 @@ export const FOOD_VALUE: Record<FoodKind, number> = {
   tomato: 2,
   berry: 1,
   acorn: 2,
+  fishchips: 4, // the big one, in its paper
+  scone: 2,
+  sponge: 3,
+  sandwich: 2,
+  pie: 3,
+  sausageroll: 2,
+  crumpet: 2,
+  strawberry: 2,
+  jellybaby: 1,
+  bagel: 2,
+  biscuit: 1,
+  tea: 1, // and a little warm-up zoom (see TEA_ZOOM in world.ts)
 };
+
+/** The afternoon-tea bites, in the order that makes a Tea Time (London). */
+export const TEA_TIME: readonly FoodKind[] = ['sandwich', 'scone', 'sponge'];
 
 // Spawn weights, same order as FOOD_KINDS. A shorter table simply cannot pick the later kinds, so
 // the school's two tables never yield the Common's forest food. A stage picks a table (Stage.foodKindAt).
@@ -29,6 +47,9 @@ export const WEIGHTS_YARD = [1.5, 2, 3, 1, 1, 1.5];
 export const WEIGHTS_GREEN = [0, 0, 0.5, 4, 4, 2];
 // The Common: a bit of picnic litter, but mostly forest food.
 export const WEIGHTS_COMMON = [1, 1, 1.5, 1, 1, 1.5, 3, 2.5, 3, 2];
+
+/** A weight table by name (zero for anything unnamed), in FOOD_KINDS order: London's zone menus. */
+export const foodWeights = (w: Partial<Record<FoodKind, number>>): number[] => FOOD_KINDS.map((k) => w[k] ?? 0);
 
 /** One food kind drawn from a weight table (same order as FOOD_KINDS). */
 export const pickFoodKind = (rng: Rng, weights: readonly number[]): FoodKind => FOOD_KINDS[weighted(rng, weights)];

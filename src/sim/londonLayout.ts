@@ -8,16 +8,17 @@
  * Coordinates follow docs/LEVEL3-LONDON-PLAN.md §3, nudged where the river needed room.
  *
  * Pure data, like layout.ts and commonLayout.ts: the sim collides against it, the renderer
- * draws it. Animals and food are still borrowed (London's own menu and zoo arrive in A2).
+ * draws it. London has its own menu (zone by zone, food.ts) and its own zoo (animals.ts).
  */
 
-import { COMMON_ANIMALS } from './animals';
+import { LONDON_ANIMALS } from './animals';
 import type { WardenConfig } from './cooper';
-import { pickFoodKind, WEIGHTS_GREEN, WEIGHTS_YARD } from './food';
+import { foodWeights, pickFoodKind } from './food';
 import type { Box, Circle } from './layout';
 import { inBox } from './layout';
 import type { Rng } from './rng';
-import type { Landmark, Portal, Spot, Stage, WaterZone } from './stage';
+import type { Landmark, Portal, Spot, Stage, Terrain, WaterZone } from './stage';
+import { inWater } from './water';
 
 export const LONDON_BOUNDS = { minX: -85, maxX: 85, minZ: -65, maxZ: 65 };
 const BOUNDS = LONDON_BOUNDS;
@@ -119,6 +120,12 @@ export const ST_JAMES: Box = { x: -26, z: -26, w: 16, d: 10 };
 export const COVENT_GARDEN: Box = { x: 8, z: -50, w: 16, d: 10 };
 export const BOROUGH: Box = { x: 40, z: 24, w: 14, d: 10 };
 export const SOUTH_BANK: Box = { x: -30, z: 38, w: 22, d: 12 };
+/** St James's Park's lake (painted, like the Serpentine: not swimming water). Swans and ducks live on its banks. */
+export const ST_JAMES_LAKE = { x: ST_JAMES.x + 1, z: ST_JAMES.z + 0.5, rx: 5.5, rz: 1.8, rot: 0.1 };
+/** The City: St Paul's across to the Gherkin and the Bank (bagels and pies). */
+const THE_CITY: Box = { x: 38, z: -46, w: 36, d: 26 };
+/** In front of the Palace and round the Victoria Memorial: the garden party (and the corgis). */
+const PALACE_GARDEN: Box = { x: -46, z: -27, w: 22, d: 10 };
 
 /** A painted street (cream with ink edges), for the ground painter and, later, the buses. */
 export interface Road {
@@ -160,6 +167,67 @@ const SNAKE_SPAWN = { x: -46, z: 8, heading: -0.45 };
 /** A random point on the open map, anywhere (the walkers' isFree check keeps them dry). */
 const anywhere = (rng: Rng): Spot => ({ x: rng.range(BOUNDS.minX, BOUNDS.maxX), z: rng.range(BOUNDS.minZ, BOUNDS.maxZ) });
 const inside = (rng: Rng, b: Box): Spot => ({ x: rng.range(b.x - b.w / 2, b.x + b.w / 2), z: rng.range(b.z - b.d / 2, b.z + b.d / 2) });
+
+// ---------------------------------------------------------------- the menu and the zoo
+
+/** The river with no bridges in it: "near the water" for food, bridges included. */
+const RIVER_ONLY: Terrain = { bounds: BOUNDS, solidBoxes: [], solidCircles: [], water: [THAMES] };
+const near = (x: number, z: number, p: Spot, r: number) => (x - p.x) ** 2 + (z - p.z) ** 2 < r * r;
+
+/** What grows where (docs/LEVEL3-LONDON.md §4), checked in this order. */
+const MENU = {
+  /** Trafalgar Square and Piccadilly Circus: jelly babies. */
+  sweets: foodWeights({ jellybaby: 5, biscuit: 1 }),
+  /** Covent Garden market: fruit (and a scone). */
+  market: foodWeights({ apple: 3, strawberry: 3, scone: 1 }),
+  /** Borough Market: veg and a pie. */
+  borough: foodWeights({ broccoli: 3, carrot: 3, pie: 2 }),
+  /** The South Bank: crumpets, sausage rolls, chips. */
+  southBank: foodWeights({ crumpet: 3, sausageroll: 2, fishchips: 2 }),
+  /** The City: bagels and pies. */
+  city: foodWeights({ bagel: 3, pie: 2, tea: 1 }),
+  /** The Palace and St James's Park: afternoon tea. */
+  palace: foodWeights({ sandwich: 3, scone: 3, sponge: 2, tea: 2 }),
+  /** Hyde Park: strawberries and a picnic. */
+  park: foodWeights({ strawberry: 3, sandwich: 1, biscuit: 1, apple: 1 }),
+  /** Along the Thames: fish and chips. */
+  river: foodWeights({ fishchips: 4, sausageroll: 1, tea: 1 }),
+  /** Everywhere else: a London street mix. */
+  street: foodWeights({ sausageroll: 3, biscuit: 2.5, tea: 2, sandwich: 0.7, scone: 0.5, pie: 0.5, fishchips: 0.4, jellybaby: 0.4 }),
+};
+
+function menuAt(x: number, z: number): readonly number[] {
+  if (near(x, z, NELSON, 9) || near(x, z, PICCADILLY_FOUNTAIN, 9)) return MENU.sweets;
+  if (inBox(COVENT_GARDEN, x, z)) return MENU.market;
+  if (inBox(BOROUGH, x, z)) return MENU.borough;
+  if (inBox(SOUTH_BANK, x, z)) return MENU.southBank;
+  if (inBox(THE_CITY, x, z)) return MENU.city;
+  if (inBox(PALACE_GARDEN, x, z) || inBox(ST_JAMES, x, z)) return MENU.palace;
+  if (inBox(HYDE_PARK, x, z)) return MENU.park;
+  if (inWater(RIVER_ONLY, x, z, 5)) return MENU.river;
+  return MENU.street;
+}
+
+/** A point on the bank of a painted lake, just off the water: swans and ducks are walkers. */
+function lakeside(rng: Rng): Spot {
+  const e = rng.next() < 0.5 ? SERPENTINE : ST_JAMES_LAKE;
+  const t = rng.range(0, Math.PI * 2);
+  const u = (e.rx + 1) * Math.cos(t);
+  const v = (e.rz + 1) * Math.sin(t);
+  return { x: e.x + u * Math.cos(e.rot) - v * Math.sin(e.rot), z: e.z + u * Math.sin(e.rot) + v * Math.cos(e.rot) };
+}
+
+/** A point along a street (and a little either side of its middle). */
+function alongRoad(rng: Rng, path: readonly Spot[], spread: number): Spot {
+  const i = rng.int(path.length - 1);
+  const t = rng.next();
+  return {
+    x: path[i].x + (path[i + 1].x - path[i].x) * t + rng.range(-spread, spread),
+    z: path[i].z + (path[i + 1].z - path[i].z) * t + rng.range(-spread, spread),
+  };
+}
+
+const roadPath = (id: string): readonly Spot[] => ROADS.find((r) => r.id === id)!.path;
 
 /** Mr Cooper on duty as a London Bobby: polite, dry, a bit grand. Bubbles only. */
 const BOBBY: WardenConfig = {
@@ -204,19 +272,32 @@ export const LONDON: Stage = {
   bridges: BRIDGES,
   snakeSpawn: SNAKE_SPAWN,
   fallbackSpot: { x: 0, z: -32 }, // open paper north of the river, between Trafalgar and St Paul's
-  animals: COMMON_ANIMALS, // London's own zoo (corgis, swans, gulls…) arrives in A2
-  gulpHints: ['🐿️🐦', '🦔🦆', '🦊🐇', '🦌', '🦌', '🔥🐲'],
+  animals: LONDON_ANIMALS,
+  // A big flock in Trafalgar Square, ducks on both lakes.
+  animalCounts: { pigeon: 10, duck: 4 },
+  animalHomes: { pigeon: 'trafalgar' },
+  // Swans are never gulped, so they are never hinted. The pelican has no emoji: the goose stands in.
+  gulpHints: ['🐦🐿️', '🦆🐶', '🕊️', '🪿', '🐴', '🦖'],
 
-  // A big map, like the Common: twice the food. Veg in the parks, lunch leftovers in the streets.
+  // A big map, like the Common: twice the food, zone by zone (see MENU).
   foodScale: 2,
-  foodKindAt: (rng, x, z) => pickFoodKind(rng, inBox(HYDE_PARK, x, z) || inBox(ST_JAMES, x, z) ? WEIGHTS_GREEN : WEIGHTS_YARD),
+  foodKindAt: (rng, x, z) => pickFoodKind(rng, menuAt(x, z)),
   homePoint: (rng: Rng, home: string): Spot => {
     switch (home) {
       case 'woods':
       case 'green':
-        return inside(rng, HYDE_PARK);
+        return rng.next() < 0.75 ? inside(rng, HYDE_PARK) : inside(rng, ST_JAMES); // squirrels in the parks
       case 'lagoon':
-        return inside(rng, ST_JAMES); // the ducks' lake
+      case 'lake':
+        return lakeside(rng); // the swans', ducks' and pelicans' banks
+      case 'palace':
+        return alongRoad(rng, roadPath('mall'), 3); // the corgis and the guard horse, on the Mall
+      case 'trafalgar':
+        return { x: NELSON.x + rng.range(-7, 7), z: NELSON.z + rng.range(-6, 6) };
+      case 'river':
+        return alongRoad(rng, rng.next() < 0.6 ? roadPath('embankment') : roadPath('southbank'), 2); // gulls on the Embankment
+      case 'museum':
+        return { x: MUSEUM.x + rng.range(-8, 8), z: MUSEUM.z + MUSEUM.d / 2 + rng.range(1.5, 5) };
       default:
         return anywhere(rng);
     }

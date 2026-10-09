@@ -6,7 +6,7 @@ import { Bot, MORE_RIVALS, type Personality } from './bot';
 import { botCardChoice, type Rules, rulesFor } from './modes';
 import { isFree, makeHit, resolveAshore, resolveCircle, slideAlong, turnToward, wrapAngle } from './collide';
 import { Cooper, COOPER_AURA, COOPER_RADIUS } from './cooper';
-import { type Food, type FoodKind, FOOD_VALUE, GOLDEN_MULTIPLIER, placeFood } from './food';
+import { type Food, type FoodKind, FOOD_VALUE, GOLDEN_MULTIPLIER, placeFood, TEA_TIME } from './food';
 import { type Hazard, type HazardKind, makeHazards, type Pellet, PELLET_LIFE_TICKS, placeHazard } from './hazards';
 import { type Circle, inBox, SCHOOL } from './layout';
 import { Rng } from './rng';
@@ -34,6 +34,15 @@ const OUCH_SHARE = 0.12; // of current mass lost per rock...
 const OUCH_MAX = 15; // ...up to this much
 const CREATURE_RESPAWN = 25; // seconds a gulped creature stays faded before it returns elsewhere
 const PIXIE_MAGNET = 22; // Pixie Dust: a huge food-pull radius
+/** London's cuppa: a little warm-up zoom, this much faster for this long. */
+const TEA_ZOOM = 1.25;
+const TEA_ZOOM_FOR = 2;
+/** Tea Time: sandwich → scone → sponge inside this many seconds... */
+const TEA_TIME_WITHIN = 20;
+/** ...brings out the cake stand: this many treats around you, and a bonus. */
+const TEA_TIME_TREATS = 8;
+const TEA_TIME_BONUS = 150;
+const TEA_STAND: readonly FoodKind[] = ['scone', 'sponge', 'sandwich', 'strawberry'];
 /** Miss Sami, out on the Common with a mum: warm, whimsical, accurate. Bubbles only, like Mr Cooper. */
 const SAMI_LINES = [
   'Morning! Lovely to see you on the Common.',
@@ -117,7 +126,13 @@ export type GameEvent =
   | { type: 'kiss'; who: number; x: number; z: number; gem: boolean }
   /** A fantastic creature was gulped: its magic bursts, `gems` are earned by `who`. */
   | { type: 'magic'; kind: CreatureKind; who: number; x: number; z: number; gems: number }
-  | { type: 'bump'; who: number; what: 'wall' | 'cooper' | 'kid' };
+  | { type: 'bump'; who: number; what: 'wall' | 'cooper' | 'kid' }
+  /** London: an animal's call (a swan's HONK, a corgi's yip, a flock of pigeons taking off). */
+  | { type: 'cry'; kind: AnimalKind; x: number; z: number }
+  /** London: a gull or a pelican made off with a snack (it reappears elsewhere). */
+  | { type: 'steal'; kind: AnimalKind; food: FoodKind; x: number; z: number }
+  /** London: sandwich, scone, sponge in a row: TEA TIME! A cake stand of treats around `who`. */
+  | { type: 'teatime'; who: number; x: number; z: number };
 
 /** Terrain with only bounds and solids: water counts as open. */
 const dryTerrain = (t: Terrain): Terrain => ({ bounds: t.bounds, solidBoxes: t.solidBoxes, solidCircles: t.solidCircles });
@@ -215,7 +230,7 @@ export class World {
       this.foods.push(food);
     }
     for (const kind of stage.animals) {
-      for (let i = 0; i < ANIMALS[kind].count; i++) {
+      for (let i = 0; i < (stage.animalCounts?.[kind] ?? ANIMALS[kind].count); i++) {
         const a = makeAnimal(kind);
         placeAnimal(a, this, 6);
         a.born = -999;
@@ -358,6 +373,10 @@ export class World {
       s.slowed = Math.hypot(s.x - c.x, s.z - c.z) < COOPER_AURA;
       let pace = s.slowed ? SLOW_FACTOR : 1;
       if (this.stage.water && inWater(this.stage, s.x, s.z)) pace *= SWIM_FACTOR;
+      if (s.teaFor > 0) {
+        s.teaFor -= dt;
+        pace *= TEA_ZOOM;
+      }
       s.speedFactor += (pace - s.speedFactor) * Math.min(1, dt * 4);
       s.update(input, dt, !s.slowed, this.stage, this.snakeSolids);
 
@@ -1051,7 +1070,51 @@ export class World {
     const value = FOOD_VALUE[f.kind] * (golden ? GOLDEN_MULTIPLIER : 1) * (toasted ? 2 : 1);
     const points = s.gain(value);
     this.events.push({ type: 'eat', who: s.id, kind: f.kind, x: f.x, z: f.z, points, golden, toasted });
+    const kind = f.kind;
     placeFood(f, this.rng, this.stage, this.tick, s.x, s.z, 8, this.hazards, s.luck);
+    // London's menu only (no other stage grows these): a cuppa's zoom, and the Tea Time combo.
+    if (kind === 'tea') s.teaFor = TEA_ZOOM_FOR;
+    if (TEA_TIME.includes(kind)) this.teaTime(s, kind);
+  }
+
+  /** Sandwich, then scone, then sponge, inside TEA_TIME_WITHIN seconds (other food in between is fine). */
+  private teaTime(s: Snake, kind: FoodKind): void {
+    const step = TEA_TIME.indexOf(kind);
+    if (step === 0) {
+      s.teaStep = 1;
+      s.teaFrom = this.tick;
+      return;
+    }
+    if (step !== s.teaStep || (this.tick - s.teaFrom) * STEP > TEA_TIME_WITHIN) {
+      s.teaStep = 0; // out of order: start again with a sandwich
+      return;
+    }
+    s.teaStep++;
+    if (s.teaStep < TEA_TIME.length) return;
+    s.teaStep = 0;
+    s.score += TEA_TIME_BONUS;
+    this.cakeStand(s);
+    this.events.push({ type: 'teatime', who: s.id, x: s.x, z: s.z });
+  }
+
+  /** Bring a ring of afternoon-tea treats out around the snake (food borrowed from elsewhere on the map). */
+  private cakeStand(s: Snake): void {
+    let i = 0;
+    for (let n = 0; n < TEA_TIME_TREATS; n++) {
+      const a = (n / TEA_TIME_TREATS) * Math.PI * 2 + s.heading;
+      const x = s.x + Math.cos(a) * 3;
+      const z = s.z + Math.sin(a) * 3;
+      if (!isFree(this.stage, x, z, 0.5, this.hazards)) continue;
+      // Borrow the next food that is not already close by.
+      while (i < this.foods.length && (this.foods[i].x - s.x) ** 2 + (this.foods[i].z - s.z) ** 2 < 100) i++;
+      if (i >= this.foods.length) return;
+      const f = this.foods[i++];
+      f.x = x;
+      f.z = z;
+      f.kind = TEA_STAND[n % TEA_STAND.length];
+      f.golden = false;
+      f.born = this.tick;
+    }
   }
 
   private swallowPellet(s: Snake, index: number): void {

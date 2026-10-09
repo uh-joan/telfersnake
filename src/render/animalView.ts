@@ -7,6 +7,8 @@ import { model, paint, PAINTED } from './paint';
 
 type Geo = THREE.BufferGeometry;
 const BLACK = 0x1c1c1f;
+const CORGI = 0xe08a3c;
+const BONE = 0xf1ead6;
 
 const sphere = (r: number, color: number, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1): Geo =>
   paint(new THREE.SphereGeometry(r, 10, 8), color, (g) => g.scale(sx, sy, sz).translate(x, y, z));
@@ -158,6 +160,99 @@ const MODELS: Record<AnimalKind, () => Geo[]> = {
     leg(0.016, 0.1, 0xd88a5a, -0.06, 0),
     leg(0.016, 0.1, 0xd88a5a, 0.06, 0),
   ],
+  // ---- London's zoo
+  // A royal corgi: ginger and white, long and low, huge ears, no tail to speak of.
+  corgi: () => [
+    paint(new THREE.CapsuleGeometry(0.17, 0.38, 4, 10), CORGI, (g) => g.rotateX(Math.PI / 2).translate(0, 0.26, 0)),
+    sphere(0.15, 0xffffff, 0, 0.21, 0.12, 0.9, 0.8, 1.4), // white chest and belly
+    sphere(0.16, CORGI, 0, 0.42, 0.32),
+    sphere(0.1, 0xffffff, 0, 0.37, 0.42, 1, 0.8, 1.1), // white muzzle
+    sphere(0.035, BLACK, 0, 0.4, 0.52),
+    ...[-1, 1].map((s) => paint(new THREE.ConeGeometry(0.075, 0.2, 4), CORGI, (g) => g.rotateZ(s * -0.25).translate(s * 0.1, 0.6, 0.28))),
+    ...[-1, 1].map((s) => paint(new THREE.ConeGeometry(0.045, 0.12, 4), 0xffc9a8, (g) => g.rotateZ(s * -0.25).translate(s * 0.1, 0.58, 0.3))),
+    ...eyes(0.026, 0.07, 0.47, 0.44),
+    sphere(0.06, 0xffffff, 0, 0.3, -0.33), // a fluffy white bottom
+    ...fourLegs(0.045, 0.12, CORGI, 0.1, 0.17).slice(0, 2),
+    ...fourLegs(0.045, 0.12, 0xffffff, 0.1, 0.17).slice(2),
+  ],
+  // The King's swan: white, an S-curved neck, an orange beak with its black knob.
+  swan: () => [
+    sphere(0.3, 0xffffff, 0, 0.32, -0.05, 1, 0.75, 1.45),
+    ...[-1, 1].map((s) => sphere(0.2, 0xf1f1ef, s * 0.2, 0.42, -0.12, 0.45, 0.6, 1.3)),
+    paint(new THREE.ConeGeometry(0.14, 0.26, 6), 0xffffff, (g) => g.rotateX(-1.1).translate(0, 0.46, -0.5)),
+    ...[[0.48, 0.3, 0.1], [0.62, 0.36, 0.09], [0.76, 0.36, 0.08], [0.88, 0.32, 0.075]].map(([y, z, r]) => sphere(r, 0xffffff, 0, y, z)),
+    sphere(0.11, 0xffffff, 0, 0.95, 0.36, 1, 0.9, 1.2),
+    paint(new THREE.ConeGeometry(0.05, 0.2, 6), 0xff7a1a, (g) => g.rotateX(Math.PI / 2 + 0.35).translate(0, 0.9, 0.52)),
+    sphere(0.04, BLACK, 0, 0.96, 0.45),
+    ...eyes(0.024, 0.07, 0.98, 0.42),
+    ...[-1, 1].map((s) => paint(new THREE.BoxGeometry(0.1, 0.02, 0.14), 0x2b2b2e, (g) => g.translate(s * 0.1, 0.01, 0.02))),
+  ],
+  // A herring gull, always on the wing: white, grey back and wings, black tips, yellow beak.
+  gull: () => [
+    sphere(0.17, 0xffffff, 0, 0.95, -0.02, 1, 0.95, 1.6),
+    sphere(0.12, 0xffffff, 0, 1.04, 0.26),
+    paint(new THREE.ConeGeometry(0.04, 0.18, 5), 0xffcf33, (g) => g.rotateX(Math.PI / 2).translate(0, 1.02, 0.42)),
+    sphere(0.022, 0xe0393e, 0, 0.995, 0.4), // the red spot on the beak
+    ...[-1, 1].flatMap((s) => [
+      paint(new THREE.BoxGeometry(0.46, 0.035, 0.24), 0xaeb6c2, (g) => g.rotateZ(s * 0.18).translate(s * 0.34, 1.0, -0.02)),
+      paint(new THREE.BoxGeometry(0.16, 0.035, 0.18), 0x1c1c1f, (g) => g.rotateZ(s * 0.3).translate(s * 0.64, 1.07, -0.04)),
+    ]),
+    paint(new THREE.ConeGeometry(0.1, 0.22, 4), 0xffffff, (g) => g.rotateX(-Math.PI / 2).scale(1, 0.35, 1).translate(0, 0.95, -0.36)),
+    ...eyes(0.022, 0.06, 1.08, 0.33),
+  ],
+  // A pelican: big white body, short legs, and that enormous beak with its orange pouch.
+  pelican: () => [
+    sphere(0.3, 0xf4f1ea, 0, 0.5, -0.05, 1, 0.9, 1.35),
+    ...[-1, 1].map((s) => sphere(0.2, 0xd9d4c8, s * 0.22, 0.55, -0.12, 0.4, 0.7, 1.3)),
+    paint(new THREE.CylinderGeometry(0.08, 0.11, 0.36, 8), 0xf4f1ea, (g) => g.rotateX(0.35).translate(0, 0.82, 0.24)),
+    sphere(0.13, 0xf4f1ea, 0, 1.02, 0.32),
+    paint(new THREE.BoxGeometry(0.1, 0.06, 0.52), 0xf2a33a, (g) => g.rotateX(0.35).translate(0, 0.96, 0.62)),
+    sphere(0.12, 0xff8c3a, 0, 0.86, 0.6, 0.7, 0.75, 2.0), // the pouch
+    ...eyes(0.025, 0.08, 1.06, 0.4),
+    leg(0.03, 0.22, 0xf2a33a, -0.1, 0),
+    leg(0.03, 0.22, 0xf2a33a, 0.1, 0),
+    ...[-1, 1].map((s) => paint(new THREE.BoxGeometry(0.12, 0.02, 0.14), 0xf2a33a, (g) => g.translate(s * 0.1, 0.01, 0.06))),
+  ],
+  // A guard horse: glossy black, a red saddle cloth with gold trim, a white blaze. No rider.
+  horse: () => [
+    paint(new THREE.CapsuleGeometry(0.32, 0.72, 4, 12), 0x1d1d22, (g) => g.rotateX(Math.PI / 2).translate(0, 1.05, 0)),
+    paint(new THREE.BoxGeometry(0.68, 0.36, 0.62), 0xc8102e, (g) => g.translate(0, 1.12, -0.04)),
+    paint(new THREE.BoxGeometry(0.7, 0.05, 0.64), 0xf2c230, (g) => g.translate(0, 0.94, -0.04)),
+    paint(new THREE.BoxGeometry(0.34, 0.08, 0.42), 0x3a2a1c, (g) => g.translate(0, 1.38, -0.02)), // the saddle
+    paint(new THREE.CylinderGeometry(0.13, 0.18, 0.62, 8), 0x1d1d22, (g) => g.rotateX(0.55).translate(0, 1.45, 0.5)),
+    paint(new THREE.CapsuleGeometry(0.13, 0.32, 4, 8), 0x1d1d22, (g) => g.rotateX(1.25).translate(0, 1.7, 0.78)),
+    paint(new THREE.BoxGeometry(0.06, 0.03, 0.3), 0xffffff, (g) => g.rotateX(1.25 - Math.PI / 2).translate(0, 1.72, 0.88)), // blaze
+    ...[-1, 1].map((s) => paint(new THREE.ConeGeometry(0.05, 0.14, 4), 0x1d1d22, (g) => g.translate(s * 0.08, 1.9, 0.68))),
+    paint(new THREE.BoxGeometry(0.05, 0.42, 0.12), 0x111114, (g) => g.rotateX(0.5).translate(0, 1.6, 0.4)), // mane
+    ...eyes(0.03, 0.12, 1.78, 0.82),
+    paint(new THREE.ConeGeometry(0.1, 0.62, 6), 0x111114, (g) => g.rotateX(-0.35).translate(0, 0.86, -0.66)), // tail
+    ...fourLegs(0.065, 0.78, 0x1d1d22, 0.2, 0.42),
+    ...[[-0.2, -0.42], [0.2, -0.42], [-0.2, 0.42], [0.2, 0.42]].map(([x, z]) => leg(0.075, 0.1, 0xffffff, x, z)), // white socks
+  ],
+  // The dinosaur skeleton escaped from the museum: chunky cartoon bones, a big grinning skull.
+  dino: () => [
+    // the backbone, from the neck down the tail
+    ...[[1.35, 0.55, 0.13], [1.4, 0.3, 0.15], [1.42, 0.05, 0.16], [1.4, -0.2, 0.15], [1.35, -0.45, 0.14], [1.25, -0.7, 0.12], [1.1, -0.95, 0.1], [0.95, -1.18, 0.085], [0.8, -1.38, 0.07]].map(([y, z, r]) =>
+      sphere(r, BONE, 0, y, z)),
+    // ribs
+    ...[0.35, 0.12, -0.11, -0.34].map((z) =>
+      paint(new THREE.TorusGeometry(0.3, 0.045, 5, 12, Math.PI * 1.15), BONE, (g) => g.rotateZ(-0.075 * Math.PI).translate(0, 1.1, z))),
+    paint(new THREE.TorusGeometry(0.22, 0.06, 5, 10), BONE, (g) => g.rotateX(Math.PI / 2).scale(1, 1, 1.3).translate(0, 0.95, -0.25)), // hips
+    // the neck and the big skull
+    paint(new THREE.CylinderGeometry(0.08, 0.1, 0.42, 6), BONE, (g) => g.rotateX(0.7).translate(0, 1.55, 0.72)),
+    paint(new THREE.BoxGeometry(0.42, 0.36, 0.62), BONE, (g) => g.translate(0, 1.82, 1.0)),
+    paint(new THREE.BoxGeometry(0.36, 0.1, 0.5), BONE, (g) => g.rotateX(0.25).translate(0, 1.55, 1.04)), // the jaw, hanging open
+    ...[-1, 1].map((s) => sphere(0.08, 0x3a3226, s * 0.17, 1.9, 0.96, 0.4, 1, 1)), // eye sockets
+    ...[0.86, 0.98, 1.1, 1.22].flatMap((z) => [-1, 1].map((s) => paint(new THREE.ConeGeometry(0.03, 0.08, 4), 0xffffff, (g) => g.rotateX(Math.PI).translate(s * 0.15, 1.6, z)))),
+    // little arms, big legs (thigh, shin, foot)
+    ...[-1, 1].map((s) => paint(new THREE.CylinderGeometry(0.035, 0.035, 0.3, 5), BONE, (g) => g.rotateX(1.1).translate(s * 0.2, 1.15, 0.6))),
+    ...[-1, 1].flatMap((s) => [
+      paint(new THREE.CylinderGeometry(0.09, 0.07, 0.6, 6), BONE, (g) => g.rotateX(0.3).translate(s * 0.26, 0.72, -0.2)),
+      sphere(0.1, BONE, s * 0.26, 0.45, -0.12),
+      paint(new THREE.CylinderGeometry(0.06, 0.06, 0.42, 6), BONE, (g) => g.rotateX(-0.3).translate(s * 0.26, 0.24, -0.18)),
+      paint(new THREE.BoxGeometry(0.16, 0.06, 0.3), BONE, (g) => g.translate(s * 0.26, 0.03, -0.06)),
+    ]),
+  ],
 };
 
 /** How each kind moves its body as it goes: [hop height, strides per metre, side-to-side waddle]. */
@@ -176,6 +271,12 @@ const GAIT: Record<AnimalKind, [number, number, number]> = {
   hedgehog: [0.02, 4, 0],
   fox: [0.09, 3, 0.03],
   pigeon: [0.05, 4.5, 0.18],
+  corgi: [0.07, 6, 0.24], // a waddly trot on short legs
+  swan: [0.02, 3, 0.16],
+  gull: [0.08, 1.5, 0.14], // a bob and a bank on the wing
+  pelican: [0.04, 3, 0.22],
+  horse: [0.12, 1.4, 0.03],
+  dino: [0.1, 1.1, 0.1], // a clattering lurch
 };
 
 /** The petting farm, one instanced mesh per kind. Limbs do not animate; hops and waddles sell it. */
@@ -187,6 +288,9 @@ export class AnimalView {
   private readonly e = new THREE.Euler(0, 0, 0, 'YXZ');
   private readonly pos = new THREE.Vector3();
   private readonly scale = new THREE.Vector3();
+  /** How high each animal is off the ground right now (London's pigeons take off as a flock). */
+  private lift = new Float32Array(0);
+  private lastTime = 0;
 
   constructor(capacity: number) {
     for (const kind of ANIMAL_KINDS) {
@@ -199,6 +303,9 @@ export class AnimalView {
 
   update(world: WorldView, time: number): void {
     for (const mesh of this.meshes.values()) mesh.count = 0;
+    if (this.lift.length !== world.animals.length) this.lift = new Float32Array(world.animals.length);
+    const dt = Math.min(0.1, Math.max(0, time - this.lastTime));
+    this.lastTime = time;
     for (let i = 0; i < world.animals.length; i++) {
       const a = world.animals[i];
       const mesh = this.meshes.get(a.kind)!;
@@ -212,12 +319,20 @@ export class AnimalView {
       const squash = a.kind === 'snail' ? 1 + Math.sin(time * 3 + i) * 0.12 * moving : 1;
       const s = 1.25 * Math.max(0.01, grow);
 
-      this.e.set(0, Math.PI / 2 - a.heading, Math.sin(phase) * waddle * moving);
+      // A pigeon burst out of a flock (only London's ever flee this fast) flaps up into the air.
+      const aloft = a.kind === 'pigeon' && a.speed > 5 ? 1.6 : 0;
+      this.lift[i] += (aloft - this.lift[i]) * Math.min(1, dt * (aloft ? 5 : 2));
+      // Fliers bob and bank as they flap.
+      const flap = a.kind === 'gull' || this.lift[i] > 0.05 ? Math.sin(time * 9 + i * 1.3) : 0;
+      this.e.set(0, Math.PI / 2 - a.heading, Math.sin(phase) * waddle * moving + flap * 0.12);
       this.q.setFromEuler(this.e);
-      this.pos.set(a.x, Math.abs(Math.sin(phase)) * hop * moving, a.z);
+      this.pos.set(a.x, Math.abs(Math.sin(phase)) * hop * moving + this.lift[i] + flap * 0.06, a.z);
       this.m.compose(this.pos, this.q, this.scale.set(s, s, s * squash));
       mesh.setMatrixAt(mesh.count++, this.m);
     }
-    for (const mesh of this.meshes.values()) mesh.instanceMatrix.needsUpdate = true;
+    for (const mesh of this.meshes.values()) {
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.visible = mesh.count > 0;
+    }
   }
 }

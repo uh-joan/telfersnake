@@ -138,6 +138,11 @@ export class Snake {
   freezeIn = 0;
   /** Seconds this snake is frozen solid (a rival's Freeze Puff): it cannot steer or move. */
   frozenFor = 0;
+  /** London: seconds left of a cuppa's little warm-up zoom. */
+  teaFor = 0;
+  /** London: how far into Tea Time (sandwich → scone → sponge) this snake is, and the tick it began. */
+  teaStep = 0;
+  teaFrom = 0;
   /** Seconds a spent helmet takes to come back. 0 = no helmet owned. */
   helmetRecharge = 0;
   helmetReady = false;
@@ -178,6 +183,7 @@ export class Snake {
     this.helmetRecharge = 0;
     this.laserIn = this.stinkIn = this.zapIn = this.freezeIn = 0;
     this.frozenFor = 0;
+    this.teaFor = this.teaStep = this.teaFrom = 0;
     for (let i = 0; i < this.magic.length; i++) this.magic[i] = 0;
     this.luckyCards = 0;
     refreshStats(this);

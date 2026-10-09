@@ -24,6 +24,7 @@ import { TrailView } from './render/trailView';
 import { Stage } from './render/stage';
 import { Weather } from './render/weather';
 import { UpgradeFx } from './render/upgradeFx';
+import type { AnimalKind } from './sim/animals';
 import { CREATURES } from './sim/creatures';
 import { asMode, godUnlocked, type Mode, rulesFor } from './sim/modes';
 import { asStage, type StageId } from './sim/stage';
@@ -491,6 +492,17 @@ function finishRun(end = 'finish'): void {
 
 // ---------------------------------------------------------------- events from the sim
 
+/** What London's animals say, as a popup. */
+const CRY: Partial<Record<AnimalKind, string>> = { swan: '🦢 HONK!', corgi: 'YIP!', pigeon: 'FLAP!' };
+const FEATHERS = [0xffffff, 0xd9dde3, 0x9aa0aa];
+const TEA_STEAM = [0xffffff, 0xf3e3c3, 0xc98a45];
+
+/** Close enough to the local snake that a room-wide event is worth a popup and a sound. */
+function nearMe(x: number, z: number): boolean {
+  const s = world.snake;
+  return (s.x - x) ** 2 + (s.z - z) ** 2 < 14 * 14;
+}
+
 /** Rivals get the confetti but not the sounds, popups or banners: those are about you. */
 function handleEvents(): void {
   for (const e of world.events) {
@@ -505,6 +517,12 @@ function handleEvents(): void {
         hud.popup(`${e.golden ? '🌟 ' : e.toasted ? '🔥 ' : ''}+${e.points}`, e.x, e.z);
         if (e.golden) sfx?.golden();
         else sfx?.eat();
+        if (e.kind === 'tea') {
+          // A cuppa: a little warm-up zoom.
+          sparkles.burst(world.snake.x, world.snake.z, TEA_STEAM, 12, 0.9);
+          hud.popup('☕ ZOOM!', world.snake.x, world.snake.z, 'fun');
+          sfx?.zoom();
+        }
         break;
       case 'gulp':
         snakeViews[e.who].swallow();
@@ -516,7 +534,7 @@ function handleEvents(): void {
         break;
       case 'boop':
         if (!mine) break;
-        hud.popup('BOING!', e.x, e.z, 'fun');
+        hud.popup(e.kind === 'swan' ? '🦢 HONK!' : 'BOING!', e.x, e.z, 'fun');
         sfx?.boing();
         sfx?.voice(e.kind);
         break;
@@ -674,6 +692,29 @@ function handleEvents(): void {
         }
         break;
       }
+      case 'cry':
+        // London's animals: a swan's HONK, a corgi's yip, a whole flock of pigeons lifting off.
+        if (!nearMe(e.x, e.z)) break;
+        if (e.kind === 'pigeon') sparkles.burst(e.x, e.z, FEATHERS, 18, 1.2);
+        hud.popup(CRY[e.kind] ?? '!', e.x, e.z, 'fun');
+        sfx?.voice(e.kind);
+        break;
+      case 'steal':
+        // A gull (or a pelican) made off with someone's snack.
+        sparkles.burst(e.x, e.z, FEATHERS, 10, 0.8);
+        if (!nearMe(e.x, e.z)) break;
+        hud.popup(e.kind === 'gull' ? 'STOLEN!' : 'GOBBLE!', e.x, e.z, 'bad');
+        sfx?.voice(e.kind);
+        sfx?.snatch();
+        break;
+      case 'teatime':
+        // Sandwich, scone, sponge: TEA TIME! The cake stand comes out.
+        sparkles.burst(e.x, e.z, CONFETTI, 30, 1.6);
+        sparkles.burst(e.x, e.z, GOLD, 16, 1.2);
+        if (!mine) break;
+        hud.announce('TEA TIME!', '🫖 🥪 🍰');
+        sfx?.teaTime();
+        break;
       case 'say':
         // A grown-up says something, in a speech bubble over their head (Cooper, the keeper, Miss Sami…).
         hud.say(e.text, e.x, e.z);

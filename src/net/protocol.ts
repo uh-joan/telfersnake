@@ -161,7 +161,7 @@ export const animalKindIndex = (a: Animal) => ANIMAL_KINDS.indexOf(a.kind);
  * fanfare would play on every phone. Only events that carry a `who` can be listed.
  */
 const PER_SEAT: ReadonlySet<Extract<GameEvent, { who: number }>['type']> = new Set([
-  'cards', 'bump', 'boop', 'ouch', 'pellet', 'tier', 'helmet', 'pelt', 'kiss', 'magic',
+  'cards', 'bump', 'boop', 'ouch', 'pellet', 'tier', 'helmet', 'pelt', 'kiss', 'magic', 'teatime',
 ] as const);
 
 export function eventIsFor(e: GameEvent, seat: number): boolean {

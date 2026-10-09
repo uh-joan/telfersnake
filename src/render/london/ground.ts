@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
   BOROUGH, COVENT_GARDEN, HYDE_PARK, LANDMARKS, LONDON_BOUNDS, NELSON, PICCADILLY_FOUNTAIN, ROADS,
-  SERPENTINE, SOUTH_BANK, ST_JAMES, THAMES, VICTORIA_MEMORIAL, type Road,
+  SERPENTINE, SOUTH_BANK, ST_JAMES, ST_JAMES_LAKE, THAMES, VICTORIA_MEMORIAL, type Road,
 } from '../../sim/londonLayout';
 import type { Box } from '../../sim/layout';
 import { Rng } from '../../sim/rng';
@@ -94,8 +94,7 @@ const CIRCLES = [
   { x: PICCADILLY_FOUNTAIN.x, z: PICCADILLY_FOUNTAIN.z, r: 6 },
   { x: VICTORIA_MEMORIAL.x, z: VICTORIA_MEMORIAL.z, r: 5 },
 ];
-/** St James's Park's lake (painted, like the Serpentine: not swimming water). */
-export const ST_JAMES_LAKE = { x: ST_JAMES.x + 1, z: ST_JAMES.z + 0.5, rx: 5.5, rz: 1.8, rot: 0.1 };
+export { ST_JAMES_LAKE }; // it lives with the map now: the swans and ducks need it
 const SEA_SERPENT = { x: -66, z: 49 };
 /** The tour: a gentle loop round the sights, in the order a guide would walk it. */
 const TOUR = ['museum', 'palace', 'piccadilly', 'trafalgar', 'stpauls', 'gherkin', 'tower', 'towerbridge', 'shard', 'globe', 'eye', 'bigben'];
