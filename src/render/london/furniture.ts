@@ -41,30 +41,48 @@ const inEllipse = (x: number, z: number, e: { x: number; z: number; rx: number; 
   return (u / (e.rx + pad)) ** 2 + (v / (e.rz + pad)) ** 2 < 1;
 };
 
-/** One kind of prop, instanced, with its outline sharing the same instance matrices. */
+/** Props are batched per patch of the map this big (m), so the patches off screen are culled. */
+const CHUNK = 64;
+
+/**
+ * One kind of prop, instanced, with its outline sharing the same instance matrices: one pair per
+ * map patch, each with its own bounds, so only the patches near the camera are drawn (or shadowed).
+ */
 function instanced(geom: THREE.BufferGeometry, places: readonly Place[], outline = 0.04, castShadow = true): THREE.Group {
   const g = new THREE.Group();
   if (places.length === 0) return g;
-  const mesh = new THREE.InstancedMesh(geom, toonMaterial(), places.length);
+  const chunks = new Map<string, Place[]>();
+  for (const pl of places) {
+    const key = `${Math.floor(pl.x / CHUNK)},${Math.floor(pl.z / CHUNK)}`;
+    const list = chunks.get(key);
+    if (list) list.push(pl);
+    else chunks.set(key, [pl]);
+  }
+  const material = toonMaterial();
+  const hullGeom = outline > 0 ? outlineGeometry(geom, outline) : null;
+  const hullMat = inkMaterial();
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 1, 0);
   const p = new THREE.Vector3();
   const s = new THREE.Vector3();
-  places.forEach((pl, i) => {
-    q.setFromAxisAngle(up, pl.rot ?? 0);
-    m.compose(p.set(pl.x, 0, pl.z), q, s.setScalar(pl.s ?? 1));
-    mesh.setMatrixAt(i, m);
-  });
-  mesh.castShadow = castShadow;
-  mesh.receiveShadow = true;
-  mesh.computeBoundingSphere();
-  g.add(mesh);
-  if (outline > 0) {
-    const hull = new THREE.InstancedMesh(outlineGeometry(geom, outline), inkMaterial(), places.length);
-    hull.instanceMatrix = mesh.instanceMatrix;
-    hull.computeBoundingSphere();
-    g.add(hull);
+  for (const list of chunks.values()) {
+    const mesh = new THREE.InstancedMesh(geom, material, list.length);
+    list.forEach((pl, i) => {
+      q.setFromAxisAngle(up, pl.rot ?? 0);
+      m.compose(p.set(pl.x, 0, pl.z), q, s.setScalar(pl.s ?? 1));
+      mesh.setMatrixAt(i, m);
+    });
+    mesh.castShadow = castShadow;
+    mesh.receiveShadow = true;
+    mesh.computeBoundingSphere();
+    g.add(mesh);
+    if (hullGeom) {
+      const hull = new THREE.InstancedMesh(hullGeom, hullMat, list.length);
+      hull.instanceMatrix = mesh.instanceMatrix;
+      hull.computeBoundingSphere();
+      g.add(hull);
+    }
   }
   return g;
 }

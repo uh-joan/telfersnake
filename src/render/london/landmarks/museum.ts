@@ -211,7 +211,6 @@ export function build(): LandmarkBuild {
 
   return {
     group,
-    tall: true,
     labelY: TOWER_H + 7.5,
     animate: (t) => {
       // Look left… look right… with a little bob, like it's checking the traffic.

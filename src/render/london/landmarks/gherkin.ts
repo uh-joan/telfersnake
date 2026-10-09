@@ -101,7 +101,6 @@ export function build(): LandmarkBuild {
 
   return {
     group,
-    tall: true,
     labelY: H + 3,
     animate: (t) => {
       const cycle = t % 6;

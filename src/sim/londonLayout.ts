@@ -75,7 +75,7 @@ const TOWER_LEGS: Box[] = TOWER_BRIDGE_TOWERS.flatMap((t) => [
   { x: t.x, z: t.z + 4.2, w: 3, d: 2.4 },
 ]);
 /** The Shard: a glass spike on a square base, south of the river. */
-export const SHARD: Box = { x: 52, z: 42, w: 6, d: 6 };
+export const SHARD: Box = { x: 52, z: 42, w: 9, d: 9 };
 /** The Gherkin: round, at the north edge of the City. */
 export const GHERKIN: Circle = { x: 50, z: -52, r: 3.5 };
 /** Shakespeare's Globe: round, white, thatched, on Bankside. */
@@ -265,8 +265,121 @@ export const LONDON: Stage = {
     line(THAMES.path);
     c.fillStyle = '#b9a98a'; // the bridges
     for (const b of BRIDGES) box(b);
-    c.fillStyle = '#4a4038'; // the landmarks' footprints
+    c.fillStyle = 'rgba(74,64,56,0.35)'; // the landmarks' footprints, faint under their icons
     for (const b of SOLID_BOXES) box(b);
     for (const p of SOLID_CIRCLES) disc(p);
+    for (const l of LANDMARKS) paintIcon(c, l.id, X(l.at.x), Z(l.at.z), scale);
   },
 };
+
+/**
+ * A tiny picture of each sight for the minimap, centred on (cx, cy), drawn in metres × `u` px:
+ * a gold clock tower for Big Ben, a ring for the Eye, a blue glass spike for the Shard, and so on.
+ */
+function paintIcon(c: CanvasRenderingContext2D, id: string, cx: number, cy: number, u: number): void {
+  const ink = '#2b2118';
+  c.save();
+  c.translate(cx, cy);
+  c.scale(u * 1.5, u * 1.5); // a touch larger than life: the minimap is small
+  c.lineWidth = 0.9;
+  c.lineJoin = 'round';
+  c.strokeStyle = ink;
+  const rect = (x: number, y: number, w: number, h: number, fill: string) => {
+    c.fillStyle = fill;
+    c.fillRect(x, y, w, h);
+    c.strokeRect(x, y, w, h);
+  };
+  const poly = (pts: number[], fill: string) => {
+    c.beginPath();
+    for (let i = 0; i < pts.length; i += 2) (i === 0 ? c.moveTo : c.lineTo).call(c, pts[i], pts[i + 1]);
+    c.closePath();
+    c.fillStyle = fill;
+    c.fill();
+    c.stroke();
+  };
+  const dot = (x: number, y: number, r: number, fill: string) => {
+    c.beginPath();
+    c.arc(x, y, r, 0, Math.PI * 2);
+    c.fillStyle = fill;
+    c.fill();
+    c.stroke();
+  };
+  switch (id) {
+    case 'bigben': // a gold tower with a white clock and a pointed slate top
+      rect(-2, -4, 4, 9, '#e2b85c');
+      poly([-2.4, -4, 2.4, -4, 0, -9], '#434a57');
+      dot(0, -1.5, 1.3, '#fffbea');
+      break;
+    case 'eye': // the wheel
+      c.beginPath();
+      c.arc(0, -1, 5, 0, Math.PI * 2);
+      c.lineWidth = 2.6;
+      c.stroke();
+      c.lineWidth = 1.4;
+      c.strokeStyle = '#ffffff';
+      c.stroke();
+      c.strokeStyle = ink;
+      c.lineWidth = 0.9;
+      poly([-2.5, 5, 0, -1, 2.5, 5], 'rgba(0,0,0,0)');
+      dot(0, -1, 0.9, '#8cc8ec');
+      break;
+    case 'palace': // a long cream front with a red flag on top
+      rect(-7, -2.5, 14, 5, '#f1e6cc');
+      c.beginPath();
+      c.moveTo(0, -2.5);
+      c.lineTo(0, -7);
+      c.stroke();
+      rect(0, -7, 3, 2, '#d8342c');
+      break;
+    case 'trafalgar': // Nelson's column on its plinth
+      rect(-0.8, -8, 1.6, 10, '#d9cdb3');
+      dot(0, -8.5, 1.2, '#a89c86');
+      rect(-3, 2, 6, 2, '#d9cdb3');
+      break;
+    case 'stpauls': // the great grey dome and its golden cross
+      rect(-5, 0, 10, 4, '#f1ebdc');
+      c.beginPath();
+      c.arc(0, 0, 4, Math.PI, 0);
+      c.closePath();
+      c.fillStyle = '#c9ccd0';
+      c.fill();
+      c.stroke();
+      rect(-0.5, -6.5, 1, 2.5, '#f2c230');
+      break;
+    case 'tower': // a square keep with four turrets
+      rect(-4.5, -4.5, 9, 9, '#efe6d0');
+      for (const [x, y] of [[-4.5, -4.5], [4.5, -4.5], [-4.5, 4.5], [4.5, 4.5]]) dot(x, y, 1.6, '#e5dac0');
+      break;
+    case 'towerbridge': // two towers and the blue walkway between them
+      rect(-6, -1.2, 12, 2.4, '#8cc8ec');
+      rect(-7.5, -3, 3.4, 6, '#d9cdb3');
+      rect(4.1, -3, 3.4, 6, '#d9cdb3');
+      break;
+    case 'shard': // a tall glass spike
+      poly([-4, 4.5, 4, 4.5, 0.4, -9, -0.4, -9], '#8ec9ea');
+      break;
+    case 'gherkin': // a green egg
+      c.beginPath();
+      c.ellipse(0, -1.5, 3, 5.5, 0, 0, Math.PI * 2);
+      c.fillStyle = '#5c9e3c';
+      c.fill();
+      c.stroke();
+      break;
+    case 'globe': // a round white theatre under a thatched ring
+      dot(0, 0, 4.5, '#c9a25a');
+      dot(0, 0, 2.5, '#f8f1df');
+      break;
+    case 'piccadilly': // the bright light screens
+      rect(-6, -3, 4, 4, '#ff5fa2');
+      rect(-2, -3, 4, 4, '#ffd23f');
+      rect(2, -3, 4, 4, '#3fb6ff');
+      dot(0, 4, 1.4, '#d9cdb3');
+      break;
+    case 'museum': // a long terracotta front with two towers
+      rect(-7, -1.5, 14, 5, '#c9714b');
+      rect(-2.6, -6, 2, 5, '#c9714b');
+      rect(0.6, -6, 2, 5, '#c9714b');
+      break;
+  }
+  c.restore();
+}

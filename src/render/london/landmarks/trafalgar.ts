@@ -167,7 +167,6 @@ export function build(): LandmarkBuild {
 
   return {
     group,
-    tall: false, // the column is thin: fading the whole square while the snake plays among the lions would hurt more
     labelY: top + 2,
     animate(t) {
       jets.forEach((j, i) => {

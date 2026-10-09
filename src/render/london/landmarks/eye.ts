@@ -94,7 +94,6 @@ export function build(): LandmarkBuild {
 
   return {
     group,
-    tall: true,
     labelY: HUB_Y + R + 2.5,
     animate: (t) => {
       const a = -t * 0.06; // clockwise, a turn every ~100 s

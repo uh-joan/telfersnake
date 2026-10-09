@@ -247,7 +247,7 @@ export function build(): LandmarkBuild {
   flag.mesh.position.set(0, H + 4.6, zc);
   group.add(flag.mesh);
 
-  return { group, tall: true, labelY: H + 7, animate: (t) => flag.wave(t) };
+  return { group, labelY: H + 7, animate: (t) => flag.wave(t) };
 }
 
 /** A built-in geometry made kit-shaped (non-indexed, position + normal + colour), for the odd torus or wing. */

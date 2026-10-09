@@ -99,7 +99,7 @@ let scenery: School | null = null;
 function mountScenery(id: StageId): void {
   let next = sceneryCache.get(id);
   if (!next) {
-    next = makeStageScene(id, stage.maxAnisotropy, stage.maxTextureSize);
+    next = makeStageScene(id, stage.maxAnisotropy, stage.maxTextureSize, stage.camera);
     sceneryCache.set(id, next);
   }
   if (scenery === next) return;
@@ -795,7 +795,7 @@ function frame(now: number): void {
   // Always: a shared playground carries on behind a menu, and being bonked there must not go unmentioned.
   handleEvents();
 
-  for (const v of snakeViews) v.update(playing ? dt : 0, time);
+  for (const v of snakeViews) v.update(playing ? dt : 0, time, world.stage);
   foodView.update(world, time);
   animalView.update(world, time);
   predatorView.update(world, playing ? dt : 0);

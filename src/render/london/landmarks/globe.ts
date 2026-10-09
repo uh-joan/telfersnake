@@ -129,7 +129,6 @@ export function build(): LandmarkBuild {
 
   return {
     group,
-    tall: false,
     labelY: WALL + 7,
     animate: (t) => {
       const arr = fpos.array as Float32Array;

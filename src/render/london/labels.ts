@@ -32,6 +32,15 @@ const SCREEN_H = 0.05;
 /** Labels start to fade this far from the snake, and are gone by FAR. */
 const NEAR = 42;
 const FAR = 58;
+/** A ribbon never rides higher on screen than this (NDC, 1 = the top edge): the HUD lives up there. */
+const TOP_NDC = 0.66;
+/** On a phone held upright the HUD (minimap, pause, leaderboard) reaches further down. */
+const TOP_NDC_PORTRAIT = 0.32;
+/** ...and never lower than this over its roof, so it still reads as that sight's name. */
+const MIN_Y = 2;
+/** The ribbon's half-size on screen (NDC) for the "is it over the snake?" test, roughly. */
+const HALF_W = 0.28;
+const HALF_H = 0.07;
 
 function ribbonTexture(text: string): { texture: THREE.CanvasTexture; aspect: number } {
   const probe = document.createElement('canvas').getContext('2d')!;
@@ -112,12 +121,22 @@ export interface Labels {
   update(x: number, z: number, t: number): void;
 }
 
-/** One ribbon per landmark, floating at `y` over (x, z). */
-export function makeLabels(spots: readonly { id: LandmarkId; x: number; y: number; z: number }[]): Labels {
+const _p = new THREE.Vector3();
+const _s = new THREE.Vector3();
+
+/**
+ * One ribbon per landmark, floating at `y` over (x, z). With the `camera`, a ribbon that would sit
+ * off the top of the screen (a small snake's camera rides low, under the tall sights' roofs) comes
+ * down until it is in view, drawn over its building like a sign; and one that would cover the snake
+ * fades back so the snake always shows.
+ */
+export function makeLabels(spots: readonly { id: LandmarkId; x: number; y: number; z: number }[], camera?: THREE.Camera): Labels {
   const group = new THREE.Group();
   const sprites = spots.map((s) => {
     const { texture, aspect } = ribbonTexture(LABEL_TEXT[s.id]);
-    const mat = new THREE.SpriteMaterial({ map: texture, sizeAttenuation: false, depthWrite: false, transparent: true, fog: false });
+    const mat = new THREE.SpriteMaterial({
+      map: texture, sizeAttenuation: false, depthWrite: false, depthTest: camera === undefined, transparent: true, fog: false,
+    });
     const sprite = new THREE.Sprite(mat);
     sprite.center.set(0.5, 0); // hang from its bottom edge, so it floats just above the roof
     sprite.scale.set(SCREEN_H * (H / BAND) * aspect, SCREEN_H * (H / BAND), 1);
@@ -129,12 +148,35 @@ export function makeLabels(spots: readonly { id: LandmarkId; x: number; y: numbe
   return {
     group,
     update(x, z, t) {
+      if (camera) _s.set(x, 1, z).project(camera);
       sprites.forEach((l, i) => {
-        const d = Math.hypot(l.sprite.position.x - x, l.sprite.position.z - z);
-        const o = 1 - THREE.MathUtils.smoothstep(d, NEAR, FAR);
-        l.mat.opacity = o;
-        l.sprite.visible = o > 0.01;
-        l.sprite.position.y = l.y + Math.sin(t * 1.3 + i * 1.7) * 0.25;
+        const p = l.sprite.position;
+        const d = Math.hypot(p.x - x, p.z - z);
+        let o = 1 - THREE.MathUtils.smoothstep(d, NEAR, FAR);
+        let y = l.y;
+        if (camera && o > 0.01) {
+          const top = (camera as THREE.PerspectiveCamera).aspect < 1 ? TOP_NDC_PORTRAIT : TOP_NDC;
+          // Highest height still under `top` on screen: projection is monotonic in y, so bisect.
+          if (_p.set(p.x, y, p.z).project(camera).y > top || _p.z > 1) {
+            let lo = MIN_Y;
+            let hi = l.y;
+            for (let k = 0; k < 8; k++) {
+              const mid = (lo + hi) / 2;
+              _p.set(p.x, mid, p.z).project(camera);
+              if (_p.y > top || _p.z > 1) hi = mid;
+              else lo = mid;
+            }
+            y = lo;
+            // Even sitting on its roofline it would be up under the HUD: wait until it comes down.
+            if (_p.set(p.x, y, p.z).project(camera).y > top || _p.z > 1) o = 0;
+          }
+          // Over the snake? Step back to a whisper. (The ribbon hangs up from its point.)
+          _p.set(p.x, y, p.z).project(camera);
+          if (Math.abs(_p.x - _s.x) < HALF_W && _s.y - _p.y > -0.02 && _s.y - _p.y < HALF_H * 2 + 0.04) o *= 0.25;
+        }
+        l.mat.opacity += (o - l.mat.opacity) * 0.15;
+        l.sprite.visible = l.mat.opacity > 0.01;
+        p.y = y + Math.sin(t * 1.3 + i * 1.7) * 0.25;
       });
     },
   };

@@ -26,8 +26,6 @@ export interface LandmarkBuild {
   group: THREE.Group;
   /** Its one bit of life (the clock hands, the wheel, the flag), every frame: t = seconds, dt = frame. */
   animate?(t: number, dt: number): void;
-  /** Tall enough to hide a snake behind it: fades see-through when it stands between camera and snake. */
-  tall: boolean;
   /** Where the ribbon label floats (local y, metres). */
   labelY: number;
 }

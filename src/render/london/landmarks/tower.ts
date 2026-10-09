@@ -173,7 +173,6 @@ export function build(): LandmarkBuild {
 
   return {
     group,
-    tall: true,
     labelY: TH + 4.5,
     animate(t) {
       place(t);

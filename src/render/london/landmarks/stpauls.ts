@@ -161,7 +161,6 @@ export function build(): LandmarkBuild {
 
   return {
     group,
-    tall: true,
     labelY: crossTop + 2.5,
     animate(t) {
       flock.rotation.y = t * 0.45;

@@ -168,5 +168,5 @@ export function build(): LandmarkBuild {
     return f;
   });
 
-  return { group, tall: true, labelY: BODY_TOP + 9, animate: (t) => { for (const f of flags) f.wave(t); } };
+  return { group, labelY: BODY_TOP + 9, animate: (t) => { for (const f of flags) f.wave(t); } };
 }

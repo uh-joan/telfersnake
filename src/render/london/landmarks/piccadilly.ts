@@ -362,7 +362,6 @@ export function build(): LandmarkBuild {
   return {
     group,
     // It stands on the map's north edge, so nothing behind it can hide; and fading would dim the lights.
-    tall: false,
     labelY: H + 7,
     animate(t) {
       paint(Math.floor(t / 0.5));

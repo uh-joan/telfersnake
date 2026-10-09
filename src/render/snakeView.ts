@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import type { Snake } from '../sim/snake';
+import type { Terrain } from '../sim/stage';
+import { inWater } from '../sim/water';
 import { makeHat } from './hats';
 import { disposeTree } from './paint';
 
@@ -8,6 +10,9 @@ const BUMP_SPEED = 9; // m/s a swallowed snack travels down the body
 const BUMP_WIDTH = 0.55;
 const MAX_BUMPS = 10;
 const LICK_FOR = 0.2; // seconds a Long Tongue lash lasts
+/** The Thames' surface sits this far below the paper (render/london/water.ts WATER_Y). */
+const WATER_Y = -0.3;
+const RIPPLES = 2;
 
 /** One snake: instanced body, googly-eyed head, and whatever kit its upgrades have earned it. */
 export class SnakeView {
@@ -43,6 +48,11 @@ export class SnakeView {
   private readonly next = { x: 0, z: 0 };
   /** Distance behind the head of each snack bulge currently travelling tailward. */
   private readonly bumps: number[] = [];
+  /** How far each segment has sunk into the river (eased, so a snake slides in rather than drops). */
+  private readonly sink = new Float32Array(MAX_SEGMENTS);
+  private headSink = 0;
+  /** Swimming: rings spreading out from the head. Built the first time the snake gets wet. */
+  private ripples: THREE.Mesh[] = [];
 
   /** `hatId` is a Tuck Shop hat. */
   constructor(private readonly snake: Snake, hatId = 'no-hat') {
@@ -223,6 +233,28 @@ export class SnakeView {
     disposeTree(this.group); // hat materials are shared between all hats (see hats.ts) and are left alone
   }
 
+  /** A cheap wake: two rings spreading and fading from the head while it swims. */
+  private splash(on: boolean, hs: number, time: number): void {
+    if (on && this.ripples.length === 0) {
+      const geo = new THREE.RingGeometry(0.82, 1, 24).rotateX(-Math.PI / 2);
+      for (let i = 0; i < RIPPLES; i++) {
+        const ring = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false }));
+        ring.renderOrder = 1;
+        this.ripples.push(ring);
+        this.group.add(ring);
+      }
+    }
+    for (let i = 0; i < this.ripples.length; i++) {
+      const ring = this.ripples[i];
+      ring.visible = on;
+      if (!on) continue;
+      const t = (time * 0.9 + i / RIPPLES) % 1;
+      ring.scale.setScalar(hs * (0.9 + t * 2.2));
+      ring.position.set(this.snake.x, WATER_Y + 0.03, this.snake.z);
+      (ring.material as THREE.MeshBasicMaterial).opacity = 0.55 * (1 - t);
+    }
+  }
+
   /** Long Tongue: lash out at something just eaten at (x, z). */
   lick(x: number, z: number): void {
     this.lickX = x;
@@ -237,8 +269,11 @@ export class SnakeView {
     this.bumps.push(0);
   }
 
-  update(dt: number, time: number): void {
+  /** `terrain` is the stage being played: a snake in its river swims low in the water. */
+  update(dt: number, time: number, terrain?: Terrain): void {
     const snake = this.snake;
+    const wet = terrain?.water !== undefined;
+    const ease = Math.min(1, dt * 7);
     // Gone while bonked; blinking while it cannot be touched.
     this.group.visible = snake.alive && (snake.immune <= 0 || Math.floor(time * 12) % 2 === 0);
     if (!snake.alive) {
@@ -281,11 +316,18 @@ export class SnakeView {
       let swell = 0;
       for (const b of this.bumps) swell += Math.exp(-(((d - b) / BUMP_WIDTH) ** 2));
       s *= 1 + bulge * Math.min(1.5, swell);
-      this.m.makeScale(s, s, s).setPosition(this.p.x, s, this.p.z);
+      // Swimming: the body rides with its back just out of the water, bobbing along in a wave.
+      let y = s;
+      if (wet) {
+        const target = inWater(terrain, this.p.x, this.p.z) ? s * 0.55 - WATER_Y : 0;
+        this.sink[i] += (target - this.sink[i]) * ease;
+        if (this.sink[i] > 0.01) y += -this.sink[i] + Math.sin(time * 3.2 - i * 0.7) * 0.06 * Math.min(1, this.sink[i]);
+      } else this.sink[i] = 0;
+      this.m.makeScale(s, s, s).setPosition(this.p.x, y, this.p.z);
       this.body.setMatrixAt(i, this.m);
       if (wrapped && this.wrap) {
         const w = s * (1.22 + Math.sin(time * 4 + i) * 0.03);
-        this.wrap.setMatrixAt(i, this.m.makeScale(w, w, w).setPosition(this.p.x, s, this.p.z));
+        this.wrap.setMatrixAt(i, this.m.makeScale(w, w, w).setPosition(this.p.x, y, this.p.z));
       }
 
       if (spiky && i % 2 === 0) {
@@ -294,7 +336,7 @@ export class SnakeView {
         const yaw = Math.atan2(this.next.x - this.p.x, this.next.z - this.p.z);
         this.e.set(0.6, yaw, 0, 'YXZ');
         const k = s * (0.9 + snake.spikes);
-        this.m.compose(this.pos.set(this.p.x, s * 1.75, this.p.z), this.q.setFromEuler(this.e), this.scl.set(k, k, k));
+        this.m.compose(this.pos.set(this.p.x, y + s * 0.75, this.p.z), this.q.setFromEuler(this.e), this.scl.set(k, k, k));
         this.spikes.setMatrixAt(spikeCount++, this.m);
       }
     }
@@ -339,7 +381,12 @@ export class SnakeView {
     }
     const hs = r * 1.18 * (isDragon ? 1.15 : 1);
     this.head.scale.setScalar(hs);
-    this.head.position.set(snake.x, hs, snake.z);
+    // The head floats a little higher than the body, bobbing: a doggy-paddling snake.
+    const swimming = wet && inWater(terrain, snake.x, snake.z);
+    this.headSink += ((swimming ? hs * 0.45 - WATER_Y : 0) - this.headSink) * ease;
+    const bob = this.headSink > 0.01 ? Math.sin(time * 3.2 + 0.7) * 0.07 * Math.min(1, this.headSink) : 0;
+    this.head.position.set(snake.x, hs - this.headSink + bob, snake.z);
+    this.splash(swimming, hs, time);
     this.head.rotation.y = Math.PI / 2 - snake.heading;
     this.lickLeft -= dt;
     if (this.lickLeft > 0 && snake.reachBonus > 0) {

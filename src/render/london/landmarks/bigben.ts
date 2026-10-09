@@ -185,5 +185,5 @@ export function build(): LandmarkBuild {
   hands.computeBoundingSphere();
   group.add(hands);
 
-  return { group, tall: true, labelY: 31, animate: (t) => setHands(t) };
+  return { group, labelY: 31, animate: (t) => setHands(t) };
 }

@@ -60,7 +60,7 @@ function shard(
   };
   // Inward offset: horizontal, toward the axis, shrinking a little with height.
   _n.copy(out);
-  const thick = 0.45;
+  const thick = 0.6;
   const inner = (p: THREE.Vector3, v: number) => p.clone().addScaledVector(_n, -thick * (1 - v * 0.6));
 
   // Outer face: floors (a glass band then a thin white line), split into streak columns.
@@ -114,9 +114,9 @@ export function build(): LandmarkBuild {
       const b1 = s.dir.clone().multiplyScalar(out).addScaledVector(s.along, uB);
       const top = tops[i * 2 + half];
       // The tops stop short of the axis and of each other: an open, jagged crown.
-      const tOut = 0.55 + proud * 0.6;
-      const tA = half === 0 ? -0.75 : 0.08;
-      const tB = half === 0 ? -0.08 : 0.75;
+      const tOut = 0.85 + proud * 0.6;
+      const tA = half === 0 ? -1.05 : 0.08;
+      const tB = half === 0 ? -0.08 : 1.05;
       const t0 = s.dir.clone().multiplyScalar(tOut).addScaledVector(s.along, tA).setY(top);
       const t1 = s.dir.clone().multiplyScalar(tOut).addScaledVector(s.along, tB).setY(top);
       parts.push(shard(b0, b1, t0, t1, s.dir, i * 2 + half));
@@ -146,7 +146,6 @@ export function build(): LandmarkBuild {
 
   return {
     group,
-    tall: true,
     labelY: H + 4,
     animate: (t) => {
       // A soft band (and a fainter echo) climbing about 5 m a second, tilted a little across the face.
