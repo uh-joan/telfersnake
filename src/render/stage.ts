@@ -43,6 +43,8 @@ export class Stage {
   private readonly greyTmp = new THREE.Color(0x8a8f96);
   private readonly focus = new THREE.Vector3();
   private distance = 17;
+  /** The stage's camera distance multiplier (Stage.cameraZoom): 1 everywhere but London. */
+  zoom = 1;
   private primed = false;
   private readonly v = new THREE.Vector3();
   width = 1;
@@ -118,7 +120,7 @@ export class Stage {
     // Zoomed to show roughly 10 m across at the start (portrait), so the snake and the school
     // read at a friendly size; it eases back as the snake grows and needs to see further.
     const pullBack = this.camera.aspect < 1 ? 1.4 : 1.15;
-    const wantDistance = (15 + 30 * (radius - 0.3)) * pullBack;
+    const wantDistance = (15 + 30 * (radius - 0.3)) * pullBack * this.zoom;
     const lead = 1.5 + radius * 2;
     const wantX = x + Math.cos(heading) * lead;
     const wantZ = z + Math.sin(heading) * lead;

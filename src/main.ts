@@ -107,6 +107,7 @@ function mountScenery(id: StageId): void {
   scenery = next;
   stage.scene.add(scenery.group);
   stage.setAtmosphere(id); // each place its own light and haze
+  stage.zoom = stageFor(id).cameraZoom ?? 1; // London's camera sits a touch closer
 }
 
 /** Everyone's hat, by seat: yours from the save, other players' as the server tells it. */
