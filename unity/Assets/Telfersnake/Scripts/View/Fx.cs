@@ -203,6 +203,47 @@ namespace Telfer.View
             }
         }
 
+        /// <summary>
+        /// London's trails (A7 trailView.ts), each its own motion: raindrops falling from above the snake,
+        /// feathers and bunting tumbling down, tea bubbles rising, Thames spray thrown up and out, soft
+        /// Red Arrows smoke, firework sparks bursting outward. Anything else is the plain sparkle.
+        /// </summary>
+        public void Trail(Vector3 pos, Color c, string style)
+        {
+            var e = new ParticleSystem.EmitParams();
+            switch (style)
+            {
+                case "raindrops":
+                    e.position = pos + new Vector3(Random.Range(-0.4f, 0.4f), 2.6f, Random.Range(-0.4f, 0.4f));
+                    e.velocity = Vector3.down * 3.5f; e.startSize = 0.16f; e.startColor = c; e.startLifetime = 0.75f;
+                    crumbs.Emit(e, 1);
+                    return;
+                case "pigeon-feathers":
+                case "bunting":
+                    e.position = pos + Vector3.up * 0.8f;
+                    e.velocity = new Vector3(Random.Range(-0.6f, 0.6f), Random.Range(0.4f, 1.2f), Random.Range(-0.6f, 0.6f));
+                    e.startSize = style == "bunting" ? 0.3f : 0.26f; e.startColor = c; e.rotation = Random.Range(0, 360); e.startLifetime = 1.8f;
+                    confetti.Emit(e, 1);
+                    return;
+                case "tea-bubbles":
+                    Spray(puffs, pos + Vector3.up * 0.3f, new Color(c.r, c.g, c.b, 0.75f), 1, 0.5f, 0.32f, 2.2f, 0.3f, 1.4f);
+                    e.position = pos + Vector3.up * 0.4f; e.velocity = Vector3.up * 1.4f + Random.insideUnitSphere * 0.2f;
+                    e.startSize = 0.28f; e.startColor = Color.Lerp(c, Color.white, 0.4f); e.startLifetime = 1.2f;
+                    sparkles.Emit(e, 1);
+                    return;
+                case "thames-spray":
+                    Spray(crumbs, pos + Vector3.up * 0.3f, c, 2, 3.2f, 0.13f, 1.6f, 1, 0.8f);
+                    return;
+                case "red-arrows":
+                    Spray(puffs, pos + Vector3.up * 0.5f, new Color(c.r, c.g, c.b, 0.7f), 1, 0.4f, 0.9f, 0.4f, 1, 1.6f);
+                    return;
+                case "fireworks":
+                    Spray(sparkles, pos + Vector3.up * 0.6f, c, 3, 2.6f, 0.3f, 0.6f, 1, 0.6f);
+                    return;
+            }
+            Trail(pos, c);
+        }
+
         public void Trail(Vector3 pos, Color c)
         {
             Spray(sparkles, pos, Color.Lerp(c, Color.white, 0.4f), 1, 0.6f, 0.35f, 0.5f, 1, 0.5f);

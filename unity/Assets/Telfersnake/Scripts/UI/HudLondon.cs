@@ -1,5 +1,6 @@
 using Telfer.Sim;
 using Telfer.View;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -34,6 +35,108 @@ namespace Telfer.UI
                 jewelSlots[i] = img;
             }
             jewelPill.gameObject.SetActive(false);
+        }
+
+        // ------------------------------------------------------------------ London's keepsakes: stamps and postcards
+
+        readonly Album album = new Album();
+        RectTransform albumBtn, stampRt;
+        CanvasGroup stampGroup;
+        RawImage stampArt;
+        Text stampName;
+        float stampT = -1;
+        readonly List<Image> mapRings = new List<Image>();
+        /// <summary>The sights stamped this run (a fresh passport every run), inked on the minimap.</summary>
+        public readonly HashSet<string> Stamped = new HashSet<string>();
+        public bool AlbumOpen => album.IsOpen;
+        public void CloseAlbum() => album.Close();
+
+        /// <summary>The Postcard Album, beside the Tuck Shop on the title: once there is a London to collect.</summary>
+        void BuildAlbumButton(RectTransform t)
+        {
+            albumBtn = UiKit.Rect(t, "album", new Vector2(0, 0), new Vector2(0, 0), new Vector2(0.5f, 0.5f), new Vector2(285, 120), new Vector2(150, 150));
+            UiKit.Shadow(albumBtn, 20, 0.3f, null, true);
+            var b = UiKit.Button(albumBtn, "btn", new Color(0.86f, 0.25f, 0.3f), 75, () => { Audio.Synth.I?.Play("pick"); album.Open(rootRt, RefreshTitle); });
+            b.GetComponent<Springy>().Idle = 0.02f;
+            // A little postcard with a red stamp in its corner.
+            var card = UiKit.Rect(b.transform, "card", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 6), new Vector2(96, 68));
+            card.localRotation = Quaternion.Euler(0, 0, -8);
+            UiKit.Panel(card, "bg", new Color(1f, 0.98f, 0.92f), 8);
+            var st = UiKit.Rect(card, "stamp", new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1), new Vector2(-6, -6), new Vector2(26, 30));
+            UiKit.Panel(st, "s", new Color(0.85f, 0.2f, 0.17f), 4);
+            for (int i = 0; i < 3; i++)
+            {
+                var line = UiKit.Rect(card, "line", new Vector2(0, 0), new Vector2(0, 0), new Vector2(0, 0), new Vector2(10, 12 + i * 12), new Vector2(50, 4));
+                UiKit.Panel(line, "l", new Color(0.6f, 0.62f, 0.7f), 2);
+            }
+            var lbl = UiKit.Rect(albumBtn, "lbl", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(0, -2), new Vector2(200, 40));
+            UiKit.Label(lbl, "t", "Postcards", 28, Color.white, TextAnchor.MiddleCenter, 2);
+        }
+
+        /// <summary>
+        /// A rubber stamp slams down in the middle of the screen: the sight's picture in a frame of red ink and
+        /// its short name (hud.ts stamp). Gone again in a couple of seconds.
+        /// </summary>
+        public void Stamp(string id, string name, Texture art)
+        {
+            Stamped.Add(id);
+            if (!stampRt)
+            {
+                stampRt = UiKit.Rect(game, "stamp", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 90), new Vector2(330, 290));
+                stampGroup = stampRt.gameObject.AddComponent<CanvasGroup>();
+                stampGroup.blocksRaycasts = false;
+                UiKit.Panel(stampRt, "ink", new Color(0.8f, 0.12f, 0.15f, 0.95f), 26);
+                var inner = UiKit.Panel(stampRt, "paper", new Color(1f, 0.97f, 0.9f), 18);
+                ((RectTransform)inner.transform).offsetMin = new Vector2(12, 12); ((RectTransform)inner.transform).offsetMax = new Vector2(-12, -12);
+                var a = UiKit.Rect(stampRt, "art", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+                a.offsetMin = new Vector2(26, 70); a.offsetMax = new Vector2(-26, -26);
+                stampArt = a.gameObject.AddComponent<RawImage>();
+                stampArt.raycastTarget = false;
+                var n = UiKit.Rect(stampRt, "name", new Vector2(0, 0), new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, 18), new Vector2(-30, 50));
+                stampName = UiKit.Label(n, "t", "", 36, new Color(0.8f, 0.12f, 0.15f));
+            }
+            stampArt.texture = art;
+            stampArt.gameObject.SetActive(art != null);
+            stampName.text = name;
+            stampRt.localRotation = Quaternion.Euler(0, 0, -8 + Random.Range(-3f, 3f));
+            stampRt.SetAsLastSibling();
+            stampRt.gameObject.SetActive(true);
+            stampT = 0;
+        }
+
+        void SyncStamp(float dt)
+        {
+            if (stampT < 0 || !stampRt) return;
+            stampT += dt;
+            // Slam: down from big in a blink, a little bounce, then hold and fade.
+            float s = stampT < 0.14f ? Mathf.Lerp(1.9f, 0.94f, stampT / 0.14f) : stampT < 0.26f ? Mathf.Lerp(0.94f, 1, (stampT - 0.14f) / 0.12f) : 1;
+            stampRt.localScale = Vector3.one * s;
+            stampGroup.alpha = stampT < 0.08f ? stampT / 0.08f : stampT > 1.9f ? Mathf.Clamp01(1 - (stampT - 1.9f) / 0.4f) : 1;
+            if (stampT > 2.3f) { stampT = -1; stampRt.gameObject.SetActive(false); }
+        }
+
+        /// <summary>A ring of red ink over every sight stamped this run, on the minimap.</summary>
+        void SyncStampRings(World w)
+        {
+            int i = 0;
+            if (w.Stage.Id == StageId.London)
+                foreach (var l in London.LANDMARKS)
+                {
+                    if (!Stamped.Contains(l.id)) continue;
+                    while (mapRings.Count <= i)
+                    {
+                        var img = UiKit.Image(minimapImg.transform, "stamp", UiKit.Ring, new Color(0.8f, 0.12f, 0.16f, 0.95f));
+                        var r = (RectTransform)img.transform;
+                        r.anchorMin = r.anchorMax = Vector2.zero;
+                        r.sizeDelta = new Vector2(26, 26);
+                        mapRings.Add(img);
+                    }
+                    var ring = mapRings[i++];
+                    ring.gameObject.SetActive(true);
+                    ring.transform.SetAsLastSibling();
+                    ((RectTransform)ring.transform).anchoredPosition = MapPos(l.x, l.z);
+                }
+            for (; i < mapRings.Count; i++) mapRings[i].gameObject.SetActive(false);
         }
 
         void BuildLondonOverlays()
@@ -122,6 +225,8 @@ namespace Telfer.UI
             }
             jewelPill.localScale = Vector3.Lerp(jewelPill.localScale, Vector3.one, 1 - Mathf.Exp(-dt * 10));
 
+            SyncStamp(dt);
+            SyncStampRings(w);
             flashT = Mathf.Max(0, flashT - dt);
             float fl = Mathf.Clamp01(flashT / FLASH_FOR);
             flashImg.color = new Color(1, 1, 1, fl * fl * 0.95f);

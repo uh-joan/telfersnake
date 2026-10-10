@@ -237,7 +237,13 @@ namespace Telfer.Audio
             { var b = new Buf(3.7f); Hiss(b, 0, 2.6, 200, 1800, 0.22f, 0.5); Hiss(b, 1.2, 2.4, 1800, 300, 0.18f, 0.5); Clip("jets", b); }
             { var b = new Buf(0.8f); Tone(b, 0, 300, 0.7, Wave.Sine, 0.1f, 0, 60, 6); Clip("wobble", b); }
 
+            // London's keepsakes (A7): a rubber stamp's THUNK, a new postcard's music-box ta-daa, the Tiny Big Ben hat's chime.
+            { var b = new Buf(0.35f); Tone(b, 0, 120, 0.18, Wave.Sine, 0.32f, 55); Tone(b, 0, 260, 0.06, Wave.Square, 0.05f, 140); Hiss(b, 0, 0.09, 1800, 500, 0.22f, 1.4); Clip("stamp", b); }
+            { var b = new Buf(1.0f); double[] fs = { 784, 988, 1175, 1568 }; for (int i = 0; i < 4; i++) Tone(b, i * 0.09, fs[i], 0.35, Wave.Sine, 0.07f); Clip("postcard", b); }
+            { var b = new Buf(2.0f); double[] fs = { 659.3, 830.6, 740, 493.9 }; for (int i = 0; i < 4; i++) BellNote(b, fs[i], i * 0.32, 0.9, 0.035f); Clip("chime", b); }
+
             BuildMusic();
+            BuildLondonMusic();
         }
 
         /// <summary>One soft bell note: a sine with a couple of quiet overtones, ringing on.</summary>
@@ -326,6 +332,80 @@ namespace Telfer.Audio
             }
         }
 
+        // ------------------------------------------------------------------ London's brass band (music.ts, A7)
+
+        /// <summary>
+        /// A jaunty music-hall take on two traditional London songs: "London Bridge Is Falling Down" (bars 1-4) and
+        /// "Oranges and Lemons" run into church-bell phrases (bars 5-8). Oom-pah bass and a brassy cornet; the layers
+        /// as the snake grows: glockenspiel bells, a snare's taps, the march's drums, the cornet up an octave. The city
+        /// hums round it: pigeons, a bus's ding-ding, gulls over the river, a ship's horn.
+        /// </summary>
+        void BuildLondonMusic()
+        {
+            const double BPM = 142, STEP = 60 / BPM / 4;
+            int[][] triads = { new[] { 48, 52, 55 }, new[] { 55, 59, 62 }, new[] { 48, 52, 55 }, new[] { 55, 59, 62 }, new[] { 48, 52, 55 }, new[] { 53, 57, 60 }, new[] { 48, 52, 55 }, new[] { 55, 59, 62 } };
+            int[] bass = { 36, 43, 36, 43, 36, 41, 36, 43 };
+            int?[][] lead =
+            {
+                new int?[] { 79, 81, 79, 77, 76, 77, 79, null }, new int?[] { 74, 76, 77, null, 76, 77, 79, null },
+                new int?[] { 79, 81, 79, 77, 76, 77, 79, null }, new int?[] { 74, null, 79, null, 76, 72, null, null },
+                new int?[] { 79, 76, 79, 76, 72, null, 72, 74 }, new int?[] { 76, 77, 79, 77, 76, 74, 72, null },
+                new int?[] { 79, 76, 79, 76, 72, 74, 76, 77 }, new int?[] { 79, 77, 76, 74, 72, null, 67, null },
+            };
+            double total = STEP * 128;
+            var core = new Buf((float)total, true);
+            var bells = new Buf((float)total, true);
+            var taps = new Buf((float)total, true);
+            var drums = new Buf((float)total, true);
+            var high = new Buf((float)total, true);
+            for (int step = 0; step < 128; step++)
+            {
+                int bar = step / 16, i = step % 16;
+                double t = step * STEP;
+                var triad = triads[bar];
+                // Oom-pah: the tuba on one and three (root, then fifth), the band's "pah" on two and four.
+                if (i == 0 || i == 8)
+                {
+                    int note = i == 0 ? bass[bar] : bass[bar] + 7;
+                    Tone(core, t, Hz(note), STEP * 3, Wave.Triangle, 0.2f);
+                    Tone(core, t, Hz(note), STEP * 2.5, Wave.Square, 0.04f);
+                }
+                if (i == 4 || i == 12) foreach (var n in triad) Tone(core, t, Hz(n + 12), STEP * 1.2, Wave.Square, 0.022f);
+                // The tune on a brassy cornet: a sawtooth with a square under it and a little vibrato.
+                if (i % 2 == 0 && lead[bar][i / 2] is int l)
+                {
+                    Tone(core, t, Hz(l), STEP * 1.8, Wave.Saw, 0.04f, 0, 3, 6);
+                    Tone(core, t, Hz(l), STEP * 1.8, Wave.Square, 0.03f);
+                    Tone(high, t, Hz(l + 12), STEP * 1.2, Wave.Triangle, 0.03f);
+                }
+                // Glockenspiel bells: the chord rung high, every eighth.
+                if (i % 2 == 1) Tone(bells, t, Hz(triad[((i - 1) / 2) % triad.Length] + 24), STEP * 1.4, Wave.Sine, 0.022f);
+                // A march: taps on the snare's off-beats; then bass drum and snare, and a roll into the top.
+                if (i % 4 == 2) Hiss(taps, t, 0.04, 3000, 2200, 0.035f, 1.2);
+                if (i == 0 || i == 8) Tone(drums, t, 110, 0.16, Wave.Sine, 0.26f, 50);
+                if (i == 4 || i == 12) Hiss(drums, t, 0.1, 2600, 1300, 0.1f, 1.1);
+                if (bar == 7 && i >= 12) Hiss(drums, t, 0.05, 2800, 2000, 0.05f + (i - 12) * 0.012f, 1.2);
+                // The city.
+                if (bar % 4 == 1 && i == 10) { Tone(core, t, 400, 0.22, Wave.Sine, 0.03f, 340, 12, 14); Tone(core, t + 0.26, 380, 0.3, Wave.Sine, 0.028f, 300, 12, 14); }
+                if (bar == 6 && i == 2) foreach (var d in new[] { 0, 0.2 }) Tone(core, t + d, 1568, 0.4, Wave.Sine, 0.022f);
+                if (bar == 3 && i == 12) { Tone(core, t, 1250, 0.3, Wave.Saw, 0.01f, 850, 40, 9); Tone(core, t + 0.32, 1150, 0.26, Wave.Saw, 0.008f, 800, 40, 9); }
+                if (bar == 0 && i == 0) { Tone(core, t, 110, 1.4, Wave.Saw, 0.018f); Tone(core, t, 165, 1.4, Wave.Square, 0.008f); }
+            }
+            var layers = new[] { Clip("l-core", core, 1.3f), Clip("l-bells", bells, 1.3f), Clip("l-taps", taps, 1.3f), Clip("l-drums", drums, 1.3f), Clip("l-high", high, 1.3f) };
+            londonMusic = new AudioSource[layers.Length];
+            for (int i = 0; i < layers.Length; i++)
+            {
+                var src = gameObject.AddComponent<AudioSource>();
+                src.clip = layers[i];
+                src.loop = true;
+                src.volume = 0;
+                src.Play();
+                londonMusic[i] = src;
+            }
+        }
+
+        AudioSource[] londonMusic;
+
         // ------------------------------------------------------------------ playing
 
         public void Play(string name, float volume = 1, float pitch = 1)
@@ -348,9 +428,9 @@ namespace Telfer.Audio
         /// <summary>0 = lead and bass; each size tier adds a layer (arps, hats, drums, sparkle).</summary>
         public void SetMusicLevel(int level) => musicLevel = level;
         public void Duck(bool on) => ducked = on;
-        bool commonPlace;
-        /// <summary>The Common softens the theme: no hi-hats, gentler drums, more sparkle.</summary>
-        public void SetPlace(bool common) => commonPlace = common;
+        bool commonPlace, londonPlace;
+        /// <summary>The Common softens the theme: no hi-hats, gentler drums, more sparkle. London has its own brass band.</summary>
+        public void SetPlace(bool common, bool london = false) { commonPlace = common; londonPlace = london; }
 
         void Update()
         {
@@ -360,7 +440,14 @@ namespace Telfer.Audio
             {
                 float want = i == 0 || musicLevel >= i ? 1 : 0;
                 if (commonPlace) want *= i == 2 ? 0.2f : i == 3 ? 0.55f : i == 4 ? 1.4f : 0.85f;
+                if (londonPlace) want = 0;
                 music[i].volume = Mathf.MoveTowards(music[i].volume, want * master, Time.unscaledDeltaTime * 0.8f);
+            }
+            if (londonMusic == null) return;
+            for (int i = 0; i < londonMusic.Length; i++)
+            {
+                float want = londonPlace && (i == 0 || musicLevel >= i) ? 1 : 0;
+                londonMusic[i].volume = Mathf.MoveTowards(londonMusic[i].volume, want * master, Time.unscaledDeltaTime * 0.8f);
             }
         }
     }

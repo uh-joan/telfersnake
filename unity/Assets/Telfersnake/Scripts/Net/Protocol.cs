@@ -212,6 +212,8 @@ namespace Telfer.Net
         public uint body, stripe, head;
         /// <summary>Null when the skin has no pattern.</summary>
         public uint[] pattern;
+        /// <summary>Piccadilly Lights: the pattern chases along the body (drawn only).</summary>
+        public bool shimmer;
 
         public SnakeLook ToSim() => new SnakeLook(name, body, stripe, head);
     }
@@ -245,7 +247,7 @@ namespace Telfer.Net
                     look = new NetLook
                     {
                         name = Json.Str(l, "name", ""), body = (uint)Json.Num(l, "body"), stripe = (uint)Json.Num(l, "stripe"),
-                        head = (uint)Json.Num(l, "head"), pattern = pattern,
+                        head = (uint)Json.Num(l, "head"), pattern = pattern, shimmer = Json.Bool(l, "shimmer"),
                     },
                 };
             }

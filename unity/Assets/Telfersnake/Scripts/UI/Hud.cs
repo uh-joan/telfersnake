@@ -200,6 +200,7 @@ namespace Telfer.UI
             shopIcon.raycastTarget = false;
             var sl = UiKit.Rect(shopRt, "lbl", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(0, -2), new Vector2(200, 40));
             UiKit.Label(sl, "t", "Tuck Shop", 28, Color.white, TextAnchor.MiddleCenter, 2);
+            BuildAlbumButton(t);
 
             // Your name, top right: tap to type one or shuffle.
             var chip = nameChip = UiKit.Rect(t, "name", new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1), new Vector2(-24, -24), new Vector2(330, 70));
@@ -288,6 +289,7 @@ namespace Telfer.UI
             }
             shopIcon.texture = Icons.Skin(p.skin, p.hat);
             chipName.text = p.name;
+            albumBtn.gameObject.SetActive(p.londonUnlocked);
         }
 
         /// <summary>Not enough stars for the Common yet: the tile shakes its head.</summary>
@@ -941,11 +943,17 @@ namespace Telfer.UI
             toastGroup = t.gameObject.AddComponent<CanvasGroup>();
             toastGroup.blocksRaycasts = false;
             UiKit.Panel(t, "bg", new Color(0.13f, 0.15f, 0.22f, 0.92f), 42);
-            var ic = UiKit.Image(t, "signal", UiKit.Signal, new Color(0.75f, 0.8f, 0.9f));
+            var ic = toastSignal = UiKit.Image(t, "signal", UiKit.Signal, new Color(0.75f, 0.8f, 0.9f));
             var ir = (RectTransform)ic.transform; ir.anchorMin = ir.anchorMax = new Vector2(0, 0.5f); ir.sizeDelta = new Vector2(54, 54); ir.anchoredPosition = new Vector2(52, 2);
             // Crossed out: the line is gone.
             var slash = UiKit.Panel(ic.transform, "slash", new Color(1f, 0.45f, 0.45f), 4);
             var sr = (RectTransform)slash.transform; sr.anchorMin = sr.anchorMax = new Vector2(0.5f, 0.5f); sr.sizeDelta = new Vector2(8, 66); sr.localRotation = Quaternion.Euler(0, 0, 40);
+            // Or a little picture (a postcard), in the same place.
+            var pr = UiKit.Rect(t, "pic", new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(52, 0), new Vector2(76, 54));
+            pr.localRotation = Quaternion.Euler(0, 0, -6);
+            toastPic = pr.gameObject.AddComponent<RawImage>();
+            toastPic.raycastTarget = false;
+            pr.gameObject.SetActive(false);
             toastText = UiKit.Label(t, "t", "", 32, Color.white, TextAnchor.MiddleLeft);
             ((RectTransform)toastText.transform).offsetMin = new Vector2(96, 0); ((RectTransform)toastText.transform).offsetMax = new Vector2(-24, 0);
             t.gameObject.SetActive(false);
@@ -953,8 +961,22 @@ namespace Telfer.UI
         }
 
         /// <summary>A short note across the top that outlives the screen under it (the results come up behind it).</summary>
+        Image toastSignal;
+        RawImage toastPic;
+
+        /// <summary>A short note with a picture (a postcard just kept) instead of the signal.</summary>
+        public void Toast(string text, Texture picture)
+        {
+            Toast(text);
+            toastSignal.gameObject.SetActive(picture == null);
+            toastPic.gameObject.SetActive(picture != null);
+            toastPic.texture = picture;
+        }
+
         public void Toast(string text)
         {
+            toastSignal.gameObject.SetActive(true);
+            toastPic.gameObject.SetActive(false);
             toastText.text = text;
             toastRt.sizeDelta = new Vector2(Mathf.Max(300, text.Length * 17 + 130), 84);
             toastRt.SetAsLastSibling();
@@ -1074,11 +1096,14 @@ namespace Telfer.UI
             if (CardsOpen) LayoutCards();
             if (results) LayoutResults();
             shop.Layout(fit);
+            album.Layout(fit);
         }
 
         void LayoutTitle()
         {
             var size = fit.Safe.size;
+            // The album sits beside the Tuck Shop; upright, above it, clear of the footer line.
+            if (albumBtn) Place(albumBtn, fit.Portrait ? new Vector2(110, 310) : new Vector2(285, 120), albumBtn.sizeDelta);
             if (!fit.Portrait)
             {
                 // Sideways: as designed, only shrunk on a short screen (a phone on its side).

@@ -1179,6 +1179,9 @@ namespace Telfer.View
             SyncLabels(cam, head, dt, labelsOn, craned);
         }
 
+        /// <summary>One of the twelve sights by id (null if unknown): the postcards photograph them.</summary>
+        public LandmarkView Landmark(string id) => landmarks.Find(l => l.id == id);
+
         public void SetLabelsActive(bool on) { if (labelCanvas) labelCanvas.gameObject.SetActive(on); }
     }
 }

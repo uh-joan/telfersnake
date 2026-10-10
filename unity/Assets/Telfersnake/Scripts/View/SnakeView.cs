@@ -61,11 +61,15 @@ namespace Telfer.View
         public Vector3 HeadPos { get; private set; }
 
         uint[] trail;
+        /// <summary>The trail's id (London's trails each move their own way), and a Piccadilly Lights skin's pattern.</summary>
+        string trailStyle;
+        uint[] shimmer;
+        int shimmerStep = -1;
         Transform hat, halo;
         bool hatSpins;
         float trailIn;
 
-        public SnakeView(Snake s, Transform parent, bool player, uint[] pattern = null, string hatId = null, uint[] trailPalette = null)
+        public SnakeView(Snake s, Transform parent, bool player, uint[] pattern = null, string hatId = null, uint[] trailPalette = null, string trailId = null, bool shimmers = false)
         {
             snake = s;
             isPlayer = player;
@@ -103,12 +107,15 @@ namespace Telfer.View
             helmet = BuildHelmet();
             dragon = BuildDragon();
             BuildLegends();
-            Dress(pattern, hatId, trailPalette);
+            Dress(pattern, hatId, trailPalette, trailId, shimmers);
         }
 
         /// <summary>A Tuck Shop look: skin pattern colours, a hat on the head, a trail behind.</summary>
-        public void Dress(uint[] pattern, string hatId, uint[] trailPalette)
+        public void Dress(uint[] pattern, string hatId, uint[] trailPalette, string trailId = null, bool shimmers = false)
         {
+            trailStyle = trailId;
+            shimmer = shimmers && pattern != null && pattern.Length > 0 ? pattern : null;
+            shimmerStep = -1;
             if (pattern != null && pattern.Length > 0)
             {
                 bodyMat.SetFloat("_PCount", Mathf.Min(8, pattern.Length));
@@ -558,7 +565,18 @@ namespace Telfer.View
                 if (trailIn <= 0)
                 {
                     trailIn = 0.04f;
-                    Fx.I.Trail(BodyPoint(s.Length * 0.92f) + Random.insideUnitSphere * s.Radius * 0.6f, MeshKit.Hex(trail[Random.Range(0, trail.Length)]));
+                    Fx.I.Trail(BodyPoint(s.Length * 0.92f) + Random.insideUnitSphere * s.Radius * 0.6f, MeshKit.Hex(trail[Random.Range(0, trail.Length)]), trailStyle);
+                }
+            }
+            // Piccadilly Lights: the pattern chases from head to tail, one segment every 1/8 s (segment i shows pattern[(i - step) mod n]).
+            if (shimmer != null)
+            {
+                int step = Mathf.FloorToInt(time * 8);
+                if (step != shimmerStep)
+                {
+                    shimmerStep = step;
+                    int n = Mathf.Min(8, shimmer.Length);
+                    for (int i = 0; i < 8; i++) bodyMat.SetColor("_P" + i, MeshKit.Hex(shimmer[(((i % n) - step) % n + n) % n]));
                 }
             }
             bool isDragon = s.Tier >= 5;

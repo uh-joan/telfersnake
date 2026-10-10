@@ -212,7 +212,7 @@ namespace Telfer.Net
             foreach (var seat in seats)
             {
                 string key = seat.bot + "|" + seat.hat + "|" + seat.trail + "|" + seat.look.name + "|" + seat.look.body + "|" + seat.look.stripe + "|" + seat.look.head
-                    + "|" + (seat.look.pattern == null ? "" : string.Join(",", seat.look.pattern));
+                    + "|" + (seat.look.pattern == null ? "" : string.Join(",", seat.look.pattern)) + "|" + seat.look.shimmer;
                 if (seatKeys.TryGetValue(seat.id, out var old) && old == key) continue;
                 seatKeys[seat.id] = key;
                 ChangedSeats.Add(seat.id);

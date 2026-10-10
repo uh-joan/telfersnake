@@ -26,6 +26,11 @@ namespace Telfer.Meta
         public bool commonUnlocked;
         /// <summary>London's Golden Ticket, and its first-visit fanfare: kept under London's own key (save.ts LONDON_KEY).</summary>
         public bool londonUnlocked, londonSeen;
+        /// <summary>
+        /// London's keepsakes (save.ts, docs/london-catalogue.md): every landmark ever stamped, and the postcards kept
+        /// for ever. Both live in London's key and only ever grow: every save unions them with what is stored.
+        /// </summary>
+        public List<string> stamps = new List<string>(), postcards = new List<string>();
         /// <summary>Reached MEGA in a Normal game: half of God mode's key.</summary>
         public bool mega;
         public bool godRevealed, commonSeen;
@@ -39,7 +44,7 @@ namespace Telfer.Meta
         const string KEY = "telfersnake.save.v1";
         /// <summary>
         /// London's progress lives in its own key ({unlocked, seen, stamps, postcards}), which a pre-London
-        /// bundle never touches (save.ts). This game only knows the two flags; the rest is written back as read.
+        /// bundle never touches (save.ts). Anything else in it is written back as read.
         /// </summary>
         const string LONDON_KEY = "telfersnake.london.v1";
         /// <summary>Where this remaster kept its own save before it shared the web game's.</summary>
@@ -134,6 +139,10 @@ namespace Telfer.Meta
             londonSeen |= Flag(london, "seen");
             london["unlocked"] = londonUnlocked;
             london["seen"] = londonSeen;
+            stamps = Union(stamps, Strings(london, "stamps"));
+            postcards = Union(postcards, Strings(london, "postcards"));
+            london["stamps"] = new List<string>(stamps);
+            london["postcards"] = new List<string>(postcards);
             if (!Store.Set(LONDON_KEY, Json.Write(london))) return;
             // Only once it is safely stored does this game adopt the merged picture.
             if (!Store.Set(KEY, Json.Write(d))) return;
@@ -153,6 +162,33 @@ namespace Telfer.Meta
             commonSeen |= now.commonSeen;
             londonUnlocked |= now.londonUnlocked;
             londonSeen |= now.londonSeen;
+            // London's collections only ever grow: take in whatever the other tab collected.
+            stamps = Union(stamps, now.stamps);
+            postcards = Union(postcards, now.postcards);
+        }
+
+        /// <summary>Keep a postcard for ever. True only the first time (that is when the fanfare plays). The caller saves.</summary>
+        public bool AwardPostcard(string id)
+        {
+            if (postcards.Contains(id)) return false;
+            postcards.Add(id);
+            return true;
+        }
+
+        static List<string> Strings(Dictionary<string, object> d, string key)
+        {
+            var list = new List<string>();
+            foreach (var o in Json.List(d, key) ?? new List<object>()) if (o is string s && s.Length > 0 && s.Length < 40) list.Add(s);
+            return list;
+        }
+
+        /// <summary>a then b, each id once, in order.</summary>
+        static List<string> Union(List<string> a, List<string> b)
+        {
+            var u = new List<string>();
+            foreach (var id in a) if (!u.Contains(id)) u.Add(id);
+            foreach (var id in b) if (!u.Contains(id)) u.Add(id);
+            return u;
         }
 
         /// <summary>The stored save, trusting none of it (save.ts readDisk), or null when there is none.</summary>
@@ -183,6 +219,7 @@ namespace Telfer.Meta
             var london = Json.TryParseObject(Store.Get(LONDON_KEY) ?? "");
             p.londonUnlocked = london != null && Flag(london, "unlocked");
             p.londonSeen = london != null && Flag(london, "seen");
+            if (london != null) { p.stamps = Strings(london, "stamps"); p.postcards = Strings(london, "postcards"); }
             // The web game spells these in lower case; Mode and Stage below gate God and the Common.
             p.mode = Json.Str(d, "mode") switch { "easy" => "Easy", "god" => "God", null => "Easy", _ => "Normal" };
             // A locked place is kept as chosen (so HD never resets a child's pick); the Stage getter below plays the school for it.

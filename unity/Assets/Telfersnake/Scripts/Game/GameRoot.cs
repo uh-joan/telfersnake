@@ -119,6 +119,9 @@ namespace Telfer.Game
             headOf = i => snakeViews[i].HeadPos;
             block = new MaterialPropertyBlock();
             Shots.BeforeRender = () => { rig.Refit(); if (state != State.Title) hud.Sync(world, rig.Cam, headOf, 0); SyncLondon(0); };
+            // The album's postcards are photographs of London's own landmarks, taken with everything else hidden.
+            Postcards.Env = () => { if (london == null) london = new LondonEnv(envRoot, !mobile); return london; };
+            Postcards.Isolate = PostcardIsolate;
             NewWorld(P.Mode, P.Stage, true);
             rig.TitleOrbit(0);
             hud.RefreshTitle();
@@ -161,7 +164,7 @@ namespace Telfer.Game
             if (schoolRoot) schoolRoot.gameObject.SetActive(id == StageId.School);
             if (common != null) common.root.gameObject.SetActive(id == StageId.Common);
             if (london != null) london.root.gameObject.SetActive(id == StageId.London);
-            synth.SetPlace(id != StageId.School);
+            synth.SetPlace(id == StageId.Common, id == StageId.London);
             atmo.SetPlace(id);
         }
 
@@ -234,7 +237,7 @@ namespace Telfer.Game
             {
                 bool mine = i == 0 && !attractMode;
                 var sv = mine
-                    ? new SnakeView(world.Snakes[i], runRoot, true, skin?.pattern, P.hat, trail?.palette)
+                    ? new SnakeView(world.Snakes[i], runRoot, true, skin?.pattern, P.hat, trail?.palette, trail?.id, skin != null && skin.shimmer)
                     : new SnakeView(world.Snakes[i], runRoot, false);
                 sv.OnStep();
                 sv.OnStep();
@@ -248,7 +251,8 @@ namespace Telfer.Game
 
         void StartRun()
         {
-            synth.Play("bell");
+            // London's arrival: the Westminster Quarters from Big Ben, instead of the school bell.
+            synth.Play(P.Stage == StageId.London ? "quarters" : "bell");
             synth.Play("pick");
             NewWorld(P.Mode, P.Stage, false);
             state = State.Play;
@@ -277,9 +281,103 @@ namespace Telfer.Game
             {
                 P.londonSeen = true;
                 P.Save();
-                hud.Banner("London!", null);
+                hud.Banner("London!", Icons.Of("london-bigben", ModelsLondon.IconMesh(), Mats.VertexGlossy, -25, 12));
+                synth.Play("bong"); // and Big Ben himself says hello
+            }
+            hud.Stamped.Clear(); // a fresh passport every run
+            chimeIn = 6;
+            // In London it is Miss Sami who says hello, by the Tube exit at Westminster where you pop out.
+            if (world.Stage.Id == StageId.London && RealRun)
+            {
+                var sami = System.Array.Find(world.Stage.Chatters ?? new Chatter[0], c => c.id == "sami");
+                if (sami != null)
+                {
+                    bubbleAt = W.P(sami.x, sami.z, 3.6f);
+                    hud.Say("Welcome to London! Mind the gap, and mind the river.", bubbleAt.Value);
+                }
             }
         }
+
+        // ------------------------------------------------------------------ London's keepsakes: stamps and postcards
+
+        float chimeIn = 6;
+        readonly List<(float at, System.Action act)> later = new List<(float, System.Action)>();
+
+        void After(float seconds, System.Action act) => later.Add((Time.unscaledTime + seconds, act));
+
+        /// <summary>
+        /// Every frame: the stamps (the first time this run your head comes within a sight's reach), the Tiny Big
+        /// Ben hat's chime, and anything waiting its turn (a postcard's fanfare after the moment's own).
+        /// </summary>
+        void Keepsakes(float dt, Snake me)
+        {
+            for (int i = later.Count - 1; i >= 0; i--)
+                if (Time.unscaledTime >= later[i].at) { var a = later[i].act; later.RemoveAt(i); a(); }
+            if (state == State.Title || attract != null) return;
+            if (world.Stage.Id == StageId.London && me.alive && RealRun)
+                foreach (var l in London.LANDMARKS)
+                    if (!hud.Stamped.Contains(l.id) && (me.x - l.x) * (me.x - l.x) + (me.z - l.z) * (me.z - l.z) < l.radius * l.radius) StampSight(l.id);
+            if (P.hat == "tiny-bigben" && (chimeIn -= dt) <= 0)
+            {
+                chimeIn = 20;
+                synth.Play("chime", 0.8f);
+            }
+        }
+
+        /// <summary>
+        /// Your snake reached a sight for the first time this run: THUNK, an inked stamp on the screen and on the
+        /// minimap. The first stamp ever earns its postcard; all twelve in one run is WHOLE LONDON.
+        /// </summary>
+        void StampSight(string id)
+        {
+            hud.Stamp(id, Postcards.NameOf(id), Postcards.Art(id));
+            synth.Play("stamp");
+            if (!P.stamps.Contains(id)) P.stamps.Add(id);
+            KeepPostcard(id, false);
+            P.Save(); // the stamp and its postcard, in one write
+            if (hud.Stamped.Count == London.LANDMARKS.Length)
+                After(1.6f, () =>
+                {
+                    hud.Banner("WHOLE LONDON!", Icons.Trophy);
+                    var at = W.P(world.Me.x, world.Me.z);
+                    Fx.I.Confetti(at, 120, 9);
+                    Fx.I.Stars(at, 30);
+                    synth.Play("tierUp");
+                    synth.Play("golden");
+                    KeepPostcard("whole");
+                });
+        }
+
+        /// <summary>Keep a postcard for ever (London, a real run), with a little fanfare the first time.</summary>
+        void KeepPostcard(string id, bool save = true)
+        {
+            if (world.Stage.Id != StageId.London || !RealRun || !P.AwardPostcard(id)) return;
+            if (save) P.Save();
+            After(0.9f, () => { hud.Toast("Postcard!", Postcards.Art(id)); synth.Play("postcard"); });
+        }
+
+        /// <summary>For a postcard's photograph: London alone on the stage (true), or everything back as it was (false).</summary>
+        void PostcardIsolate(bool on)
+        {
+            if (on)
+            {
+                isolated.Clear();
+                foreach (var t in new[] { schoolRoot, common?.root, runRoot, london?.root })
+                    if (t) isolated.Add((t.gameObject, t.gameObject.activeSelf));
+                if (schoolRoot) schoolRoot.gameObject.SetActive(false);
+                if (common != null) common.root.gameObject.SetActive(false);
+                if (runRoot) runRoot.gameObject.SetActive(false);
+                if (london != null) london.root.gameObject.SetActive(true);
+                london?.SetLabelsActive(false);
+            }
+            else
+            {
+                foreach (var (go, was) in isolated) if (go) go.SetActive(was);
+                isolated.Clear();
+                london?.SetLabelsActive(true);
+            }
+        }
+        readonly List<(GameObject go, bool was)> isolated = new List<(GameObject, bool)>();
 
         // ------------------------------------------------------------------ online runs
 
@@ -315,7 +413,8 @@ namespace Telfer.Game
             me.look.body = look.body; me.look.stripe = look.stripe; me.look.head = look.head;
             var trail = Catalogue.Find(P.trail);
             snakeViews[MeIx].Destroy();
-            snakeViews[MeIx] = new SnakeView(me, runRoot, true, Catalogue.FindSkin(P.skin)?.pattern, P.hat, trail?.palette);
+            var skin = Catalogue.FindSkin(P.skin);
+            snakeViews[MeIx] = new SnakeView(me, runRoot, true, skin?.pattern, P.hat, trail?.palette, trail?.id, skin != null && skin.shimmer);
             snakeViews[MeIx].OnStep();
             snakeViews[MeIx].OnStep();
         }
@@ -422,7 +521,7 @@ namespace Telfer.Game
         {
             var seat = i < net.AllSeats.Length ? net.AllSeats[i] : null;
             var trail = seat != null ? Catalogue.Find(seat.trail) : null;
-            var sv = new SnakeView(world.Snakes[i], runRoot, i == MeIx, seat?.look.pattern, seat?.hat, trail?.palette);
+            var sv = new SnakeView(world.Snakes[i], runRoot, i == MeIx, seat?.look.pattern, seat?.hat, trail?.palette, trail?.id, seat != null && seat.look.shimmer);
             sv.OnStep();
             sv.OnStep();
             return sv;
@@ -588,12 +687,13 @@ namespace Telfer.Game
             else slowmo = Mathf.Lerp(slowmo, 1, 1 - Mathf.Exp(-realDt * 6));
             float dt = realDt * slowmo;
 
-            if ((Controls.Pressed(Key.Escape) || Controls.PadPressed(p => p.startButton)) && !hud.ShopOpen)
+            if (hud.AlbumOpen && Controls.Pressed(Key.Escape)) hud.CloseAlbum();
+            else if ((Controls.Pressed(Key.Escape) || Controls.PadPressed(p => p.startButton)) && !hud.ShopOpen)
             {
                 if (state == State.Play) SetPaused(true);
                 else if (state == State.Paused) SetPaused(false);
             }
-            if (state == State.Title && !hud.ResultsOpen && !hud.ShopOpen && !hud.NameOpen && hud.NameClosedFrame != Time.frameCount && (Controls.Pressed(Key.Enter) || Controls.PadPressed(p => p.buttonSouth))) Play();
+            if (state == State.Title && !hud.ResultsOpen && !hud.ShopOpen && !hud.AlbumOpen && !hud.NameOpen && hud.NameClosedFrame != Time.frameCount && (Controls.Pressed(Key.Enter) || Controls.PadPressed(p => p.buttonSouth))) Play();
             if (state == State.Cards)
             {
                 if (Controls.Pressed(Key.Digit1) || Controls.Pressed(Key.Numpad1)) Choose(0);
@@ -684,6 +784,7 @@ namespace Telfer.Game
             hud.ShowStick(controls.StickOn && state == State.Play, controls.StickBase, controls.StickKnob);
             hud.ShowDashing(controls.Dash && state == State.Play);
             hud.SetBubbleWorld(bubbleAt ?? (bubbleFromSami ? wild.SamiHead : views.CooperHead));
+            Keepsakes(realDt, me);
             if (state == State.Play && me.alive)
             {
                 runLongest = Mathf.Max(runLongest, me.Length);
@@ -896,6 +997,7 @@ namespace Telfer.Game
                         Fx.I.Ring(at, new Color(1f, 0.85f, 0.3f), 5, 0.6f);
                         if (!mine) break;
                         synth.Play("teaTime");
+                        KeepPostcard("teatime");
                         rig.Punch(0.5f);
                         hud.Banner("TEA TIME!", Icons.Food(FoodKind.Sponge));
                         break;
@@ -949,6 +1051,7 @@ namespace Telfer.Game
                         if (!mine) break;
                         EarnGem(at);
                         hud.Pop(snakeViews[MeIx].HeadPos + Vector3.up * 1.4f, "Smile!", new Color(0.6f, 0.85f, 1f), 46, 1.3f);
+                        KeepPostcard("guard");
                         synth.Play("golden");
                         synth.Play("chaChing");
                         break;
@@ -1013,6 +1116,7 @@ namespace Telfer.Game
                         slowmoFor = 0.6f;
                         atmo.TierUp();
                         hud.Banner("ROYAL!", null);
+                        KeepPostcard("royal");
                         synth.Play("tierUp");
                         synth.Play("bell");
                         break;
@@ -1027,13 +1131,14 @@ namespace Telfer.Game
                         Fx.I.Confetti(at, 40, 7);
                         if (!mine) break;
                         hud.Banner("WHEE!", null);
+                        KeepPostcard("launch");
                         synth.Play("whee");
                         rig.Punch(0.6f);
                         break;
                     case EventType.Ride:
                         if (e.carrier == Carrier.Eye) Fx.I.Confetti(at, 30, 5); else Fx.I.Munch(at, new Color(0.62f, 0.83f, 0.95f), false);
                         if (!mine) break;
-                        if (e.on && e.carrier == Carrier.Eye) { hud.Banner("LONDON EYE!", null); synth.Play("rideUp"); }
+                        if (e.on && e.carrier == Carrier.Eye) { hud.Banner("LONDON EYE!", null); synth.Play("rideUp"); KeepPostcard("eyeride"); }
                         else if (e.on) { hud.Pop(at + Vector3.up * 1.4f, "ALL ABOARD!", new Color(0.6f, 0.85f, 1f), 44); synth.Play("toot"); }
                         else { hud.Pop(at + Vector3.up * 1.4f, "+" + (e.carrier == Carrier.Eye ? 100 : 60), new Color(1f, 0.85f, 0.3f), 44); synth.Play("levelUp"); }
                         break;
@@ -1043,6 +1148,7 @@ namespace Telfer.Game
                         hud.Tube(London.TUBE_NAMES, e.from, e.to);
                         hud.Pop(at + Vector3.up * 1.6f, "Mind the gap!", Color.white, 44, 1.3f);
                         synth.Play("mindTheGap");
+                        KeepPostcard("tube");
                         rig.Snap(snakeViews[MeIx].HeadPos, world.Me.Length);
                         break;
                     case EventType.Wobble:
@@ -1062,6 +1168,7 @@ namespace Telfer.Game
                         EarnGem(at);
                         hud.Pop(at + Vector3.up * 1.6f, "+1", new Color(0.35f, 0.7f, 1f), 44);
                         synth.Play("golden");
+                        KeepPostcard("fireworks");
                         break;
                     case EventType.Lob:
                         wild.Throw(at);
@@ -1088,7 +1195,7 @@ namespace Telfer.Game
                             atmo.TierUp();
                             rig.Punch(0.7f);
                             hud.Banner(e.creature == CreatureKind.Unicorn && world.Stage.Id == StageId.London ? "RAINBOW!" : MagicNames[(int)e.creature], Icons.Creature(e.creature));
-                            if (e.creature == CreatureKind.Dragon) synth.Play("whoosh");
+                            if (e.creature == CreatureKind.Dragon) { synth.Play("whoosh"); KeepPostcard("dragon"); }
                             EarnGem(at, e.gems);
                         }
                         break;
