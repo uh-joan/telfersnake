@@ -121,9 +121,10 @@ namespace Telfer.UI
                 var ic = UiKit.Rect(b.transform, "icon", new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(4, 4), new Vector2(96, 96));
                 stageIcons[i] = ic.gameObject.AddComponent<RawImage>();
                 stageIcons[i].raycastTarget = false;
-                var lbl = UiKit.Label(b.transform, "t", i == 0 ? "School" : i == 1 ? "Common" : "London", 32, Ink, TextAnchor.MiddleLeft);
+                var lbl = UiKit.Label(b.transform, "t", i == 0 ? "School" : i == 1 ? "Common" : "London", 30, Ink, TextAnchor.MiddleLeft);
                 ((RectTransform)lbl.transform).offsetMin = new Vector2(100, 0);
-                var lockRt = UiKit.Rect(b.transform, "lock", new Vector2(1, 1), new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-30, -6), new Vector2(110, 44));
+                // The price tag rides the chip's top edge but never past its side (the last chip sits at the screen's edge on a phone).
+                var lockRt = UiKit.Rect(b.transform, "lock", new Vector2(1, 1), new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-64, -4), new Vector2(110, 44));
                 lockRt.localRotation = Quaternion.Euler(0, 0, -6);
                 UiKit.Panel(lockRt, "bg", Ink, 22);
                 var ls = UiKit.Image(lockRt, "star", UiKit.Star, Yellow);
@@ -490,10 +491,12 @@ namespace Telfer.UI
             UiKit.Panel(box, "bg", UiKit.Sheet, 40);
             var t = UiKit.Rect(box, "t", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -20), new Vector2(400, 80));
             UiKit.Label(t, "t", "Paused", 56, Ink);
-            Button(box, new Vector2(0, 110), "Play", Green, () => OnResume?.Invoke());
-            Button(box, new Vector2(0, 10), "Tuck Shop", new Color(1f, 0.6f, 0.75f), () => { Audio.Synth.I?.Play("pick"); OpenShop(); });
+            var play = Button(box, new Vector2(0, 110), "Play", Green, () => OnResume?.Invoke());
+            var tuck = Button(box, new Vector2(0, 10), "Tuck Shop", new Color(1f, 0.6f, 0.75f), () => { Audio.Synth.I?.Play("pick"); OpenShop(); });
+            var cards = BuildPauseAlbum(box);
             soundBtn = Button(box, new Vector2(0, -90), "Sound: on", new Color(0.35f, 0.65f, 1f), () => { soundOn = !soundOn; soundBtn.text = soundOn ? "Sound: on" : "Sound: off"; OnSound?.Invoke(soundOn); });
-            Button(box, new Vector2(0, -190), "Home", new Color(1f, 0.45f, 0.45f), () => OnQuit?.Invoke());
+            var home = Button(box, new Vector2(0, -190), "Home", new Color(1f, 0.45f, 0.45f), () => OnQuit?.Invoke());
+            foreach (var b in new[] { play, tuck, cards, soundBtn, home }) pauseRows.Add((RectTransform)b.transform.parent.parent);
             p.gameObject.SetActive(false);
             return p;
         }
@@ -508,7 +511,25 @@ namespace Telfer.UI
             return UiKit.Label(b.transform, "t", label, 36, Color.white, TextAnchor.MiddleCenter, 2);
         }
 
-        public void ShowPause(bool on) => pauseLayer.gameObject.SetActive(on);
+        readonly List<RectTransform> pauseRows = new List<RectTransform>();
+
+        public void ShowPause(bool on)
+        {
+            if (on)
+            {
+                // The Postcards row is there once there is a London to collect: the box grows to hold it.
+                pauseAlbum.gameObject.SetActive(Meta.Profile.I.londonUnlocked);
+                int n = 0;
+                foreach (var r in pauseRows) if (r.gameObject.activeSelf) n++;
+                float h = 120 + n * 100;
+                Place(pauseBox, pauseBox.anchoredPosition, new Vector2(460, h));
+                int k = 0;
+                foreach (var r in pauseRows) if (r.gameObject.activeSelf) r.anchoredPosition = new Vector2(0, h / 2 - 150 - 100 * k++);
+                Relayout();
+            }
+            else if (pauseLayer.gameObject.activeSelf) album.Close();
+            pauseLayer.gameObject.SetActive(on);
+        }
 
         void OpenShop() => shop.Open(rootRt, () => { RefreshTitle(); OnShopChanged?.Invoke(); });
 
@@ -1090,7 +1111,7 @@ namespace Telfer.UI
             foreach (var layer in new[] { game, title }) { layer.offsetMin = lo; layer.offsetMax = -hi; }
             LayoutTitle();
             LayoutHud();
-            Place(pauseBox, SafeCentre, pauseBox.sizeDelta, fit.Portrait ? 1.3f : Mathf.Min(1, fit.Safe.height / 580));
+            Place(pauseBox, SafeCentre, pauseBox.sizeDelta, fit.Portrait ? 1.3f : Mathf.Min(1, fit.Safe.height / (pauseBox.sizeDelta.y + 60)));
             // Upright, the name box rides high so the keyboard does not cover it.
             Place(nameBox, SafeCentre + new Vector2(0, fit.Portrait ? fit.Safe.height * 0.18f : 0), nameBox.sizeDelta, fit.Portrait ? 1.3f : Mathf.Min(1, fit.Safe.height / 460));
             if (CardsOpen) LayoutCards();
@@ -1107,7 +1128,7 @@ namespace Telfer.UI
             if (!fit.Portrait)
             {
                 // Sideways: as designed, only shrunk on a short screen (a phone on its side).
-                float k = Mathf.Min(1, size.y / 840);
+                float k = Mathf.Min(1, size.y / 840, (size.x - 40) / 920);
                 Set(titleHead, Vector2.zero, k);
                 Set(titleMid, Vector2.zero, k);
                 return;
@@ -1115,7 +1136,8 @@ namespace Telfer.UI
             // Upright: the logo fitted to the width, the choices bigger below it, all clear of the wallet and the shop.
             float hs = Mathf.Min(1, (size.x - 40) / 920);
             float top = size.y / 2 - 110, bottom = -size.y / 2 + 250;
-            float c = Mathf.Min(1.3f, (size.x - 40) / 640, (top - bottom - 230 * hs - 60) / 521);
+            // The widest row is the three places (690): keep a margin either side of it.
+            float c = Mathf.Min(1.3f, (size.x - 56) / 690, (top - bottom - 230 * hs - 60) / 521);
             float gap = Mathf.Max(20, (top - bottom - 230 * hs - 521 * c) / 3);
             // The logo's middle is 225 above the head's origin, the choices' middle 125 below the column's.
             Set(titleHead, new Vector2(0, top - gap - 115 * hs - 225 * hs), hs);

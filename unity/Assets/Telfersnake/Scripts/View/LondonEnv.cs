@@ -27,7 +27,7 @@ namespace Telfer.View
         /// <summary>Tower Bridge's two bascules (west, east), hinged at their towers, for the lifts to come.</summary>
         public Transform BasculeWest, BasculeEast;
 
-        sealed class Fader { public List<Renderer> renderers; public Bounds bounds; public float fade = 1; public bool[] casts; }
+        sealed class Fader { public LandmarkView v; public List<Renderer> renderers; public Bounds bounds; public float fade = 1; public bool[] casts; }
 
         static readonly Bounds2 B = London.BOUNDS;
         /// <summary>The printed border round the playable map (outside the fence, never walked on).</summary>
@@ -63,7 +63,7 @@ namespace Telfer.View
                     if (g.Count == 0) continue;
                     var b = g[0].bounds;
                     foreach (var r in g) b.Encapsulate(r.bounds);
-                    var f = new Fader { renderers = g, bounds = b, casts = new bool[g.Count] };
+                    var f = new Fader { v = v, renderers = g, bounds = b, casts = new bool[g.Count] };
                     for (int i = 0; i < g.Count; i++) f.casts[i] = g[i].shadowCastingMode != ShadowCastingMode.Off;
                     faders.Add(f);
                 }
@@ -1037,9 +1037,23 @@ namespace Telfer.View
 
         // ================================================================== ribbon labels
 
-        sealed class Label { public LandmarkView v; public RectTransform rt; public CanvasGroup g; public Vector3 at; public float alpha; }
+        sealed class Label { public LandmarkView v; public RectTransform rt; public CanvasGroup g; public Vector3 at; public float alpha, width, phase; public List<Fader> faders; }
         readonly List<Label> labels = new List<Label>();
         Canvas labelCanvas;
+
+        /// <summary>
+        /// Where each sight's sign is pinned, from its LANDMARKS spot: metres east, up and south. Over the door or
+        /// at the foot of the tower on the south face, so the chase camera (south of the snake, looking north and
+        /// down) sees it whenever the snake is near, and it reads as hung on that building.
+        /// </summary>
+        static readonly Dictionary<string, Vector3> SIGN = new Dictionary<string, Vector3>
+        {
+            ["bigben"] = new Vector3(2, 4, 0.5f), ["eye"] = new Vector3(0, 4, 2.2f), ["palace"] = new Vector3(0, 4.5f, 3.4f),
+            ["trafalgar"] = new Vector3(0, 4, 5.8f), ["stpauls"] = new Vector3(3, 4.5f, 5), ["tower"] = new Vector3(0, 4.5f, 7.5f),
+            // Tower Bridge's sign hangs on its west tower, not out over the river.
+            ["towerbridge"] = new Vector3(-5.2f, 4.5f, 5.8f), ["shard"] = new Vector3(0, 4, 6.4f), ["gherkin"] = new Vector3(0, 4, 4.3f),
+            ["globe"] = new Vector3(0, 4.5f, 4.9f), ["piccadilly"] = new Vector3(0, 4, 2.2f), ["museum"] = new Vector3(0.3f, 4.5f, 7.4f),
+        };
 
         static readonly Dictionary<string, string> LABEL_TEXT = new Dictionary<string, string>
         {
@@ -1102,40 +1116,44 @@ namespace Telfer.View
                 var bo = band.gameObject.AddComponent<Outline>();
                 bo.effectColor = ink; bo.effectDistance = new Vector2(2.5f, -2.5f);
                 UiKit.Label(rt, "t", text, 28, MeshKit.Hex(0xfffaf0), TextAnchor.MiddleCenter, 2, ink);
-                labels.Add(new Label { v = v, rt = rt, g = g, at = v.root.position + Vector3.up * v.labelY });
+                var o = SIGN[v.id];
+                labels.Add(new Label { v = v, rt = rt, g = g, at = v.root.position + new Vector3(o.x, o.y, -o.z), width = w, phase = labels.Count * 1.7f, faders = faders.FindAll(f => f.v == v) });
             }
         }
 
-        /// <summary>Labels start to fade this far from the snake, and are gone by FAR; never above TOP_NDC (the HUD lives up there).</summary>
-        const float NEAR = 42, FAR = 58, TOP_NDC = 0.66f, TOP_NDC_PORTRAIT = 0.32f, MIN_Y = 2;
+        /// <summary>Signs start to fade this far from the snake, and are gone by FAR; a sign's band is SIGN_H metres tall.</summary>
+        const float NEAR = 42, FAR = 58, SIGN_H = 1.05f, BAND = 46;
 
-        void SyncLabels(Camera cam, Vector3 focus, float dt, bool show, bool craned)
+        /// <summary>
+        /// Each ribbon is a sign pinned to its sight: drawn where its world anchor is on screen, at the size a
+        /// SIGN_H-tall board would be there, facing the camera. It never slides: off screen it is simply not seen.
+        /// It fades with a see-through landmark, and rather than cover your snake's head.
+        /// </summary>
+        void SyncLabels(Camera cam, Vector3 focus, float time, float dt, bool show, bool craned)
         {
-            var cv = (RectTransform)labelCanvas.transform;
-            var size = cv.rect.size;
-            bool portrait = size.y > size.x;
-            float topNdc = portrait ? TOP_NDC_PORTRAIT : TOP_NDC;
+            var size = ((RectTransform)labelCanvas.transform).rect.size;
+            var head = cam.WorldToViewportPoint(focus + Vector3.up * 0.5f);
             foreach (var l in labels)
             {
-                var at = l.at;
+                var at = l.at + Vector3.up * (Mathf.Sin(time * 1.5f + l.phase) * 0.05f);
                 float d = Vector2.Distance(new Vector2(at.x, at.z), new Vector2(focus.x, focus.z));
                 float want = show ? Mathf.Clamp01((FAR - d) / (FAR - NEAR)) : 0;
                 // Riding the Eye, the camera cranes out past the wheel: its ribbon would sit right over it.
                 if (craned && l.v.id == "eye") want = 0;
                 var sp = cam.WorldToViewportPoint(at);
-                // Pull a ribbon down its building so it never rides into the HUD, but keep it over the roof.
-                if (sp.z > 0 && sp.y * 2 - 1 > topNdc)
+                float scale = sp.z > 0 ? (cam.WorldToViewportPoint(at + cam.transform.up * SIGN_H).y - sp.y) * size.y / BAND : 0;
+                if (sp.z <= 0) want = 0;
+                else
                 {
-                    var baseVp = cam.WorldToViewportPoint(l.v.root.position + Vector3.up * MIN_Y);
-                    float targetY = (topNdc + 1) / 2;
-                    if (baseVp.y < targetY) sp.y = targetY;
-                    else sp.y = baseVp.y;
+                    foreach (var f in l.faders) want = Mathf.Min(want, f.fade);
+                    var off = new Vector2((head.x - sp.x) * size.x, (head.y - sp.y) * size.y) / scale;
+                    if (head.z > 0 && Mathf.Abs(off.x) < l.width / 2 + 50 && Mathf.Abs(off.y) < BAND / 2 + 40) want = Mathf.Min(want, 0.12f);
                 }
-                if (sp.z <= 0 || sp.x < -0.2f || sp.x > 1.2f || sp.y < -0.1f) want = 0;
                 l.alpha = Mathf.MoveTowards(l.alpha, want, dt * 3);
                 l.g.alpha = l.alpha;
                 l.rt.gameObject.SetActive(l.alpha > 0.01f);
                 l.rt.anchoredPosition = new Vector2(sp.x * size.x, sp.y * size.y);
+                l.rt.localScale = new Vector3(scale, scale, 1);
             }
         }
 
@@ -1176,7 +1194,7 @@ namespace Telfer.View
                     if (faded != was) r.shadowCastingMode = faded || !f.casts[i] ? ShadowCastingMode.Off : ShadowCastingMode.On;
                 }
             }
-            SyncLabels(cam, head, dt, labelsOn, craned);
+            SyncLabels(cam, head, time, dt, labelsOn, craned);
         }
 
         /// <summary>One of the twelve sights by id (null if unknown): the postcards photograph them.</summary>

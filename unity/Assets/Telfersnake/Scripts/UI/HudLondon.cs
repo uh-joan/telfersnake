@@ -73,6 +73,27 @@ namespace Telfer.UI
             UiKit.Label(lbl, "t", "Postcards", 28, Color.white, TextAnchor.MiddleCenter, 2);
         }
 
+        RectTransform pauseAlbum;
+
+        /// <summary>The album from the pause screen too (the cards kept this run are already in it): a little postcard and the word.</summary>
+        Text BuildPauseAlbum(RectTransform box)
+        {
+            var t = Button(box, Vector2.zero, "Postcards", new Color(0.86f, 0.25f, 0.3f), () => { Audio.Synth.I?.Play("pick"); album.Open(rootRt, null); });
+            ((RectTransform)t.transform).offsetMin = new Vector2(62, 0);
+            var card = UiKit.Rect(t.transform.parent, "card", new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(52, 0), new Vector2(54, 38));
+            card.localRotation = Quaternion.Euler(0, 0, -8);
+            UiKit.Panel(card, "bg", new Color(1f, 0.98f, 0.92f), 6);
+            var st = UiKit.Rect(card, "stamp", new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1), new Vector2(-4, -4), new Vector2(15, 17));
+            UiKit.Panel(st, "s", new Color(0.85f, 0.2f, 0.17f), 3);
+            for (int i = 0; i < 2; i++)
+            {
+                var line = UiKit.Rect(card, "line", new Vector2(0, 0), new Vector2(0, 0), new Vector2(0, 0), new Vector2(6, 8 + i * 8), new Vector2(26, 3));
+                UiKit.Panel(line, "l", new Color(0.6f, 0.62f, 0.7f), 2);
+            }
+            pauseAlbum = (RectTransform)t.transform.parent.parent;
+            return t;
+        }
+
         /// <summary>
         /// A rubber stamp slams down in the middle of the screen: the sight's picture in a frame of red ink and
         /// its short name (hud.ts stamp). Gone again in a couple of seconds.

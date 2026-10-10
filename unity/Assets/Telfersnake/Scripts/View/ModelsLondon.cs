@@ -6,7 +6,7 @@ using static Telfer.View.LK;
 
 namespace Telfer.View
 {
-    /// <summary>One of London's sights, built: its root (at its LANDMARKS spot), its one bit of life, where its ribbon floats.</summary>
+    /// <summary>One of London's sights, built: its root (at its LANDMARKS spot), its one bit of life, how tall it stands (labelY).</summary>
     public sealed class LandmarkView
     {
         public string id;

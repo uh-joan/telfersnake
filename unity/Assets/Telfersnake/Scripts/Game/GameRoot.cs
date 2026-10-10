@@ -120,7 +120,7 @@ namespace Telfer.Game
             block = new MaterialPropertyBlock();
             Shots.BeforeRender = () => { rig.Refit(); if (state != State.Title) hud.Sync(world, rig.Cam, headOf, 0); SyncLondon(0); };
             // The album's postcards are photographs of London's own landmarks, taken with everything else hidden.
-            Postcards.Env = () => { if (london == null) london = new LondonEnv(envRoot, !mobile); return london; };
+            Postcards.Env = () => { if (london == null) { london = new LondonEnv(envRoot, !mobile); london.root.gameObject.SetActive(shownStage == StageId.London); } return london; };
             Postcards.Isolate = PostcardIsolate;
             NewWorld(P.Mode, P.Stage, true);
             rig.TitleOrbit(0);
@@ -286,6 +286,7 @@ namespace Telfer.Game
             }
             hud.Stamped.Clear(); // a fresh passport every run
             chimeIn = 6;
+            if (world.Stage.Id == StageId.London) atmo.ClearSkies();
             // In London it is Miss Sami who says hello, by the Tube exit at Westminster where you pop out.
             if (world.Stage.Id == StageId.London && RealRun)
             {
@@ -687,8 +688,10 @@ namespace Telfer.Game
             else slowmo = Mathf.Lerp(slowmo, 1, 1 - Mathf.Exp(-realDt * 6));
             float dt = realDt * slowmo;
 
-            if (hud.AlbumOpen && Controls.Pressed(Key.Escape)) hud.CloseAlbum();
-            else if ((Controls.Pressed(Key.Escape) || Controls.PadPressed(p => p.startButton)) && !hud.ShopOpen)
+            bool back = Controls.PadPressed(p => p.buttonEast);
+            // Esc / B / Start put the album away first; the pause screen under it stays up.
+            if (hud.AlbumOpen) { if (Controls.Pressed(Key.Escape) || back || Controls.PadPressed(p => p.startButton)) hud.CloseAlbum(); }
+            else if ((Controls.Pressed(Key.Escape) || Controls.PadPressed(p => p.startButton) || back && state == State.Paused) && !hud.ShopOpen)
             {
                 if (state == State.Play) SetPaused(true);
                 else if (state == State.Paused) SetPaused(false);

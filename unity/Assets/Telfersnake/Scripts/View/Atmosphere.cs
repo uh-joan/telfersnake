@@ -135,7 +135,7 @@ namespace Telfer.View
             RenderSettings.fogColor = london ? new Color(0.8f, 0.88f, 0.95f) : new Color(0.78f, 0.86f, 0.94f);
             Shader.SetGlobalColor(AmbientSky, london ? new Color(0.62f, 0.69f, 0.84f) : new Color(0.56f, 0.64f, 0.8f));
             Shader.SetGlobalColor(AmbientGround, london ? new Color(0.5f, 0.47f, 0.42f) : new Color(0.42f, 0.38f, 0.34f));
-            Shader.SetGlobalColor(ShadowTint, london ? new Color(0.66f, 0.7f, 0.96f) : new Color(0.62f, 0.66f, 0.95f));
+            Shader.SetGlobalColor(ShadowTint, london ? new Color(0.75f, 0.78f, 0.97f) : new Color(0.62f, 0.66f, 0.95f));
             sunWarm = london ? new Color(1f, 0.97f, 0.9f) : new Color(1f, 0.95f, 0.85f);
             sunLow = london ? new Color(1f, 0.9f, 0.76f) : new Color(1f, 0.86f, 0.68f);
             Sun.intensity = london ? 1.3f : 1.25f;
@@ -220,6 +220,8 @@ namespace Telfer.View
         public Sky Now => weather;
         /// <summary>Dev (and the fireworks): pick London's sky now.</summary>
         public void SetSky(Sky s, bool hold = true) { weather = s; forced = hold; skyHold = Random.Range(40f, 70f); }
+        /// <summary>A run begins: you always arrive in clear weather, and it holds for the first minute or so.</summary>
+        public void ClearSkies() { weather = Sky.Clear; forced = false; skyHold = Random.Range(60f, 90f); }
         /// <summary>The fireworks are on: the evening dims a little and the bloom opens up so the bursts pop.</summary>
         public void FireworksOn(bool on) => fireworksWant = on ? 1 : 0;
 
