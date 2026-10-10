@@ -10,7 +10,7 @@ namespace Telfer.View
     /// game's own recipes (foodView.ts, animalView.ts, predatorView.ts, vehicleView.ts, hazardView.ts),
     /// number for number, then turned to face +z the way the HD models do.
     /// </summary>
-    public static class ModelsLondonZoo
+    public static partial class ModelsLondonZoo
     {
         const uint BLACK = 0x1c1c1f, CORGI = 0xe08a3c, BONE = 0xf1ead6, WHITE_ = 0xffffff;
         const uint BUN_PASTRY = 0xe6ac5c, CREAM = 0xfffaf0, JAM = 0xd8283a;

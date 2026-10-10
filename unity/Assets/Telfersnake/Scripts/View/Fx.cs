@@ -10,7 +10,7 @@ namespace Telfer.View
     public sealed class Fx : MonoBehaviour
     {
         public static Fx I;
-        ParticleSystem sparkles, crumbs, puffs, confetti, embers;
+        ParticleSystem sparkles, crumbs, puffs, confetti, embers, fireworks;
         readonly List<(Transform t, Material m, float age, float life, float size, Color c)> rings = new List<(Transform, Material, float, float, float, Color)>();
         readonly Stack<(Transform, Material)> ringPool = new Stack<(Transform, Material)>();
         Mesh quad;
@@ -23,6 +23,8 @@ namespace Telfer.View
             puffs = Make("puffs", Mats.Glow(Color.white, 0, false, 1), -0.05f, 300, 1.2f, false);
             confetti = Make("confetti", Mats.Glow(Color.white, 3, false, 1.2f), 0.6f, 600, 2.5f, true);
             embers = Make("embers", Mats.Glow(new Color(1, 0.6f, 0.2f), 0, true, 3f), -0.4f, 300, 0.9f, false);
+            // London's fireworks: bright sparks (alpha-blended so they read on the cream paper, HDR so the bloom catches them).
+            fireworks = Make("fireworks", Mats.Glow(Color.white, 0, false, 1.5f), 0.22f, 1500, 2.2f, false);
             var sz = puffs.sizeOverLifetime; sz.enabled = true; sz.size = new ParticleSystem.MinMaxCurve(1, AnimationCurve.EaseInOut(0, 0.6f, 1, 1.6f));
             var rot = confetti.rotationOverLifetime; rot.enabled = true; rot.z = new ParticleSystem.MinMaxCurve(-6, 6);
             var noise = confetti.noise; noise.enabled = true; noise.strength = 0.6f; noise.frequency = 0.8f;
@@ -104,6 +106,37 @@ namespace Telfer.View
             Spray(crumbs, pos + Vector3.up * 0.4f, c, 12, 3.5f, 0.22f * size, 1.4f);
             Spray(puffs, pos + Vector3.up * 0.3f, new Color(1, 1, 1, 0.7f), 8, 1.4f, 0.8f * size, 0.4f);
             Ring(pos, Color.white, 2.5f * size, 0.45f);
+        }
+
+        /// <summary>
+        /// A firework bursting at `pos`: a ball of sparks of its colour (every fifth white) flying out to about
+        /// `radius` metres (setPieceView.ts drawBurst), sagging and fading over two seconds.
+        /// </summary>
+        public void Firework(Vector3 pos, Color c, float radius)
+        {
+            const int SPARKS = 48;
+            var e = new ParticleSystem.EmitParams();
+            for (int i = 0; i < SPARKS; i++)
+            {
+                // Evenly round a sphere (a Fibonacci lattice): a round burst.
+                float y = 1 - 2 * (i + 0.5f) / SPARKS, r = Mathf.Sqrt(1 - y * y), a = i * 2.399963f;
+                var dir = new Vector3(Mathf.Cos(a) * r, y, Mathf.Sin(a) * r);
+                e.position = pos;
+                e.velocity = dir * radius * Random.Range(0.85f, 1.05f);
+                e.startSize = Random.Range(3f, 4.2f);
+                e.startColor = i % 5 == 0 ? Color.white : c;
+                e.startLifetime = Random.Range(1.7f, 2.3f);
+                fireworks.Emit(e, 1);
+            }
+            // The bang itself: a bright flash at the heart of the burst.
+            Spray(sparkles, pos, Color.Lerp(c, Color.white, 0.5f), 10, 1.5f, 2.2f, 0.2f);
+        }
+
+        /// <summary>Feathers or dust of the given colours bursting from `pos` (the classic's sparkles.burst).</summary>
+        public void Burst(Vector3 pos, Color[] colours, int n, float speed)
+        {
+            for (int i = 0; i < n; i++) Spray(crumbs, pos + Vector3.up * 0.5f, colours[i % colours.Length], 1, speed * 2.5f, 0.2f, 1.3f);
+            Spray(sparkles, pos + Vector3.up * 0.6f, colours[0], n / 2, speed * 2, 0.35f, 1);
         }
 
         public void Dust(Vector3 pos, float size = 1)

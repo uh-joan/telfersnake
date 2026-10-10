@@ -172,7 +172,9 @@ namespace Telfer.Game
             var me = world.Me;
             bool looking = LookAt.HasValue;
             var focus = looking ? W.P(LookAt.Value.x, LookAt.Value.y) : snakeViews[MeIx].HeadPos;
-            london.Sync(rig.Cam, focus, looking || state != State.Title && me.alive, looking || state != State.Title, Time.time, dt);
+            // Up on the London Eye the camera sees the whole map: nothing stands between it and you, so nothing fades.
+            bool craned = me.alive && me.carried == Carrier.Eye;
+            london.Sync(rig.Cam, focus, !craned && (looking || state != State.Title && me.alive), looking || state != State.Title, Time.time, dt);
         }
 
         List<Occluder> Occluders => shownStage == StageId.Common ? common.Occluders : shownStage == StageId.London ? london.Occluders : scenery.Occluders;
@@ -652,8 +654,17 @@ namespace Telfer.Game
                 var id = world.Stage.Id;
                 rig.TitleOrbit(realDt, id == StageId.Common ? W.P(4, 4) : id == StageId.London ? W.P(-18, -6) : new Vector3(-6, 0, 4), id == StageId.Common ? 80 : id == StageId.London ? 92 : 62);
             }
+            else if (me.alive && me.carried == Carrier.Eye)
+            {
+                // The London Eye's ride: the camera cranes up off your capsule to a bird's-eye view of the map and back.
+                float t = Mathf.Clamp01(world.EyeRide(me) + alpha / World.EYE_RIDE);
+                LondonLifeViews.EyeRidePoint(t, out var capsule);
+                rig.Crane(capsule, W.P(-8, -6), t, realDt);
+            }
             else
             {
+                // Dragon Wings: the camera rises with the snake.
+                rig.Altitude = Mathf.MoveTowards(rig.Altitude, me.alive && me.HasMagic(MagicId.Wings) ? 1 : 0, realDt * 0.8f);
                 var vel = W.Dir(me.heading) * (me.alive ? me.BaseSpeed * me.speedFactor : 0);
                 rig.Follow(me.alive ? meView.HeadPos : rig.transform.position + rig.transform.forward * 20, vel, me.Length, me.dashing, realDt);
             }
@@ -673,7 +684,7 @@ namespace Telfer.Game
 
             hud.ShowStick(controls.StickOn && state == State.Play, controls.StickBase, controls.StickKnob);
             hud.ShowDashing(controls.Dash && state == State.Play);
-            hud.SetBubbleWorld(bubbleFromSami ? wild.SamiHead : views.CooperHead);
+            hud.SetBubbleWorld(bubbleAt ?? (bubbleFromSami ? wild.SamiHead : views.CooperHead));
             if (state == State.Play && me.alive)
             {
                 runLongest = Mathf.Max(runLongest, me.Length);
@@ -690,6 +701,8 @@ namespace Telfer.Game
 
         const int MEGA_TIER = 4;
         bool bubbleFromSami;
+        /// <summary>Where a London chatter (the tour guide, the Beefeater) is talking from, while it is them.</summary>
+        Vector3? bubbleAt;
 
         void OpenCards()
         {
@@ -701,7 +714,12 @@ namespace Telfer.Game
 
         // ------------------------------------------------------------------ events into juice
 
-        static readonly string[] MagicNames = { "Stag's Blessing!", "Rainbow Rush!", "Owl Eyes!", "Royal Ribbit!", "Fox Trick!", "Pixie Dust!", "Acorn Hoard!", "Wisp Gold!" };
+        static readonly string[] MagicNames =
+        {
+            "Stag's Blessing!", "Rainbow Rush!", "Owl Eyes!", "Royal Ribbit!", "Fox Trick!", "Pixie Dust!", "Acorn Hoard!", "Wisp Gold!",
+            // London's legends: one short word each (main.ts MAGIC_LABEL).
+            "WINGS!", "ROAR!", "PHOENIX!", "SPLASH!", "BOO!", "GIANT!", "FAIRY DUST!", "FOLLOW!",
+        };
 
         void HandleEvents()
         {
@@ -915,12 +933,143 @@ namespace Telfer.Game
                         hud.Pop(at + Vector3.up * 1.2f, "WHEE!", new Color(0.6f, 0.85f, 1f), 40);
                         synth.Play("splash");
                         break;
+                    // ---- London's people
+                    case EventType.BumpGuard:
+                        if (mine) { synth.Play("bump", 0.7f); hud.Pop(at + Vector3.up * 1.2f, "Ahem!", new Color(1f, 0.9f, 0.6f), 38); } // he does not move
+                        break;
+                    case EventType.Whistle:
+                        if (!live || !NearMe(e.x, e.z, 18)) break;
+                        hud.Pop(at + Vector3.up * 2.6f, "PHWEEE!", e.who == MeIx ? new Color(1f, 0.5f, 0.45f) : new Color(1f, 0.95f, 0.6f), 42);
+                        synth.Play("whistle");
+                        break;
+                    case EventType.GuardSmile:
+                        wild.LondonLife?.Smile(world.Snakes[e.who]);
+                        Fx.I.Stars(at + Vector3.up * 2.5f, 14);
+                        break;
+                    case EventType.Guard:
+                        if (!mine) break;
+                        EarnGem(at);
+                        hud.Pop(snakeViews[MeIx].HeadPos + Vector3.up * 1.4f, "Smile!", new Color(0.6f, 0.85f, 1f), 46, 1.3f);
+                        synth.Play("golden");
+                        synth.Play("chaChing");
+                        break;
+                    case EventType.Photo:
+                        Fx.I.Stars(at + Vector3.up * 1.6f, 6);
+                        if (!mine) break;
+                        hud.Flash();
+                        hud.Pop(at + Vector3.up * 2f, "CLICK!", Color.white, 40);
+                        synth.Play("click");
+                        break;
+                    case EventType.Boo:
+                        wild.LondonLife?.Boo();
+                        Fx.I.Burst(at + Vector3.up, new[] { new Color(0.79f, 0.81f, 0.84f), Color.white }, 10, 0.8f);
+                        if (!live || !NearMe(e.x, e.z)) break;
+                        hud.Pop(at + Vector3.up * 3.4f, "BOO!", Color.white, 46);
+                        synth.Play("boo");
+                        break;
+                    // ---- London's legends
+                    case EventType.Ring:
+                        Fx.I.Ring(at, new Color(1f, 0.82f, 0.25f), e.range * 2, 0.7f);
+                        Fx.I.Burst(at, new[] { new Color(1f, 0.82f, 0.25f), new Color(1f, 0.95f, 0.6f) }, 30, 2.2f);
+                        if (live && NearMe(e.x, e.z, 20)) { hud.Pop(at + Vector3.up * 2, "ROAR!", new Color(1f, 0.82f, 0.25f), 52); synth.Play("growl"); }
+                        break;
+                    case EventType.Roared:
+                        Fx.I.Stars(at, 8);
+                        if (mine) hud.Pop(at + Vector3.up * 1.4f, "ROAR!", new Color(1f, 0.5f, 0.45f), 44);
+                        break;
+                    case EventType.Rise:
+                        Fx.I.Burst(at, new[] { new Color(1f, 0.3f, 0f), new Color(1f, 0.72f, 0.02f), new Color(1f, 0.88f, 0.4f) }, 36, 1.8f);
+                        if (!mine) break;
+                        hud.Banner("RISE!", Icons.Creature(CreatureKind.Phoenix));
+                        synth.Play("golden");
+                        synth.Play("tierUp");
+                        break;
+                    case EventType.Land:
+                        Fx.I.Dust(at, 1.2f);
+                        if (mine) { hud.Pop(at + Vector3.up * 1.2f, "LAND!", new Color(0.8f, 0.85f, 0.95f), 40); rig.Shake(0.15f); }
+                        break;
+                    case EventType.Pearly:
+                        Fx.I.Burst(at, new[] { new Color(1f, 0.98f, 0.94f), Color.white }, 24, 1.2f);
+                        Fx.I.Burst(W.P(e.tx, e.tz), new[] { new Color(1f, 0.98f, 0.94f), Color.white }, 18, 1.2f);
+                        break;
+                    case EventType.ButtonEat:
+                        Fx.I.Stars(at, 3);
+                        if (mine) synth.Play("pellet", 0.7f);
+                        break;
+                    case EventType.Jewel:
+                    {
+                        var jc = MeshKit.Hex(ModelsLondonZoo.JEWEL_COLOURS[e.k % 5]);
+                        Fx.I.Burst(at + Vector3.up, new[] { jc, Color.white, new Color(1f, 0.85f, 0.29f) }, 26, 1.4f);
+                        if (!mine) break;
+                        hud.Pop(at + Vector3.up * 2, e.n + "/5", jc, 50, 1.3f);
+                        synth.Play("golden");
+                        synth.Play("chaChing");
+                        break;
+                    }
+                    case EventType.Royal:
+                        Fx.I.Confetti(at, 120, 9);
+                        Fx.I.Ring(at, new Color(1f, 0.82f, 0.25f), 8, 0.9f);
+                        if (!mine) break;
+                        EarnGem(at, World.ROYAL_GEMS);
+                        slowmoFor = 0.6f;
+                        atmo.TierUp();
+                        hud.Banner("ROYAL!", null);
+                        synth.Play("tierUp");
+                        synth.Play("bell");
+                        break;
+                    // ---- London's set pieces
+                    case EventType.Bong:
+                        synth.Play("bong", 0.9f);
+                        Fx.I.Burst(at + Vector3.up * 2, new[] { new Color(1f, 0.85f, 0.3f), Color.white }, 18, 1.4f);
+                        Fx.I.Ring(at, new Color(1f, 0.85f, 0.3f), 18, 1.2f);
+                        if (live && NearMe(e.x, e.z, 40)) hud.Pop(at + Vector3.up * 12, e.n > 1 ? "BONG " + (e.k + 1) + "!" : "BONG!", new Color(1f, 0.85f, 0.3f), 52, 1.4f);
+                        break;
+                    case EventType.Launch:
+                        Fx.I.Confetti(at, 40, 7);
+                        if (!mine) break;
+                        hud.Banner("WHEE!", null);
+                        synth.Play("whee");
+                        rig.Punch(0.6f);
+                        break;
+                    case EventType.Ride:
+                        if (e.carrier == Carrier.Eye) Fx.I.Confetti(at, 30, 5); else Fx.I.Munch(at, new Color(0.62f, 0.83f, 0.95f), false);
+                        if (!mine) break;
+                        if (e.on && e.carrier == Carrier.Eye) { hud.Banner("LONDON EYE!", null); synth.Play("rideUp"); }
+                        else if (e.on) { hud.Pop(at + Vector3.up * 1.4f, "ALL ABOARD!", new Color(0.6f, 0.85f, 1f), 44); synth.Play("toot"); }
+                        else { hud.Pop(at + Vector3.up * 1.4f, "+" + (e.carrier == Carrier.Eye ? 100 : 60), new Color(1f, 0.85f, 0.3f), 44); synth.Play("levelUp"); }
+                        break;
+                    case EventType.Warp:
+                        Fx.I.Dust(at, 1.4f);
+                        if (!mine) break;
+                        hud.Tube(London.TUBE_NAMES, e.from, e.to);
+                        hud.Pop(at + Vector3.up * 1.6f, "Mind the gap!", Color.white, 44, 1.3f);
+                        synth.Play("mindTheGap");
+                        rig.Snap(snakeViews[MeIx].HeadPos, world.Me.Length);
+                        break;
+                    case EventType.Wobble:
+                        if (!mine) break;
+                        hud.Pop(at + Vector3.up * 1.2f, "WOBBLE!", new Color(0.8f, 0.85f, 1f), 40);
+                        synth.Play("wobble");
+                        break;
+                    case EventType.Arrows:
+                        Fx.I.Burst(at, new[] { new Color(0.91f, 0.19f, 0.23f), Color.white, new Color(0.18f, 0.37f, 0.82f) }, 24, 1.4f);
+                        if (!mine) break;
+                        hud.Banner("RED ARROWS!", null);
+                        synth.Play("tierUp");
+                        break;
+                    case EventType.Treat:
+                        Fx.I.Confetti(at, 30, 6);
+                        if (!mine) break;
+                        EarnGem(at);
+                        hud.Pop(at + Vector3.up * 1.6f, "+1", new Color(0.35f, 0.7f, 1f), 44);
+                        synth.Play("golden");
+                        break;
                     case EventType.Lob:
                         wild.Throw(at);
                         break;
                     case EventType.Pelt:
                         Fx.I.Dust(at, 0.6f);
-                        if (mine) { synth.Play("bump"); rig.Shake(0.15f); hud.Pop(at + Vector3.up, "Oops!", new Color(1f, 0.75f, 0.5f), 36); }
+                        if (mine) { synth.Play("bump"); rig.Shake(0.15f); hud.Pop(at + Vector3.up, e.projectile == ProjectileKind.Chip ? "Soggy chip!" : "Oops!", new Color(1f, 0.75f, 0.5f), 36); }
                         break;
                     case EventType.Kiss:
                         Fx.I.Hearts(at);
@@ -939,16 +1088,19 @@ namespace Telfer.Game
                             slowmoFor = 0.5f;
                             atmo.TierUp();
                             rig.Punch(0.7f);
-                            hud.Banner(MagicNames[(int)e.creature], Icons.Creature(e.creature));
+                            hud.Banner(e.creature == CreatureKind.Unicorn && world.Stage.Id == StageId.London ? "RAINBOW!" : MagicNames[(int)e.creature], Icons.Creature(e.creature));
+                            if (e.creature == CreatureKind.Dragon) synth.Play("whoosh");
                             EarnGem(at, e.gems);
                         }
                         break;
                     case EventType.Say:
-                        if (live)
+                        // London is big and busy with talkers: only the ones near enough to hear.
+                        if (live && (world.Stage.Chatters == null || NearMe(e.x, e.z, 24)))
                         {
                             bubbleFromSami = e.sami;
+                            bubbleAt = e.speaker != null ? W.P(e.x, e.z, 3.6f) : (Vector3?)null;
                             if (e.sami) wild.SamiTalks();
-                            hud.Say(e.text, e.sami ? wild.SamiHead : views.CooperHead);
+                            hud.Say(e.text, bubbleAt ?? (e.sami ? wild.SamiHead : views.CooperHead));
                         }
                         break;
                     case EventType.BumpWall:

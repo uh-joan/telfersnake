@@ -46,6 +46,7 @@ namespace Telfer.View
 
         public static Mesh Creature(CreatureKind k)
         {
+            if (k >= CreatureKind.Dragon) return ModelsLondonZoo.Legend(k);
             int i = (int)k;
             if (creatures[i] == null) creatures[i] = BuildCreature(k);
             return creatures[i];
@@ -54,6 +55,7 @@ namespace Telfer.View
         public static Mesh Projectile(ProjectileKind k)
         {
             int i = (int)k;
+            if (k == ProjectileKind.Chip) return ModelsLondonZoo.Chip();
             if (projectiles[i] == null) projectiles[i] = k == ProjectileKind.Pebble ? BuildPebble() : BuildKiss();
             return projectiles[i];
         }

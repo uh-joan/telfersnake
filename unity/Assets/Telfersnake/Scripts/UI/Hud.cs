@@ -12,7 +12,7 @@ namespace Telfer.UI
     /// Everything drawn over the game. Visual first, with short word labels and no sentences:
     /// the players are five to eleven.
     /// </summary>
-    public sealed class Hud : MonoBehaviour
+    public sealed partial class Hud : MonoBehaviour
     {
         static readonly Color Ink = new Color(0.13f, 0.15f, 0.22f);
         static readonly Color Cream = new Color(1f, 0.99f, 0.96f, 0.94f);
@@ -63,6 +63,7 @@ namespace Telfer.UI
             popLayer = UiKit.Fill(game, "Pops");
             BuildTopLeft();
             BuildGems();
+            BuildJewels();
             BuildXpBar();
             BuildMinimap();
             BuildDash();
@@ -78,6 +79,7 @@ namespace Telfer.UI
             title = BuildTitle();
             namePanel = BuildName();
             toastRt = BuildToast();
+            BuildLondonOverlays();
             ShowTitle(true);
             fit.Changed += Relayout;
             Relayout();
@@ -550,7 +552,11 @@ namespace Telfer.UI
         void BuildBanner()
         {
             bannerRt = UiKit.Rect(game, "banner", new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 0.5f), new Vector2(0, -190), new Vector2(620, 170));
-            UiKit.Shadow(bannerRt, 26, 0.3f);
+            // The banner's soft shadow rides inside it, so it comes and goes (and swings) with the banner: left
+            // beside it, it stayed on screen after the banner had gone, a grey smudge over London's cream paper.
+            var shadow = UiKit.Shadow(bannerRt, 26, 0.3f);
+            shadow.transform.SetParent(bannerRt, true);
+            shadow.transform.SetAsFirstSibling();
             UiKit.Panel(bannerRt, "bg", Yellow, 44);
             var inner = UiKit.Panel(bannerRt, "inner", new Color(1, 1, 1, 0.25f), 36);
             ((RectTransform)inner.transform).offsetMin = new Vector2(8, 8); ((RectTransform)inner.transform).offsetMax = new Vector2(-8, -8);
@@ -589,13 +595,30 @@ namespace Telfer.UI
 
         // ------------------------------------------------------------------ gems and magic, under the score
 
-        static readonly MagicId[] MagicOrder = { MagicId.Halo, MagicId.Rainbow, MagicId.Owl, MagicId.Hidden, MagicId.Magnet };
-        static readonly CreatureKind[] MagicCreature = { CreatureKind.Unicorn, CreatureKind.Kitsune, CreatureKind.Pixie, CreatureKind.Owl, CreatureKind.Stag };
-        static readonly string[] MagicLabel = { "Rainbow", "Hidden", "Magnet", "Owl eyes", "Halo" };
-        static readonly Color[] MagicCol = { new Color(1f, 0.5f, 0.75f), new Color(1f, 0.6f, 0.25f), new Color(0.55f, 0.9f, 0.6f), new Color(0.7f, 0.6f, 1f), new Color(1f, 0.85f, 0.3f) };
+        static readonly MagicId[] MagicOrder =
+        {
+            MagicId.Halo, MagicId.Rainbow, MagicId.Owl, MagicId.Hidden, MagicId.Magnet,
+            MagicId.Wings, MagicId.River, MagicId.Giant, MagicId.Phoenix,
+        };
+        /// <summary>Who gives each magic (by MagicId): on the Common, and London's legends.</summary>
+        static readonly CreatureKind[] MagicCreature =
+        {
+            CreatureKind.Unicorn, CreatureKind.Kitsune, CreatureKind.Pixie, CreatureKind.Owl, CreatureKind.Stag,
+            CreatureKind.Dragon, CreatureKind.Mermaid, CreatureKind.Gog, CreatureKind.Phoenix, CreatureKind.LionRoyal,
+        };
+        static readonly string[] MagicLabel = { "Rainbow", "Hidden", "Magnet", "Owl eyes", "Halo", "Wings", "River", "Giant", "Phoenix", "Roar" };
+        static readonly Color[] MagicCol =
+        {
+            new Color(1f, 0.5f, 0.75f), new Color(1f, 0.6f, 0.25f), new Color(0.55f, 0.9f, 0.6f), new Color(0.7f, 0.6f, 1f), new Color(1f, 0.85f, 0.3f),
+            new Color(0.78f, 0.82f, 0.9f), new Color(0.12f, 0.85f, 0.78f), new Color(0.72f, 0.5f, 0.3f), new Color(1f, 0.42f, 0.15f), new Color(1f, 0.76f, 0.1f),
+        };
+        /// <summary>The creature a magic came from here: London's ghost and fairy give the Common's hidden and magnet.</summary>
+        CreatureKind MagicSource(int i) =>
+            stage != null && stage.Id == StageId.London && i == (int)MagicId.Hidden ? CreatureKind.Ghost :
+            stage != null && stage.Id == StageId.London && i == (int)MagicId.Magnet ? CreatureKind.Fairy : MagicCreature[i];
 
         sealed class MagicBadge { public RectTransform rt; public Image fill; public RawImage icon; public float max; }
-        readonly MagicBadge[] magicBadges = new MagicBadge[5];
+        readonly MagicBadge[] magicBadges = new MagicBadge[10];
         Text gemCount;
         RectTransform gemPill;
         int lastGems = -1;
@@ -611,7 +634,7 @@ namespace Telfer.UI
             ((RectTransform)gemCount.transform).offsetMin = new Vector2(62, 0);
 
             // One badge per magic: the creature that gave it, with a ring that runs down as it wears off.
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < magicBadges.Length; i++)
             {
                 var rt = UiKit.Rect(game, "magic", new Vector2(0, 1), new Vector2(0, 1), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(84, 84));
                 UiKit.Shadow(rt, 12, 0.22f);
@@ -653,7 +676,7 @@ namespace Telfer.UI
                 if (b.rt.gameObject.activeSelf != on)
                 {
                     b.rt.gameObject.SetActive(on);
-                    if (on) { b.icon.texture = Icons.Creature(MagicCreature[i]); b.rt.localScale = Vector3.one * 1.4f; }
+                    if (on) { b.icon.texture = Icons.Creature(MagicSource(i)); b.rt.localScale = Vector3.one * 1.4f; }
                 }
                 if (!on) continue;
                 if (left > b.max) b.max = left;
@@ -1178,6 +1201,7 @@ namespace Telfer.UI
                 }
             }
             SyncGems(me, dt);
+            SyncLondon(w, dt);
 
             // World to the game layer, which sits inside the safe area.
             var full = rootRt.rect.size;
@@ -1199,7 +1223,12 @@ namespace Telfer.UI
             if (w.Kids != null)
                 foreach (var k in w.Kids) MapDot(di++, MapKid, 6).anchoredPosition = MapPos(k.x, k.z);
             if (w.Predators != null)
-                foreach (var p in w.Predators) MapDot(di++, MapDanger, p.kind == PredatorKind.Bear ? 11 : 9).anchoredPosition = MapPos(p.x, p.z);
+                foreach (var p in w.Predators) MapDot(di++, MapDanger, p.kind == PredatorKind.Bear || p.kind == PredatorKind.Lion ? 11 : 9).anchoredPosition = MapPos(p.x, p.z);
+            // London: the buses (red) and cabs (black) on their rounds, and the Crown Jewels (gold) lying about.
+            foreach (var v in w.Vehicles)
+                MapDot(di++, v.kind == VehicleKind.Bus ? MapBus : MapCab, v.kind == VehicleKind.Bus ? 12 : 9).anchoredPosition = MapPos(v.x, v.z);
+            foreach (var t in w.Treasures)
+                if (t.respawnIn <= 0) MapDot(di++, Yellow, 12).anchoredPosition = MapPos(t.x, t.z);
             // Magic creatures hide, unless Owl Eyes is on.
             if (w.Creatures != null && me.HasMagic(MagicId.Owl))
                 foreach (var c in w.Creatures)
@@ -1322,6 +1351,7 @@ namespace Telfer.UI
         }
 
         static readonly Color MapGulp = new Color(1f, 0.88f, 0.4f), MapBoop = new Color(1f, 0.56f, 0.67f);
+        static readonly Color MapBus = new Color(0.84f, 0.18f, 0.13f), MapCab = new Color(0.12f, 0.12f, 0.15f);
         static readonly Color MapKid = new Color(0.23f, 0.79f, 0.86f), MapDanger = new Color(0.88f, 0.19f, 0.19f), MapMagic = new Color(0.69f, 0.59f, 0.99f);
 
         readonly List<Snake> order = new List<Snake>();

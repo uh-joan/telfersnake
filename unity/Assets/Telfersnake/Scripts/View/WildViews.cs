@@ -27,6 +27,8 @@ namespace Telfer.View
         float samiTalk;
         /// <summary>London's lions, ravens and traffic (null elsewhere); its beasts leave a null in `beasts`.</summary>
         readonly LondonViews london;
+        /// <summary>London's people, legends and set pieces (null elsewhere).</summary>
+        public readonly LondonLifeViews LondonLife;
 
         public WildViews(World w, Transform parent)
         {
@@ -56,6 +58,7 @@ namespace Telfer.View
             }
             foreach (var k in w.Kids)
             {
+                if (k.kind >= KidKind.Tourist) { kids.Add(null); continue; } // London's walkers: LondonViews draws them
                 var rig = ModelsWild.Kid(root, k.look);
                 var pos = W.P(k.x, k.z);
                 kids.Add(new Child { rig = rig, prev = pos, cur = pos, yaw = W.Yaw(k.heading) });
@@ -77,7 +80,7 @@ namespace Telfer.View
                 var pos = W.P(c.x, c.z);
                 creatures.Add(new Magic { t = t, body = body.transform, ring = ring, ringMat = rm, prev = pos, cur = pos, yaw = W.Yaw(c.heading) });
             }
-            if (w.Stage.Id == StageId.London) london = new LondonViews(w, parent);
+            if (w.Stage.Id == StageId.London) { london = new LondonViews(w, parent); LondonLife = new LondonLifeViews(w, parent); }
             if (w.Stage.Greeters != null)
             {
                 var g = w.Stage.Greeters;
@@ -116,7 +119,8 @@ namespace Telfer.View
         {
             for (int i = 0; i < beasts.Count; i++) if (beasts[i] != null) Step(ref beasts[i].prev, ref beasts[i].cur, world.Predators[i].x, world.Predators[i].z);
             london?.OnStep();
-            for (int i = 0; i < kids.Count; i++) Step(ref kids[i].prev, ref kids[i].cur, world.Kids[i].x, world.Kids[i].z);
+            LondonLife?.OnStep();
+            for (int i = 0; i < kids.Count; i++) if (kids[i] != null) Step(ref kids[i].prev, ref kids[i].cur, world.Kids[i].x, world.Kids[i].z);
             for (int i = 0; i < creatures.Count; i++) Step(ref creatures[i].prev, ref creatures[i].cur, world.Creatures[i].x, world.Creatures[i].z);
         }
 
@@ -141,7 +145,7 @@ namespace Telfer.View
         {
             Child best = null;
             float bd = float.MaxValue;
-            foreach (var k in kids) { float d = (k.rig.root.position - at).sqrMagnitude; if (d < bd) { bd = d; best = k; } }
+            foreach (var k in kids) { if (k == null) continue; float d = (k.rig.root.position - at).sqrMagnitude; if (d < bd) { bd = d; best = k; } }
             if (best != null) best.throwT = 0.45f;
         }
 
@@ -151,6 +155,7 @@ namespace Telfer.View
         public void Sync(float alpha, float dt, float time)
         {
             london?.Sync(alpha, dt, time);
+            LondonLife?.Sync(alpha, dt, time);
             // ---- bears and wolves
             for (int i = 0; i < beasts.Count; i++)
             {
@@ -184,6 +189,7 @@ namespace Telfer.View
             {
                 var k = world.Kids[i];
                 var c = kids[i];
+                if (c == null) continue;
                 var pos = Vector3.Lerp(c.prev, c.cur, alpha);
                 float clamber = world.Stage.Id == StageId.Common ? Common.LogClamberHeight(k.x, k.z) : 0;
                 c.yaw = Mathf.LerpAngle(c.yaw, W.Yaw(k.heading), 1 - Mathf.Exp(-dt * 10));
@@ -227,7 +233,7 @@ namespace Telfer.View
                     shots[i] = (t, pj.kind);
                 }
                 float u = pj.total > 0 ? 1 - pj.left / pj.total : 0;
-                float arc = pj.kind == ProjectileKind.Pebble ? Mathf.Sin(u * Mathf.PI) * Mathf.Min(3, pj.total * 0.25f) + 0.6f : 1.2f + Mathf.Sin(time * 6 + i) * 0.15f;
+                float arc = pj.kind != ProjectileKind.Kiss ? Mathf.Sin(u * Mathf.PI) * Mathf.Min(3, pj.total * 0.25f) + 0.6f : 1.2f + Mathf.Sin(time * 6 + i) * 0.15f;
                 t.position = W.P(pj.x, pj.z, arc);
                 t.rotation = pj.kind == ProjectileKind.Kiss ? Quaternion.LookRotation(-Camera.main.transform.forward) * Quaternion.Euler(0, 0, Mathf.Sin(time * 5) * 12) : Quaternion.Euler(time * 400, time * 230, 0);
                 t.localScale = Vector3.one * (pj.kind == ProjectileKind.Kiss ? 1 + Mathf.Sin(time * 10) * 0.12f : 1);
