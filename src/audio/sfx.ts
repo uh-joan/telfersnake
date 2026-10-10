@@ -270,6 +270,45 @@ export class Sfx {
     this.hiss(0.3, 900, 300, 0.1, 0, 1.5);
   }
 
+  /** A Trafalgar lion waking: a soft, sleepy roar that turns into a big yawn. */
+  yawn(): void {
+    this.tone(95, 0.55, { type: 'sawtooth', gain: 0.09, slideTo: 140, vibrato: [8, 18] });
+    this.tone(330, 0.7, { type: 'triangle', gain: 0.08, slideTo: 160, delay: 0.35 });
+    this.hiss(0.6, 700, 250, 0.06, 0.3, 1.2);
+  }
+
+  /** A raven's CAW! (twice, hoarse). */
+  caw(): void {
+    for (const d of [0, 0.22]) {
+      this.tone(720, 0.16, { type: 'sawtooth', gain: 0.08, slideTo: 480, vibrato: [60, 70], delay: d });
+      this.hiss(0.14, 2200, 1200, 0.07, d, 3);
+    }
+  }
+
+  /** A London bus's bell: DING DING! */
+  dingDing(): void {
+    for (const d of [0, 0.2]) {
+      this.tone(1568, 0.5, { type: 'sine', gain: 0.12, delay: d });
+      this.tone(3136, 0.25, { type: 'sine', gain: 0.04, delay: d });
+    }
+  }
+
+  /** A horn: a bus's deep parp, or a cab's quick double beep. */
+  honk(cab = false): void {
+    if (cab) {
+      for (const d of [0, 0.16]) this.tone(440, 0.11, { type: 'square', gain: 0.07, delay: d });
+      return;
+    }
+    this.tone(196, 0.45, { type: 'sawtooth', gain: 0.08 });
+    this.tone(247, 0.45, { type: 'square', gain: 0.04 });
+  }
+
+  /** Into a puddle: a splash and a slide. */
+  splash(): void {
+    this.hiss(0.25, 2500, 700, 0.18, 0, 1.5);
+    this.tone(600, 0.25, { type: 'sine', gain: 0.08, slideTo: 1200, delay: 0.05 });
+  }
+
   /** A roll of thunder after a lightning flash: a deep rumble that fades. */
   thunder(): void {
     this.hiss(1.4, 300, 60, 0.28, 0, 0.7);

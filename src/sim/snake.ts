@@ -427,6 +427,13 @@ export class Snake {
     this.heading = turnToward(this.heading, want, step);
   }
 
+  /** Something outside move() (London's buses) is in the way: steer next tick as if against a wall. */
+  leanOn(nx: number, nz: number): void {
+    this.touchingWall = true;
+    this.wallNx = nx;
+    this.wallNz = nz;
+  }
+
   /** Swing the heading along a surface with normal (nx, nz) so the snake slides instead of sticking. */
   deflect(nx: number, nz: number, dt: number): void {
     const dx = Math.cos(this.heading);

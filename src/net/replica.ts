@@ -5,6 +5,8 @@ import { blankCreature, type Creature, CREATURE_KINDS } from '../sim/creatures';
 import { HAZARD_KINDS, type Hazard, type Pellet } from '../sim/hazards';
 import { blankKid, type Kid, KID_KINDS, type Projectile, PROJECTILE_KINDS } from '../sim/kids';
 import { blankPredator, PREDATOR_KINDS, type Predator } from '../sim/predators';
+import { isSolidHazard } from '../sim/hazards';
+import { blankVehicle, type Vehicle, VEHICLE_KINDS } from '../sim/vehicles';
 import { type Input, Snake } from '../sim/snake';
 import type { Stage } from '../sim/stage';
 import type { CardId } from '../sim/upgrades';
@@ -58,6 +60,7 @@ export class Replica implements WorldView {
   readonly foods: Food[];
   readonly animals: Animal[];
   readonly predators: Predator[];
+  readonly vehicles: Vehicle[];
   readonly kids: Kid[];
   readonly creatures: Creature[];
   projectiles: Projectile[] = [];
@@ -76,6 +79,8 @@ export class Replica implements WorldView {
   private renderTick = 0;
   // Predicting my own snake: a body-less stand-in the inputs are replayed on.
   private readonly ghost: Snake;
+  /** What my snake bumps into while I predict it: the hazards, less London's (flat) puddles. */
+  private readonly solids: Hazard[];
   private readonly pending: Pending[] = [];
   private q = 0;
   private owed = 0;
@@ -93,6 +98,19 @@ export class Replica implements WorldView {
     for (const row of welcome.foods) this.setFood(row);
     this.animals = welcome.animalKinds.map((k) => makeAnimal(ANIMAL_KINDS[k]));
     this.predators = welcome.predatorKinds.map((k) => blankPredator(PREDATOR_KINDS[k]));
+    // London's lions and ravens have fixed homes (a plinth, a perch each, in order): the renderer
+    // needs them to lift a lion onto its plinth and a raven up to the Tower.
+    let lions = 0;
+    let ravens = 0;
+    for (const p of this.predators) {
+      const home = p.kind === 'lion' ? stage.plinths?.[lions++] : p.kind === 'raven' ? stage.perches?.[ravens++] : undefined;
+      if (home) {
+        p.hx = home.x;
+        p.hz = home.z;
+      }
+    }
+    this.vehicles = (welcome.vehicleKinds ?? []).map((k) => blankVehicle(VEHICLE_KINDS[k]));
+    this.solids = this.hazards.filter(isSolidHazard); // the same objects: a 'rock' event moves them in both
     this.kids = welcome.kidKinds.map((k) => blankKid(KID_KINDS[k]));
     this.creatures = welcome.creatureKinds.map((k) => blankCreature(CREATURE_KINDS[k]));
     this.pellets = welcome.pellets.map(this.toPellet);
@@ -216,7 +234,7 @@ export class Replica implements WorldView {
     g.speedMul = this.snake.speedMul;
     // Its wall memory belongs to the previous replay, not to this starting point; steer() must not act on it.
     g.touchingWall = false;
-    for (const p of this.pending) g.move(p.input, STEP, !this.snake.slowed, this.stage, this.hazards);
+    for (const p of this.pending) g.move(p.input, STEP, !this.snake.slowed, this.stage, this.solids);
     if (Math.hypot(g.x - this.shownX, g.z - this.shownZ) > SNAP_IF_OFF_BY) this.resetPrediction(g.x, g.z, g.heading);
   }
 
@@ -236,7 +254,7 @@ export class Replica implements WorldView {
       if (free) {
         this.pending.push({ q: this.q, input: copy });
         if (this.pending.length > 120) this.pending.shift();
-        this.ghost.move(copy, STEP, !mine.slowed, this.stage, this.hazards);
+        this.ghost.move(copy, STEP, !mine.slowed, this.stage, this.solids);
       }
     }
 
@@ -317,6 +335,17 @@ export class Replica implements WorldView {
       pr.z = lerp(ra[1], rb[1], u);
       pr.heading = lerpAngle(ra[2], rb[2], u);
       pr.speed = rb[3];
+      pr.state = rb[4] ?? 0; // London's lions and ravens: statue or awake, perched or out
+    });
+
+    this.vehicles.forEach((v, i) => {
+      const ra = a.vh?.[i];
+      const rb = b.vh?.[i];
+      if (!ra || !rb) return;
+      v.x = lerp(ra[0], rb[0], t);
+      v.z = lerp(ra[1], rb[1], t);
+      v.heading = lerpAngle(ra[2], rb[2], t);
+      v.speed = rb[3];
     });
 
     this.kids.forEach((k, i) => {

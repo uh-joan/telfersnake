@@ -1,5 +1,8 @@
 import { ANIMALS, type Animal, type AnimalKind, makeAnimal, placeAnimal, updateAnimal } from './animals';
-import { makePredators, type Predator, type PredatorKind, PREDATORS } from './predators';
+import {
+  awake, LION, LION_CLIMB_TIME, LION_HOME_GIVE_UP, LION_HOP_TIME, LION_LEASH, LION_STONE_TIME, LION_WAKE, LION_WAKE_TIME,
+  makePredators, type Predator, type PredatorKind, PREDATORS, RAVEN, RAVEN_CAW_TIME, RAVEN_LEASH,
+} from './predators';
 import { KID_RADIUS, KIDS, type Kid, makeKids, type Projectile, type ProjectileKind } from './kids';
 import { type Creature, type CreatureKind, CREATURES, creatureSpot, makeCreatures } from './creatures';
 import { Bot, MORE_RIVALS, type Personality } from './bot';
@@ -7,12 +10,13 @@ import { botCardChoice, type Rules, rulesFor } from './modes';
 import { isFree, makeHit, resolveAshore, resolveCircle, slideAlong, turnToward, wrapAngle } from './collide';
 import { Cooper, COOPER_AURA, COOPER_RADIUS } from './cooper';
 import { type Food, type FoodKind, FOOD_VALUE, GOLDEN_MULTIPLIER, placeFood, TEA_TIME } from './food';
-import { type Hazard, type HazardKind, makeHazards, type Pellet, PELLET_LIFE_TICKS, placeHazard } from './hazards';
+import { type Hazard, type HazardKind, isSolidHazard, makeHazards, type Pellet, PELLET_LIFE_TICKS, placeHazard } from './hazards';
 import { type Circle, inBox, SCHOOL } from './layout';
 import { Rng } from './rng';
 import type { Stage, Terrain } from './stage';
 import { type Input, Snake, type SnakeLook, TIERS } from './snake';
 import { type CardId, type PowerId, rollCards, type UpgradeId } from './upgrades';
+import { distanceToLoop, driveVehicle, type Lane, local, makeLane, makeVehicles, type Vehicle, type VehicleKind, VEHICLES, type Walker } from './vehicles';
 import { inWater } from './water';
 
 export const STEP = 1 / 60;
@@ -59,6 +63,10 @@ const SAMI_LINES = [
   'Wave to the kiddies, they do love a friendly snake.',
 ];
 const OUCH_GRACE = 1.5; // seconds before the next rock can hurt
+/** London's puddles: a slippery slide, this much faster while you are in one. */
+const PUDDLE_ZOOM = 1.35;
+/** A vehicle has to be rolling at least this fast for a touch to be a bonk rather than a nudge. */
+const VEHICLE_BONK_SPEED = 0.3;
 const PELLET_RETURN = 0.7; // share of the lost mass that lands on the ground as pellets
 const PELLET_MAX = 5;
 const PELLET_CAP = 150;
@@ -113,8 +121,18 @@ export type GameEvent =
   | { type: 'sneeze'; who: number; by: number; x: number; z: number }
   /** A wolf about to sprint: its warning howl. */
   | { type: 'howl'; x: number; z: number }
-  /** A predator bit a snake: puff at the victim, who loses mass like a rock bonk. */
-  | { type: 'chomp'; kind: PredatorKind; who: number; x: number; z: number }
+  /** A predator bit a snake: puff at the victim, who loses mass like a rock bonk. London's lions and ravens also say how much (`lost`). */
+  | { type: 'chomp'; kind: PredatorKind; who: number; x: number; z: number; lost?: number }
+  /** London: a Trafalgar lion wakes up with a big stretch and a yawn (its tell). */
+  | { type: 'roar'; x: number; z: number }
+  /** London: a Tower raven is about to swoop: CAW! */
+  | { type: 'caw'; x: number; z: number }
+  /** London: a bus or cab has a snake ahead: DING DING! (a bus), or a honk (a cab, or a bus kept waiting). */
+  | { type: 'ding'; kind: VehicleKind; honk: boolean; x: number; z: number }
+  /** London: a snake slithered into a moving bus or cab: a rock-style bonk. "Mind the bus!" */
+  | { type: 'vbonk'; kind: VehicleKind; who: number; x: number; z: number; lost: number }
+  /** London: a snake slid into a puddle. Whee! */
+  | { type: 'splash'; who: number; x: number; z: number }
   /** A power was cast: FX at the caster. */
   | { type: 'power'; who: number; kind: PowerId; x: number; z: number; heading: number; range: number }
   /** A rival was shrunk or frozen by a power (or bonk): puff at the victim; `by` earns the gem. */
@@ -158,11 +176,19 @@ export class World {
   readonly hazards: Hazard[];
   /** Everything the snake bounces off: rocks (which shrink it) and the log (which does not). */
   private readonly snakeSolids: Circle[];
+  /** London's puddles (flat: slid across, never bumped), and who was in one last tick. */
+  private readonly puddles: Hazard[];
+  private readonly inPuddle: boolean[] = [];
+  /** Every snake's head and body, as circles, for the traffic to brake for (rebuilt each tick). */
+  private readonly walkers: Walker[] = [];
   /** The place this world is played: fence, solids, spawn tables, sanctuary, who patrols it. */
   readonly stage: Stage;
   readonly foods: Food[] = [];
   readonly animals: Animal[] = [];
   readonly predators: Predator[] = [];
+  /** London's buses and cabs (empty elsewhere), and their routes made ready for driving. */
+  readonly vehicles: Vehicle[] = [];
+  readonly lanes: Lane[] = [];
   /** The Common's children (empty on the school), and the pebbles/kisses in flight. */
   readonly kids: Kid[] = [];
   readonly projectiles: Projectile[] = [];
@@ -183,6 +209,8 @@ export class World {
 
   private readonly bots = new Map<Snake, Bot>();
   private readonly p = { x: 0, z: 0 };
+  private readonly loc = { f: 0, l: 0 };
+  private readonly loc2 = { f: 0, l: 0 };
   /** The stage with its rivers taken out (just the solids), for things that may cross water. */
   private dryStage: Terrain | null = null;
   /** Miss Sami's little natter with the mum: when she next says something, if the stage has her. */
@@ -202,7 +230,9 @@ export class World {
     this.cooper = new Cooper(stage.cooper);
     this.hazards = makeHazards(this.rng, stage);
     // What the snake bounces off: the rocks, plus the fallen log (the children clamber it instead).
-    this.snakeSolids = [...this.hazards, ...stage.logs];
+    // Not London's puddles: those you slide across.
+    this.snakeSolids = [...this.hazards.filter(isSolidHazard), ...stage.logs];
+    this.puddles = this.hazards.filter((h) => !isSolidHazard(h));
     this.pausesForCards = playerLook !== null;
 
     if (playerLook) {
@@ -242,6 +272,11 @@ export class World {
     for (const p of makePredators(stage, this.rng)) this.predators.push(p);
     for (const k of makeKids(stage, this.rng)) this.kids.push(k);
     for (const c of makeCreatures(stage, this.rng)) this.creatures.push(c);
+    // London's traffic: fixed routes, evenly spread, no RNG.
+    if (stage.routes && stage.traffic) {
+      for (const r of stage.routes) this.lanes.push(makeLane(r, stage.zebras ?? []));
+      for (const v of makeVehicles(stage.traffic, stage.routes, this.lanes)) this.vehicles.push(v);
+    }
   }
 
   static room(seed: number, rules: Rules = rulesFor('normal'), stage: Stage = SCHOOL): World {
@@ -340,6 +375,7 @@ export class World {
     c.update(this, dt);
     for (const a of this.animals) updateAnimal(a, this, dt);
     this.updatePredators(dt);
+    if (this.vehicles.length > 0) this.updateVehicles(dt);
     this.updateKids(dt);
     this.updateProjectiles(dt);
     this.updateCreatures(dt);
@@ -378,6 +414,7 @@ export class World {
       s.slowed = Math.hypot(s.x - c.x, s.z - c.z) < COOPER_AURA;
       let pace = s.slowed ? SLOW_FACTOR : 1;
       if (this.stage.water && inWater(this.stage, s.x, s.z)) pace *= SWIM_FACTOR;
+      if (this.puddles.length > 0 && this.puddle(s)) pace *= PUDDLE_ZOOM;
       if (s.teaFor > 0) pace *= TEA_ZOOM;
       s.speedFactor += (pace - s.speedFactor) * Math.min(1, dt * 4);
       s.update(input, dt, !s.slowed, this.stage, this.snakeSolids);
@@ -417,6 +454,9 @@ export class World {
       }
     }
 
+    // London's traffic: everyone out of the buses and cabs (a frozen or paused snake too; it is
+    // blinking then, so it is only nudged, never bonked).
+    if (this.vehicles.length > 0) for (const s of this.snakes) if (s.alive) this.meetVehicles(s, dt);
     for (const s of this.snakes) if (s.alive) s.sampleBody();
     this.bonkSnakes();
     this.expirePellets();
@@ -444,6 +484,7 @@ export class World {
   private bonkRock(s: Snake): boolean {
     if (!s.touchingWall || s.immune > 0) return false;
     for (const h of this.hazards) {
+      if (!isSolidHazard(h)) continue;
       const reach = s.radius + h.r + 0.02;
       if ((s.x - h.x) ** 2 + (s.z - h.z) ** 2 > reach * reach) continue;
       s.immune = OUCH_GRACE;
@@ -594,6 +635,14 @@ export class World {
   private updatePredators(dt: number): void {
     const fer = this.rules.predatorFerocity;
     for (const p of this.predators) {
+      if (p.kind === 'lion') {
+        this.updateLion(p, dt, fer);
+        continue;
+      }
+      if (p.kind === 'raven') {
+        this.updateRaven(p, dt, fer);
+        continue;
+      }
       const spec = PREDATORS[p.kind];
       if (p.frozenFor > 0) {
         p.frozenFor -= dt;
@@ -712,10 +761,10 @@ export class World {
     return best;
   }
 
-  /** Is any predator within this circle? Always false on the school (no predators). */
+  /** Is any predator (that is up and about) within this circle? Always false on the school (no predators). */
   private predatorsNear(x: number, z: number, radius: number): boolean {
     for (const p of this.predators) {
-      if (Math.hypot(p.x - x, p.z - z) <= radius + PREDATORS[p.kind].radius) return true;
+      if (awake(p) && Math.hypot(p.x - x, p.z - z) <= radius + PREDATORS[p.kind].radius) return true;
     }
     return false;
   }
@@ -726,15 +775,340 @@ export class World {
    */
   private scarePredators(x: number, z: number, radius: number, freeze: boolean): void {
     for (const p of this.predators) {
-      if (Math.hypot(p.x - x, p.z - z) > radius + PREDATORS[p.kind].radius) continue;
+      if (!awake(p) || Math.hypot(p.x - x, p.z - z) > radius + PREDATORS[p.kind].radius) continue;
+      this.spook(p, freeze);
+    }
+  }
+
+  /**
+   * One beast caught by a power. Freeze roots a bear, wolf or raven and turns a lion to stone; fire,
+   * zaps and lasers send a bear or wolf fleeing, a lion fleeing then home, a raven back to the Tower.
+   */
+  private spook(p: Predator, freeze: boolean): void {
+    if (p.kind === 'lion') {
+      if (p.state === LION.stone) return;
       if (freeze) {
-        p.frozenFor = Math.max(p.frozenFor, 1.4);
+        p.state = LION.stone;
+        p.stateFor = LION_STONE_TIME;
+        p.speed = 0;
       } else {
+        if (p.state !== LION.home) p.stateFor = LION_HOME_GIVE_UP; // a second scare must not restart its way home
+        p.state = LION.home;
         p.scaredFor = Math.max(p.scaredFor, 2.5);
-        p.chargeFor = 0;
         p.biteIn = Math.max(p.biteIn, 1);
       }
+      return;
     }
+    if (p.kind === 'raven' && !freeze) {
+      p.state = RAVEN.back;
+      p.biteIn = Math.max(p.biteIn, 1);
+      return;
+    }
+    if (freeze) {
+      p.frozenFor = Math.max(p.frozenFor, 1.4);
+    } else {
+      p.scaredFor = Math.max(p.scaredFor, 2.5);
+      p.chargeFor = 0;
+      p.biteIn = Math.max(p.biteIn, 1);
+    }
+  }
+
+  /** The nearest living snake head within `range` of (x, z) that a beast can see (Fox Trick hides you). */
+  private nearestVisible(x: number, z: number, range: number): Snake | null {
+    let best: Snake | null = null;
+    let bestD = range;
+    for (const s of this.snakes) {
+      if (!s.alive || s.hasMagic('hidden')) continue;
+      const d = Math.hypot(s.x - x, s.z - z);
+      if (d < bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  /** A London beast's capped, grace-protected bite: shrink like a rock, puff pellets. True if it landed. */
+  private londonBite(p: Predator, fer: number): boolean {
+    const spec = PREDATORS[p.kind];
+    if (p.biteIn > 0) return false;
+    for (const s of this.snakes) {
+      if (!s.alive || s.immune > 0 || s.hasMagic('hidden') || Math.hypot(s.x - p.x, s.z - p.z) > spec.biteReach + s.radius) continue;
+      s.immune = OUCH_GRACE;
+      const lost = s.mass < 1 ? 0 : Math.min(spec.biteCap, Math.max(p.kind === 'raven' ? 1 : 2, s.mass * spec.biteShare * fer));
+      if (lost > 0) this.shed(s, lost, PELLET_RETURN, p.kind === 'raven' ? 2 : 4);
+      this.events.push({ type: 'chomp', kind: p.kind, who: s.id, x: s.x, z: s.z, lost });
+      p.biteIn = spec.biteEvery;
+      return true;
+    }
+    return false;
+  }
+
+  /** Walk a beast `speed` m/s along its heading, on land, sliding along whatever it meets. */
+  private walk(p: Predator, speed: number, dt: number): void {
+    resolveAshore(this.stage, p.x, p.z, p.x + Math.cos(p.heading) * speed * dt, p.z + Math.sin(p.heading) * speed * dt, PREDATORS[p.kind].radius, this.hit, this.stage.logs);
+    p.x = this.hit.x;
+    p.z = this.hit.z;
+    p.speed = speed;
+    if (this.hit.hit) p.heading = slideAlong(p.heading, this.hit.nx, this.hit.nz);
+  }
+
+  /** A Trafalgar lion: statue → yawn → prowl → home → climb → statue (see LION in predators.ts). */
+  private updateLion(p: Predator, dt: number, fer: number): void {
+    const spec = PREDATORS.lion;
+    p.biteIn -= dt;
+    if (p.stateFor > 0) p.stateFor -= dt;
+    switch (p.state) {
+      case LION.statue: {
+        p.speed = 0;
+        if (p.stateFor > 0) return; // still sleeping off the last prowl
+        const t = this.nearestVisible(p.hx, p.hz, LION_WAKE);
+        if (!t) return;
+        // One lion up at a time (two in God mode), and it is the sleeper nearest the snake that wakes.
+        let up = 0;
+        for (const o of this.predators) {
+          if (o.kind !== 'lion' || o === p) continue;
+          if (o.state !== LION.statue) up++;
+          else if (o.stateFor <= 0 && Math.hypot(t.x - o.hx, t.z - o.hz) < Math.hypot(t.x - p.hx, t.z - p.hz)) return;
+        }
+        if (up >= (fer > 1 ? 2 : 1)) return;
+        p.state = LION.waking;
+        p.stateFor = LION_WAKE_TIME;
+        p.heading = Math.atan2(p.wz - p.hz, p.wx - p.hx);
+        this.events.push({ type: 'roar', x: p.x, z: p.z });
+        return;
+      }
+      case LION.waking: {
+        // A long stretch and a yawn on the plinth, then a hop down to the ground in front of it.
+        const k = 1 - Math.min(1, Math.max(0, p.stateFor / LION_HOP_TIME));
+        p.x = p.hx + (p.wx - p.hx) * k;
+        p.z = p.hz + (p.wz - p.hz) * k;
+        p.speed = k > 0 && k < 1 ? 1 : 0;
+        if (p.stateFor <= 0) {
+          p.state = LION.prowl;
+          p.stateFor = spec.chaseTime * fer;
+          p.x = p.wx;
+          p.z = p.wz;
+        }
+        return;
+      }
+      case LION.climb: {
+        const k = 1 - Math.min(1, Math.max(0, p.stateFor / LION_CLIMB_TIME));
+        p.x = p.wx + (p.hx - p.wx) * k;
+        p.z = p.wz + (p.hz - p.wz) * k;
+        p.speed = 0;
+        if (p.stateFor <= 0) {
+          p.state = LION.statue;
+          p.stateFor = spec.restTime / fer;
+          p.x = p.hx;
+          p.z = p.hz;
+          p.heading = Math.atan2(p.wz - p.hz, p.wx - p.hx);
+        }
+        return;
+      }
+      case LION.stone:
+        p.speed = 0;
+        if (p.stateFor <= 0) {
+          p.state = LION.home;
+          p.stateFor = LION_HOME_GIVE_UP;
+        }
+        return;
+    }
+
+    // Up and about (prowling, or plodding home). A frog's spell holds it; a scare sends it hurrying home.
+    if (p.frozenFor > 0) {
+      p.frozenFor -= dt;
+      p.speed = 0;
+      return;
+    }
+    if (p.scaredFor > 0) p.scaredFor -= dt; // spooked: it hurries home (below), it does not bolt off anywhere
+    const fromHome = Math.hypot(p.x - p.wx, p.z - p.wz);
+    if (p.state === LION.prowl) {
+      const t = this.nearestVisible(p.x, p.z, spec.sight);
+      if (!t || p.stateFor <= 0 || fromHome > LION_LEASH) {
+        p.state = LION.home; // tired, bored, or too far from the square
+        p.stateFor = LION_HOME_GIVE_UP;
+      } else {
+        p.heading = turnToward(p.heading, Math.atan2(t.z - p.z, t.x - p.x), 4 * dt);
+        this.walk(p, spec.chaseSpeed, dt);
+        if (this.londonBite(p, fer)) {
+          p.state = LION.home; // one big lick, then it is ready for a nap
+          p.stateFor = LION_HOME_GIVE_UP;
+        }
+        return;
+      }
+    }
+    // Home: plod back to the foot of the plinth, then climb up.
+    if (fromHome < 0.35 || p.stateFor <= 0) {
+      p.x = p.wx;
+      p.z = p.wz;
+      p.state = LION.climb;
+      p.stateFor = LION_CLIMB_TIME;
+      p.speed = 0;
+      return;
+    }
+    p.heading = turnToward(p.heading, Math.atan2(p.wz - p.z, p.wx - p.x), (fromHome < 2 ? 10 : 4) * dt);
+    this.walk(p, Math.min(p.scaredFor > 0 ? spec.chaseSpeed * 1.2 : spec.roamSpeed, fromHome / dt), dt);
+  }
+
+  /** A Tower raven: perched → CAW! → swoop → back (the wolf, with wings: it flies over water and walls). */
+  private updateRaven(p: Predator, dt: number, fer: number): void {
+    const spec = PREDATORS.raven;
+    p.biteIn -= dt;
+    if (p.stateFor > 0) p.stateFor -= dt;
+    if (p.frozenFor > 0) {
+      p.frozenFor -= dt; // rooted in mid-air by a Freeze Puff
+      p.speed = 0;
+      return;
+    }
+    switch (p.state) {
+      case RAVEN.perched: {
+        p.speed = 0;
+        if (p.stateFor > 0) return;
+        const t = this.nearestVisible(p.hx, p.hz, spec.sight);
+        if (!t) return;
+        p.state = RAVEN.caw;
+        p.stateFor = RAVEN_CAW_TIME;
+        p.heading = Math.atan2(t.z - p.z, t.x - p.x);
+        this.events.push({ type: 'caw', x: p.x, z: p.z });
+        return;
+      }
+      case RAVEN.caw:
+        p.speed = 0;
+        if (p.stateFor <= 0) {
+          p.state = RAVEN.swoop;
+          p.stateFor = spec.chaseTime;
+        }
+        return;
+      case RAVEN.swoop: {
+        const t = this.nearestVisible(p.x, p.z, spec.sight * 1.5);
+        if (!t || p.stateFor <= 0 || Math.hypot(p.x - p.hx, p.z - p.hz) > RAVEN_LEASH) {
+          p.state = RAVEN.back;
+          return;
+        }
+        p.heading = turnToward(p.heading, Math.atan2(t.z - p.z, t.x - p.x), 5 * dt);
+        this.fly(p, spec.chaseSpeed * fer, dt);
+        if (this.londonBite(p, fer)) p.state = RAVEN.back; // a peck, and off home
+        return;
+      }
+      case RAVEN.back: {
+        const d = Math.hypot(p.hx - p.x, p.hz - p.z);
+        if (d <= spec.roamSpeed * dt + 0.05) {
+          p.x = p.hx;
+          p.z = p.hz;
+          p.speed = 0;
+          p.state = RAVEN.perched;
+          p.stateFor = spec.restTime / fer;
+          return;
+        }
+        const want = Math.atan2(p.hz - p.z, p.hx - p.x);
+        p.heading = d < 3 ? want : turnToward(p.heading, want, 6 * dt);
+        this.fly(p, spec.roamSpeed, dt);
+        return;
+      }
+    }
+  }
+
+  /** Fly a raven along its heading: over water, walls and all, but never off the map. */
+  private fly(p: Predator, speed: number, dt: number): void {
+    const B = this.stage.bounds;
+    const r = PREDATORS[p.kind].radius;
+    p.x = Math.min(B.maxX - r, Math.max(B.minX + r, p.x + Math.cos(p.heading) * speed * dt));
+    p.z = Math.min(B.maxZ - r, Math.max(B.minZ + r, p.z + Math.sin(p.heading) * speed * dt));
+    p.speed = speed;
+  }
+
+  // ---------------------------------------------------------------- traffic (London's buses and cabs)
+
+  /** Every snake as circles (head and body) for the traffic to see, then drive each vehicle a tick. */
+  private updateVehicles(dt: number): void {
+    let n = 0;
+    const add = (x: number, z: number, r: number) => {
+      const w = this.walkers[n] ?? (this.walkers[n] = { x: 0, z: 0, r: 0 });
+      w.x = x;
+      w.z = z;
+      w.r = r;
+      n++;
+    };
+    for (const s of this.snakes) {
+      if (!s.alive) continue;
+      add(s.x, s.z, s.radius);
+      for (let i = 0; i < s.bodyCount; i++) add(s.body[i * 2], s.body[i * 2 + 1], s.radius);
+    }
+    this.walkers.length = n;
+    for (const v of this.vehicles) {
+      driveVehicle(v, this.lanes[v.route], this.vehicles, this.walkers, dt, {
+        ding: (veh, honk) => this.events.push({ type: 'ding', kind: veh.kind, honk, x: veh.x, z: veh.z }),
+      });
+    }
+  }
+
+  /**
+   * A snake against a bus or cab: it slides off the side like a wall, and if the vehicle was
+   * rolling, it is bonked like a rock (a capped shrink and some pellets, then OUCH_GRACE).
+   */
+  private meetVehicles(s: Snake, dt: number): void {
+    for (const v of this.vehicles) {
+      const spec = VEHICLES[v.kind];
+      const hl = spec.length / 2 + s.radius;
+      const hw = spec.width / 2 + s.radius;
+      if (Math.abs(v.x - s.x) > hl + hw || Math.abs(v.z - s.z) > hl + hw) continue;
+      const at = local(v, s.x, s.z, this.loc);
+      if (Math.abs(at.f) >= hl || Math.abs(at.l) >= hw) continue;
+      // Out through the nearest face (front, back, left, right) that leaves it clear: a snake
+      // pinned against a wall is squeezed out past the end instead of back into the bus.
+      const c = Math.cos(v.heading);
+      const sn = Math.sin(v.heading);
+      const ways: [number, number, number][] = [
+        [hl - at.f, c, sn], [hl + at.f, -c, -sn], [hw - at.l, sn, -c], [hw + at.l, -sn, c],
+      ];
+      ways.sort((a, b) => a[0] - b[0]);
+      let nx = ways[0][1];
+      let nz = ways[0][2];
+      let bx = 0;
+      let bz = 0;
+      for (let k = 0; k < ways.length; k++) {
+        const [push, wx, wz] = ways[k];
+        resolveCircle(this.stage, s.x + wx * (push + 0.02), s.z + wz * (push + 0.02), s.radius, this.hit, this.snakeSolids);
+        if (k === 0) {
+          bx = this.hit.x;
+          bz = this.hit.z;
+        }
+        const out = local(v, this.hit.x, this.hit.z, this.loc2);
+        if (Math.abs(out.f) >= hl - 0.05 || Math.abs(out.l) >= hw - 0.05) {
+          bx = this.hit.x;
+          bz = this.hit.z;
+          nx = wx;
+          nz = wz;
+          break;
+        }
+      }
+      s.x = bx;
+      s.z = bz;
+      s.deflect(nx, nz, dt);
+      // Steer next tick as if against a wall, so asking to go the other way turns away from the bus.
+      s.leanOn(nx, nz);
+      if (v.speed < VEHICLE_BONK_SPEED || s.immune > 0) continue;
+      s.immune = OUCH_GRACE;
+      const full = s.mass < 1 ? 0 : Math.min(spec.bonkCap, Math.max(1, s.mass * spec.bonkShare));
+      const lost = full * (1 - s.rockGuard);
+      if (lost > 0) this.shed(s, lost, PELLET_RETURN, Math.min(PELLET_MAX, Math.max(1, Math.round(lost))));
+      this.events.push({ type: 'vbonk', kind: v.kind, who: s.id, x: s.x, z: s.z, lost });
+    }
+  }
+
+  /** Is the snake sliding through a puddle? Says SPLASH as it goes in. */
+  private puddle(s: Snake): boolean {
+    let wet = false;
+    for (const h of this.puddles) {
+      if ((s.x - h.x) ** 2 + (s.z - h.z) ** 2 < h.r * h.r) {
+        wet = true;
+        break;
+      }
+    }
+    if (wet && !this.inPuddle[s.id]) this.events.push({ type: 'splash', who: s.id, x: s.x, z: s.z });
+    this.inPuddle[s.id] = wet;
+    return wet;
   }
 
   // ---------------------------------------------------------------- the kids (the Common's crowd)
@@ -1212,7 +1586,7 @@ export class World {
     for (const f of this.foods) if (this.inBreath(s, f.x, f.z, range)) { worth = true; break; }
     if (!worth) for (const o of this.snakes) if (o !== s && o.alive && o.immune <= 0 && this.inBreath(s, o.x, o.z, range)) { worth = true; break; }
     if (!worth) for (const a of this.animals) if (s.tier >= ANIMALS[a.kind].tier && this.inBreath(s, a.x, a.z, range)) { worth = true; break; }
-    if (!worth) for (const p of this.predators) if (this.inBreath(s, p.x, p.z, range)) { worth = true; break; }
+    if (!worth) for (const p of this.predators) if (awake(p) && this.inBreath(s, p.x, p.z, range)) { worth = true; break; }
     if (!worth) {
       s.breathIn = BREATH_RECHECK;
       return;
@@ -1225,7 +1599,7 @@ export class World {
       if (s.tier >= ANIMALS[a.kind].tier && this.inBreath(s, a.x, a.z, range)) a.dazed = DAZE;
     }
     for (const p of this.predators) {
-      if (this.inBreath(s, p.x, p.z, range)) { p.scaredFor = Math.max(p.scaredFor, 2.5); p.chargeFor = 0; p.biteIn = Math.max(p.biteIn, 1); }
+      if (awake(p) && this.inBreath(s, p.x, p.z, range)) this.spook(p, false);
     }
     for (const o of this.snakes) {
       if (o === s || !o.alive || o.immune > 0 || !this.inBreath(s, o.x, o.z, range)) continue;
@@ -1334,6 +1708,8 @@ export class World {
       const z = this.rng.range(B.minZ, B.maxZ);
       // Later tries settle for less elbow room rather than giving up.
       if (!isFree(this.stage, x, z, 2.5, this.hazards) || !this.clearOfSnakes(x, z, tries < 40 ? SNAKE_CLEARANCE : 5)) continue;
+      // London: never pop out in the road (a bus could be parked right there).
+      if (this.stage.routes && this.stage.routes.some((r) => distanceToLoop(r.path, x, z) < 3)) continue;
       const turn = this.rng.range(0, Math.PI * 2);
       for (let k = 0; k < DROP_HEADINGS && fewest > 0; k++) {
         const heading = wrapAngle(turn + (k * Math.PI * 2) / DROP_HEADINGS);

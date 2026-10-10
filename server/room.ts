@@ -4,6 +4,7 @@ import { cleanName, NAME_MAX, randomName } from '../src/meta/names';
 import {
   animalKindIndex, animalRow, type ClientMessage, cooperRow, creatureKindIndex, creatureRow, eventIsFor, foodRow, hazardRow,
   kidKindIndex, kidRow, pelletRow, predatorKindIndex, predatorRow, projectileRow, type Seat, type ServerMessage, SNAPSHOT_EVERY,
+  vehicleKindIndex, vehicleRow,
   snakeRow, type Snapshot,
 } from '../src/net/protocol';
 import { type Mode, rulesFor } from '../src/sim/modes';
@@ -103,6 +104,7 @@ export class Room {
       predatorKinds: w.predators.map(predatorKindIndex), kidKinds: w.kids.map(kidKindIndex),
       creatureKinds: w.creatures.map(creatureKindIndex),
       foods: w.foods.map(foodRow), pellets: w.pellets.map(pelletRow),
+      ...(w.vehicles.length > 0 ? { vehicleKinds: w.vehicles.map(vehicleKindIndex) } : {}),
     });
     this.broadcast({ t: 'seats', seats: this.seats() });
     return true;
@@ -185,6 +187,7 @@ export class Room {
       t: 'snap' as const, k: w.tick, s: w.snakes.map(snakeRow), a: w.animals.map(animalRow),
       pd: w.predators.map(predatorRow), kd: w.kids.map(kidRow), cr: w.creatures.map(creatureRow),
       pj: w.projectiles.map(projectileRow),
+      ...(w.vehicles.length > 0 ? { vh: w.vehicles.map(vehicleRow) } : {}),
       f: foods, c: cooperRow(w.cooper), ...(pelletsChanged ? { p: pellets } : {}),
     };
     for (const p of this.players.values()) {

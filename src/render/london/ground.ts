@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
   BOROUGH, COVENT_GARDEN, HYDE_PARK, LANDMARKS, LONDON_BOUNDS, NELSON, PICCADILLY_FOUNTAIN, ROADS,
-  SERPENTINE, SOUTH_BANK, ST_JAMES, ST_JAMES_LAKE, THAMES, VICTORIA_MEMORIAL, type Road,
+  SERPENTINE, SOUTH_BANK, ST_JAMES, ST_JAMES_LAKE, THAMES, VICTORIA_MEMORIAL, ZEBRAS,
 } from '../../sim/londonLayout';
 import type { Box } from '../../sim/layout';
 import { Rng } from '../../sim/rng';
@@ -36,54 +36,8 @@ const SAND = '#efcf86';
 const LAKE = '#4fb6c2';
 const ROUTE_RED = '#d8342c';
 
-/** A zebra crossing: centre, the road's direction there (radians, in the x/z plane) and the road width. */
-export interface Zebra {
-  x: number;
-  z: number;
-  angle: number;
-  width: number;
-}
-
-/** Is (x, z) clear of the river and of every landmark (for paint and street furniture alike)? */
-export function clearOfSights(x: number, z: number, margin: number): boolean {
-  if (riverDistance(x, z) < THAMES.width / 2 + margin) return false;
-  for (const l of LANDMARKS) if (Math.hypot(x - l.at.x, z - l.at.z) < Math.min(l.radius, 9) + margin) return false;
-  return true;
-}
-
-/** Distance from (x, z) to the Thames' centre line. */
-export function riverDistance(x: number, z: number): number {
-  return distanceToPath(THAMES.path, x, z);
-}
-
-export function distanceToPath(path: readonly Spot[], x: number, z: number): number {
-  let best = Infinity;
-  for (let i = 0; i + 1 < path.length; i++) {
-    const a = path[i];
-    const b = path[i + 1];
-    const dx = b.x - a.x;
-    const dz = b.z - a.z;
-    const t = Math.min(1, Math.max(0, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz)));
-    best = Math.min(best, Math.hypot(x - a.x - dx * t, z - a.z - dz * t));
-  }
-  return best;
-}
-
-/** The zebra crossings: one at the middle of each longer street segment, where it is dry and open. */
-export const ZEBRAS: Zebra[] = ROADS.flatMap((r: Road) => {
-  const out: Zebra[] = [];
-  for (let i = 0; i + 1 < r.path.length; i++) {
-    const a = r.path[i];
-    const b = r.path[i + 1];
-    const len = Math.hypot(b.x - a.x, b.z - a.z);
-    if (len < 14) continue;
-    const x = (a.x + b.x) / 2;
-    const z = (a.z + b.z) / 2;
-    if (!clearOfSights(x, z, 3)) continue;
-    out.push({ x, z, angle: Math.atan2(b.z - a.z, b.x - a.x), width: r.width });
-  }
-  return out;
-});
+// The zebras and the path helpers live with the map data now (the buses stop for the zebras).
+export { clearOfSights, distanceToPath, riverDistance, ZEBRAS, type Zebra } from '../../sim/londonLayout';
 
 /** The sandy squares (Trafalgar's is drawn round Nelson and his lions). */
 const TRAFALGAR_SQ: Box = { x: NELSON.x, z: NELSON.z, w: 16, d: 11 };

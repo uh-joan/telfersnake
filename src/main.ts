@@ -13,6 +13,7 @@ import { CreatureView } from './render/creatureView';
 import { FoodView } from './render/foodView';
 import { KidView } from './render/kidView';
 import { PredatorView } from './render/predatorView';
+import { VehicleView } from './render/vehicleView';
 import { ProjectileView } from './render/projectileView';
 import { type School } from './render/school';
 import { makeStageScene } from './render/scenery';
@@ -25,6 +26,7 @@ import { Stage } from './render/stage';
 import { Weather } from './render/weather';
 import { UpgradeFx } from './render/upgradeFx';
 import type { AnimalKind } from './sim/animals';
+import type { PredatorKind } from './sim/predators';
 import { CREATURES } from './sim/creatures';
 import { asMode, godUnlocked, type Mode, rulesFor } from './sim/modes';
 import { asStage, type StageId } from './sim/stage';
@@ -72,6 +74,7 @@ let snakeViews: SnakeView[] = [];
 let foodView = new FoodView(world.foods.length);
 let animalView = new AnimalView(world.animals.length);
 let predatorView = new PredatorView(world.predators.length);
+let vehicleView = new VehicleView(world.vehicles.length);
 let kidView = new KidView(world.kids.length);
 let projectileView = new ProjectileView();
 let creatureView = new CreatureView(world.creatures.length);
@@ -144,7 +147,7 @@ function wearOutfit(): void {
 
 /** Point the renderer at a different world: its own rocks, food, animals and snakes. */
 function mountWorld(next: WorldView): void {
-  for (const old of [hazardView.group, foodView.group, animalView.group, predatorView.group, kidView.group, projectileView.group, creatureView.group]) {
+  for (const old of [hazardView.group, foodView.group, animalView.group, predatorView.group, vehicleView.group, kidView.group, projectileView.group, creatureView.group]) {
     stage.scene.remove(old);
     disposeTree(old);
   }
@@ -153,11 +156,14 @@ function mountWorld(next: WorldView): void {
   foodView = new FoodView(world.foods.length);
   animalView = new AnimalView(world.animals.length);
   predatorView = new PredatorView(world.predators.length);
+  vehicleView = new VehicleView(world.vehicles.length);
   kidView = new KidView(world.kids.length);
   projectileView = new ProjectileView();
   creatureView = new CreatureView(world.creatures.length);
-  stage.scene.add(hazardView.group, foodView.group, animalView.group, predatorView.group, kidView.group, projectileView.group, creatureView.group);
+  stage.scene.add(hazardView.group, foodView.group, animalView.group, predatorView.group, vehicleView.group, kidView.group, projectileView.group, creatureView.group);
   mountScenery(world.stage.id);
+  // London's lions and ravens swap places with the statues and the roosting birds in the scenery.
+  predatorView.bind(scenery?.group ?? null);
   mountWarden();
   hud.setStage(world.stage);
   mountSnakes();
@@ -495,6 +501,10 @@ function finishRun(end = 'finish'): void {
 /** What London's animals say, as a popup. */
 const CRY: Partial<Record<AnimalKind, string>> = { swan: '🦢 HONK!', corgi: 'YIP!', pigeon: 'FLAP!' };
 const FEATHERS = [0xffffff, 0xd9dde3, 0x9aa0aa];
+const FEATHERS_DARK = [0x22232c, 0x4c4d58, 0x8a8f98];
+const BRONZE_DUST = [0x9a7444, 0xd1aa70, 0xfff3b0];
+/** What a bite says, by who bit: a lion only licks you (and a bit of tail falls off). */
+const CHOMP: Record<PredatorKind, string> = { bear: '🐻 OUCH!', wolf: '🐺 OUCH!', lion: '🦁 OOPS!', raven: '🐦‍⬛ PECK!' };
 const TEA_STEAM = [0xffffff, 0xf3e3c3, 0xc98a45];
 
 /** Close enough to the local snake that a room-wide event is worth a popup and a sound. */
@@ -548,7 +558,9 @@ function handleEvents(): void {
           sparkles.burst(world.snake.x, world.snake.z, BUBBLES, 14, 0.9);
           hud.popup(e.lost > 0 ? '🫧 POP!' : '🫧 SAFE!', e.x, e.z, 'fun');
         } else {
-          hud.popup(e.lost > 0 ? 'OUCH!' : 'BONK!', e.x, e.z, 'bad');
+          // London's hazards say what they are: a dropped umbrella, the roadworks.
+          const icon = e.kind === 'umbrella' ? '☂️ ' : e.kind === 'roadworks' ? '🚧 ' : '';
+          hud.popup(`${icon}${e.lost > 0 ? 'OUCH!' : 'BONK!'}`, e.x, e.z, 'bad');
         }
         sfx?.ouch();
         break;
@@ -672,12 +684,53 @@ function handleEvents(): void {
         sfx?.growl();
         break;
       case 'chomp':
-        // A bear or wolf bit someone: dust cloud like a rock bonk.
-        sparkles.burst(e.x, e.z, DUST, e.kind === 'bear' ? 22 : 14, e.kind === 'bear' ? 1.2 : 0.9);
+        // A bear or wolf bit someone: dust cloud like a rock bonk. A lion only licks you; a raven pecks.
+        if (e.kind === 'raven') sparkles.burst(e.x, e.z, FEATHERS_DARK, 10, 0.8);
+        else sparkles.burst(e.x, e.z, DUST, e.kind === 'bear' || e.kind === 'lion' ? 22 : 14, e.kind === 'bear' || e.kind === 'lion' ? 1.2 : 0.9);
         if (e.who === world.me) {
-          hud.popup(e.kind === 'bear' ? '🐻 OUCH!' : '🐺 OUCH!', e.x, e.z, 'bad');
+          hud.popup(CHOMP[e.kind], e.x, e.z, 'bad');
           sfx?.ouch();
         }
+        break;
+      case 'roar':
+        // A Trafalgar lion wakes: a big stretch and a yawn (its warning).
+        sparkles.burst(e.x, e.z, BRONZE_DUST, 10, 0.8);
+        if (!nearMe(e.x, e.z)) break;
+        hud.popup('🦁 YAWN!', e.x, e.z, 'fun');
+        sfx?.yawn();
+        break;
+      case 'caw':
+        // A Tower raven is about to swoop.
+        sparkles.burst(e.x, e.z, FEATHERS_DARK, 8, 0.7);
+        if (!nearMe(e.x, e.z)) break;
+        hud.popup('CAW!', e.x, e.z, 'bad');
+        sfx?.caw();
+        break;
+      case 'ding':
+        // A bus or cab has spotted a snake in the road: DING DING! or a honk.
+        if (!nearMe(e.x, e.z)) break;
+        hud.popup(e.honk ? '📯 HONK!' : '🔔 DING DING!', e.x, e.z, 'fun');
+        if (e.honk) sfx?.honk(e.kind === 'cab');
+        else sfx?.dingDing();
+        break;
+      case 'vbonk':
+        // Slithered into a moving bus or cab: a rock-style bonk.
+        sparkles.burst(e.x, e.z, DUST, 16, 1);
+        if (e.who !== world.me) break;
+        if (world.snake.rockGuard > 0) {
+          sparkles.burst(world.snake.x, world.snake.z, BUBBLES, 14, 0.9);
+          hud.popup(e.lost > 0 ? '🫧 POP!' : '🫧 SAFE!', e.x, e.z, 'fun');
+        } else {
+          hud.popup(e.kind === 'bus' ? '🚌 Mind the bus!' : '🚕 Mind the cab!', e.x, e.z, 'bad');
+        }
+        sfx?.ouch();
+        sfx?.honk(e.kind === 'cab');
+        break;
+      case 'splash':
+        // A puddle: whee!
+        sparkles.burst(e.x, e.z, BUBBLES, 12, 0.9);
+        hud.popup('💦 WHEE!', e.x, e.z, 'fun');
+        sfx?.splash();
         break;
       case 'magic': {
         // A fantastic creature was gulped: a burst of its own colour, and the magic lands.
@@ -840,6 +893,7 @@ function frame(now: number): void {
   foodView.update(world, time);
   animalView.update(world, time);
   predatorView.update(world, playing ? dt : 0);
+  vehicleView.update(world, playing ? dt : 0, time);
   kidView.update(world, playing ? dt : 0);
   projectileView.update(world, time);
   creatureView.update(world, time);

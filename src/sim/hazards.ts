@@ -2,6 +2,7 @@ import { isFree } from './collide';
 import type { Circle } from './layout';
 import type { Rng } from './rng';
 import type { Stage } from './stage';
+import { distanceToLoop } from './vehicles';
 
 /**
  * Playground debris. Bumping one never ends the game: the snake bounces off, says "ouch"
@@ -11,10 +12,19 @@ import type { Stage } from './stage';
  */
 
 /** Every hazard kind, for the protocol index: new kinds are appended. Each stage picks from its own `hazardKinds`. */
-export const HAZARD_KINDS = ['rock', 'stones', 'sticks'] as const;
+export const HAZARD_KINDS = ['rock', 'stones', 'sticks', 'puddle', 'umbrella', 'roadworks'] as const;
 export type HazardKind = (typeof HAZARD_KINDS)[number];
 
-const RADIUS: Record<HazardKind, number> = { rock: 0.7, stones: 0.5, sticks: 0.55 };
+const RADIUS: Record<HazardKind, number> = { rock: 0.7, stones: 0.5, sticks: 0.55, puddle: 1.2, umbrella: 0.6, roadworks: 0.9 };
+
+/**
+ * London's puddle is not a thing to bump: it lies flat and you slide across it (a little zoom).
+ * Everything else is solid: the snake bounces off and says ouch.
+ */
+export const isSolidHazard = (h: { kind: HazardKind }): boolean => h.kind !== 'puddle';
+
+/** How far a hazard keeps from a bus or cab lane (half a bus, and room to slither past). */
+const ROUTE_CLEARANCE = 2.6;
 
 export interface Hazard extends Circle {
   kind: HazardKind;
@@ -51,6 +61,8 @@ export function placeHazard(h: Hazard, rng: Rng, stage: Stage, others: readonly 
     const edge = h.r + FENCE_GAP;
     if (x < B.minX + edge || x > B.maxX - edge || z < B.minZ + edge || z > B.maxZ - edge) continue;
     if (avoid(x, z)) continue;
+    // London: nothing dropped in the road, where a bus would plough straight through it.
+    if (stage.routes && stage.routes.some((r) => distanceToLoop(r.path, x, z) < h.r + ROUTE_CLEARANCE)) continue;
     h.x = x;
     h.z = z;
     h.turn = rng.range(0, Math.PI * 2);
