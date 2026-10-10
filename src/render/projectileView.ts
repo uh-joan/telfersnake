@@ -18,12 +18,18 @@ function heart(): Geo[] {
 const MODELS: Record<ProjectileKind, () => Geo[]> = {
   pebble: () => [paint(new THREE.IcosahedronGeometry(0.11, 0), 0x8a8f98, (g) => g.scale(1, 0.85, 1.1))],
   kiss: heart,
+  // A soggy chip (London's school trip): a fat, pale-gold stick, a little bent.
+  chip: () => [
+    paint(new THREE.BoxGeometry(0.07, 0.07, 0.15), 0xf2cf6b, (g) => g.rotateX(0.25).translate(0, 0.01, -0.06)),
+    paint(new THREE.BoxGeometry(0.07, 0.07, 0.14), 0xeac05a, (g) => g.rotateX(-0.25).translate(0, 0.01, 0.07)),
+  ],
 };
 
 /** How high each lobs, and its base launch height (roughly a child's hand). */
 const ARC: Record<ProjectileKind, [number, number]> = {
   pebble: [1.6, 0.6],
   kiss: [1.1, 0.7],
+  chip: [1.3, 0.6],
 };
 
 /** Pebbles and kisses in flight, one instanced mesh per kind. */
@@ -33,6 +39,7 @@ export class ProjectileView {
   private readonly m = new THREE.Matrix4();
   private readonly q = new THREE.Quaternion();
   private readonly up = new THREE.Vector3(0, 1, 0);
+  private readonly e = new THREE.Euler();
   private readonly pos = new THREE.Vector3();
   private readonly scale = new THREE.Vector3();
 
@@ -54,6 +61,7 @@ export class ProjectileView {
       const y = base + Math.sin(t * Math.PI) * arc;
       // A pebble tumbles; a kiss bobs and always faces up.
       if (pj.kind === 'pebble') this.q.setFromAxisAngle(this.up, time * 8 + pj.x);
+      else if (pj.kind === 'chip') this.q.setFromEuler(this.e.set(time * 9 + pj.x, time * 5, 0)); // a floppy tumble
       else this.q.setFromEuler(new THREE.Euler(-0.6, 0, Math.sin(time * 6) * 0.2));
       const s = pj.kind === 'kiss' ? 1 + Math.sin(time * 8) * 0.1 : 1;
       this.pos.set(pj.x, y, pj.z);

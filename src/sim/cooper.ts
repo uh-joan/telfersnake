@@ -14,6 +14,9 @@ const RUN_SPEED = 3.4;
 const TURN_RATE = 5;
 const NEAR = 10;
 const SEEK_SNAKE_CHANCE = 0.35;
+/** The Bobby's whistle: a dashing snake inside this many metres gets a PHWEEE!, at most this often. */
+const WHISTLE_REACH = 9;
+const WHISTLE_EVERY = 4;
 
 const LINES_GENERAL = [
   'No running, please!',
@@ -101,6 +104,7 @@ export class Cooper {
   private checkIn = 1;
   private checkX = 0;
   private checkZ = 0;
+  private whistleIn = 0;
 
   /** `config` is the stage's warden (spawn, beat, optional lines/persona), or null if it has none. */
   constructor(config: WardenConfig | null) {
@@ -126,6 +130,8 @@ export class Cooper {
       this.run(w, dt);
     }
 
+    if (this.persona === 'bobby') this.whistle(w, dt);
+
     this.sayIn -= dt;
     if (this.sayIn <= 0) {
       this.sayIn = w.rng.range(3.5, 6.5);
@@ -143,6 +149,19 @@ export class Cooper {
     this.sayIn = w.rng.range(3.5, 6.5);
     this.say(w, w.rng.pick(this.lines.bump));
     return true;
+  }
+
+  /** London's Bobby blows his whistle at a speeding (dashing) snake nearby: PHWEEE! No RNG drawn. */
+  private whistle(w: World, dt: number): void {
+    this.whistleIn = Math.max(0, this.whistleIn - dt);
+    if (this.whistleIn > 0) return;
+    for (const s of w.snakes) {
+      if (!s.alive || !s.dashing || Math.hypot(s.x - this.x, s.z - this.z) > WHISTLE_REACH) continue;
+      this.whistleIn = WHISTLE_EVERY;
+      this.talking = Math.max(this.talking, 1.2); // a hand up: stop!
+      w.events.push({ type: 'whistle', who: s.id, x: this.x, z: this.z });
+      return;
+    }
   }
 
   private say(w: World, text: string): void {

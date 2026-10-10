@@ -22,6 +22,7 @@ import { SnakeView } from './render/snakeView';
 import { disposeTree } from './render/paint';
 import { Sparkles } from './render/sparkles';
 import { TrailView } from './render/trailView';
+import { LondonPeople } from './render/london/people';
 import { Stage } from './render/stage';
 import { Weather } from './render/weather';
 import { UpgradeFx } from './render/upgradeFx';
@@ -35,7 +36,7 @@ import { mountVersionSwitch } from './ui/versionSwitch';
 import { MEGA_TIER, TIERS } from './sim/snake';
 import { POWER_GEM_COST, POWER_IDS, UPGRADES } from './sim/upgrades';
 import type { WorldView } from './sim/view';
-import { STEP, World } from './sim/world';
+import { BUSK_REACH, STEP, World } from './sim/world';
 import { CardPicker } from './ui/cards';
 import { Hud } from './ui/hud';
 import { Shop } from './ui/shop';
@@ -97,6 +98,17 @@ function mountWarden(): void {
   cooperView = new CooperView(persona);
   cooperView.group.visible = world.stage.cooper !== null;
   stage.scene.add(cooperView.group);
+}
+/** London's people who stand still (the guard, the tour guide, the Beefeater, the statue, the balcony). */
+let people: LondonPeople | null = null;
+function mountPeople(): void {
+  const want = world.stage.id === 'london';
+  if (want && !people) people = new LondonPeople();
+  if (people) {
+    people.reset(); // nothing carried over from the last world (who he was looking at)
+    if (want) stage.scene.add(people.group);
+    else stage.scene.remove(people.group);
+  }
 }
 const sceneryCache = new Map<StageId, School>();
 let scenery: School | null = null;
@@ -165,6 +177,7 @@ function mountWorld(next: WorldView): void {
   // London's lions and ravens swap places with the statues and the roosting birds in the scenery.
   predatorView.bind(scenery?.group ?? null);
   mountWarden();
+  mountPeople();
   hud.setStage(world.stage);
   mountSnakes();
 }
@@ -508,10 +521,13 @@ const CHOMP: Record<PredatorKind, string> = { bear: '🐻 OUCH!', wolf: '🐺 OU
 const TEA_STEAM = [0xffffff, 0xf3e3c3, 0xc98a45];
 
 /** Close enough to the local snake that a room-wide event is worth a popup and a sound. */
-function nearMe(x: number, z: number): boolean {
+function nearMe(x: number, z: number, reach = 14): boolean {
   const s = world.snake;
-  return (s.x - x) ** 2 + (s.z - z) ** 2 < 14 * 14;
+  return (s.x - x) ** 2 + (s.z - z) ** 2 < reach * reach;
 }
+const CRUMBS = [0xf2cf6b, 0xeac05a, 0xfff3b0];
+const FLASH = [0xffffff, 0xfff3b0, 0xe7f5ff];
+const SILVER_DUST = [0xc9ced6, 0xffffff, 0x9aa1aa];
 
 /** Rivals get the confetti but not the sounds, popups or banners: those are about you. */
 function handleEvents(): void {
@@ -651,17 +667,18 @@ function handleEvents(): void {
         if (mine) {
           sfx?.bump();
           if (e.what === 'kid') hud.popup('oops!', world.snake.x, world.snake.z, 'fun');
+          if (e.what === 'guard') hud.popup('💂 Ahem!', world.snake.x, world.snake.z, 'fun'); // he does not move
         }
         break;
       case 'lob':
         // A child let fly: a little puff where it left their hand.
-        sparkles.burst(e.x, e.z, e.kind === 'kiss' ? KISSES : DUST, 5, 0.5);
+        sparkles.burst(e.x, e.z, e.kind === 'kiss' ? KISSES : e.kind === 'chip' ? CRUMBS : DUST, 5, 0.5);
         break;
       case 'pelt':
         // A pebble caught a snake: a small shrink, mischief not malice.
-        sparkles.burst(e.x, e.z, DUST, 8, 0.6);
+        sparkles.burst(e.x, e.z, e.chip ? CRUMBS : DUST, 8, 0.6);
         if (e.who === world.me) {
-          hud.popup(e.lost > 0 ? 'oops! a pebble' : 'missed!', e.x, e.z, 'bad');
+          hud.popup(e.lost > 0 ? (e.chip ? '🍟 soggy chip!' : 'oops! a pebble') : 'missed!', e.x, e.z, 'bad');
           sfx?.ouch();
         }
         break;
@@ -771,7 +788,45 @@ function handleEvents(): void {
         break;
       case 'say':
         // A grown-up says something, in a speech bubble over their head (Cooper, the keeper, Miss Sami…).
+        // London is big and busy with talkers: only the ones near enough to hear.
+        if (world.stage.chatters && !nearMe(e.x, e.z, 24)) break;
         hud.say(e.text, e.x, e.z);
+        break;
+      case 'whistle':
+        // The Bobby blows his whistle at a speeding snake.
+        if (!nearMe(e.x, e.z, 18)) break;
+        hud.popup('👮 PHWEEE!', e.x, e.z, e.who === world.me ? 'bad' : 'fun');
+        sfx?.whistle();
+        break;
+      case 'guardSmile':
+        // Three laps round the Royal Guard: everyone sees the tiniest smile.
+        people?.smile(world.snakes[e.who]);
+        sparkles.burst(e.x, e.z, GOLD, 14, 1);
+        break;
+      case 'guard':
+        // ...and a gem from his bearskin, for the one who did the laps.
+        if (!mine) break;
+        earnGem();
+        hud.popup('🙂 💎', world.snake.x, world.snake.z, 'fun'); // at you, so his face stays in view
+        sfx?.golden();
+        sfx?.chaChing();
+        break;
+      case 'photo':
+        // A tourist took your picture: CLICK! A flash round the edges of your screen, and a sticker.
+        sparkles.burst(e.x, e.z, FLASH, 6, 0.5);
+        if (!mine) break;
+        hud.flash();
+        hud.popup('CLICK!', e.x, e.z, 'fun');
+        hud.popup('📸', world.snake.x, world.snake.z, 'fun');
+        sfx?.click();
+        break;
+      case 'boo':
+        // The living statue moves! Then freezes again.
+        people?.boo();
+        sparkles.burst(e.x, e.z, SILVER_DUST, 10, 0.8);
+        if (!nearMe(e.x, e.z)) break;
+        hud.popup('BOO!', e.x, e.z, 'fun');
+        sfx?.boo();
         break;
     }
   }
@@ -788,10 +843,12 @@ let bankIn = BANK_EVERY;
 let trailIn = 0;
 let perkFxIn = 0;
 let wasDashing = false;
+let buskIn = 0;
 const tail = { x: 0, z: 0 };
 
 function frame(now: number): void {
-  const dt = Math.min(MAX_FRAME, (now - last) / 1000);
+  // Never negative: the first frame's timestamp can predate `last` (and a negative clock breaks London's screens).
+  const dt = Math.max(0, Math.min(MAX_FRAME, (now - last) / 1000));
   last = now;
   time += dt;
 
@@ -842,6 +899,14 @@ function frame(now: number): void {
       }
     }
     wasDashing = s.dashing;
+    // London's buskers: a little tune while you dance near one (the speed boost is the sim's).
+    if (world.stage.buskerSpots && s.alive) {
+      const dancing = world.stage.buskerSpots.some((b) => Math.hypot(s.x - b.x, s.z - b.z) < BUSK_REACH);
+      if (dancing && (buskIn -= dt) <= 0) {
+        buskIn = 2.4;
+        sfx?.busk();
+      } else if (!dancing) buskIn = 0;
+    }
 
     if ((bankIn -= dt) <= 0) {
       bankIn = BANK_EVERY;
@@ -905,6 +970,7 @@ function frame(now: number): void {
   upgradeFx.update(world, playing ? dt : 0, time);
   scenery?.reveal(s.x, s.z, dt);
   cooperView.update(world.cooper, playing ? dt : 0, time);
+  if (people && world.stage.id === 'london') people.update(world, playing ? dt : 0);
   stage.follow(s.x, s.z, s.heading, s.radius, dt);
   weather.update(dt, s.x, s.z);
   hud.update(world, stage, dt);

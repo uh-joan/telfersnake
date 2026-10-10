@@ -122,6 +122,19 @@ export class Hud {
     this.toastEl.classList.add('show');
   }
 
+  /** A camera flash on the screen's edges (London's tourists): white, gone in a blink. */
+  flash(): void {
+    if (!this.flashEl) {
+      this.flashEl = document.createElement('div');
+      this.flashEl.className = 'camera-flash';
+      document.body.appendChild(this.flashEl);
+    }
+    this.flashEl.classList.remove('show');
+    void this.flashEl.offsetWidth; // restart the CSS animation
+    this.flashEl.classList.add('show');
+  }
+  private flashEl: HTMLDivElement | null = null;
+
   announce(title: string, sub = ''): void {
     this.bannerTitle.textContent = title;
     this.bannerSub.textContent = sub;

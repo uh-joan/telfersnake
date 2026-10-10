@@ -21,7 +21,11 @@
  * they check the lions always get home (none away > 30 s, never a jump), the ravens and lions wake and
  * bite, the traffic stays on its lanes, never rolls onto a busy zebra it had room to stop for, never
  * holds a snake inside it, and sweeps clear of every solid and the river; bites and bonks stay capped and
- * outside the victim's grace; and script a snake on a zebra, a lion visit and a Freeze on a lion. `--baseline` records what
+ * outside the victim's grace; and script a snake on a zebra, a lion visit and a Freeze on a lion. With London's people
+ * they check the guard never moves and never pays inside his rest, the school trip never splits or leaves its path
+ * (or comes near a bus lane), the tourists, statue, whistle and chips all happen; and script 25 laps round the
+ * guard (paid twice: 3 laps, then after the rest), a lap undone by doubling back, a bump (Ahem, no shrink), a
+ * busker's dance (faster only in range) and the statue's BOO (once per rest). `--baseline` records what
  * `main` already does (the school's bots do sometimes nose a wall for a few seconds), so a later
  * run fails only when a count gets worse; a stage with no record must be spotless.
  *
@@ -45,7 +49,8 @@ import {
   ahead, blankVehicle, distanceToLoop, local, makeLane, placeVehicle, VEHICLES, type VehicleKind, type Walker, ZEBRA_HALF, zebraGap,
 } from '../src/sim/vehicles';
 import { flowAt, inWater, onBridge } from '../src/sim/water';
-import { STEP, World } from '../src/sim/world';
+import { BUSK_REACH, GUARD_COOL, STEP, World } from '../src/sim/world';
+import { TRIP_GAP } from '../src/sim/kids';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASELINES = join(HERE, 'baselines.json');
@@ -708,6 +713,181 @@ function londonDangerScripted(stage: Stage): { zebra: string; lion: string; ston
   return { zebra, lion: lionResult, stone };
 }
 
+// ---------------------------------------------------------------- London: the people (A4)
+
+interface People {
+  guards: number;
+  /** A guard payout to the same snake inside GUARD_COOL of its last one. */
+  guardTooSoon: number;
+  /** Ticks the guard's spot and his solid did not agree (he must never move). */
+  guardMoved: number;
+  /** Ticks the trip's line was longer than its rope between two neighbours, or off its path. */
+  tripSplit: number;
+  tripOff: number;
+  /** Ticks a trip child was near enough a bus lane to be clipped. */
+  tripRoad: number;
+  tripLongest: number;
+  photos: number;
+  boos: number;
+  whistles: number;
+  chipsThrown: number;
+  chipHits: number;
+  says: number;
+}
+
+const newPeople = (): People => ({
+  guards: 0, guardTooSoon: 0, guardMoved: 0, tripSplit: 0, tripOff: 0, tripRoad: 0, tripLongest: 0, photos: 0, boos: 0, whistles: 0, chipsThrown: 0, chipHits: 0, says: 0,
+});
+
+/** Distance from (x, z) to a closed polyline. */
+function toLoop(path: readonly { x: number; z: number }[], x: number, z: number): number {
+  let best = Infinity;
+  for (let i = 0; i < path.length; i++) {
+    const a = path[i];
+    const b = path[(i + 1) % path.length];
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const t = Math.min(1, Math.max(0, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz)));
+    best = Math.min(best, Math.hypot(x - a.x - dx * t, z - a.z - dz * t));
+  }
+  return best;
+}
+
+function peopleAfter(w: World, p: People, paid: Map<number, number>, tick: number, note: (m: string) => void, where: string): void {
+  const stage = w.stage;
+  for (const e of w.events) {
+    if (e.type === 'guard') {
+      p.guards++;
+      const last = paid.get(e.who);
+      if (last !== undefined && tick - last < GUARD_COOL * 60 - 1) {
+        p.guardTooSoon++;
+        note(`${where}: the guard paid snake ${e.who} again after ${tick - last} ticks`);
+      }
+      paid.set(e.who, tick);
+    } else if (e.type === 'photo') p.photos++;
+    else if (e.type === 'boo') p.boos++;
+    else if (e.type === 'whistle') p.whistles++;
+    else if (e.type === 'lob' && e.kind === 'chip') p.chipsThrown++;
+    else if (e.type === 'pelt' && e.chip) p.chipHits++;
+    else if (e.type === 'say') p.says++;
+  }
+  const g = stage.guard;
+  if (g && !stage.solidCircles.some((c) => c.x === g.x && c.z === g.z)) p.guardMoved++;
+  const trip = w.kids.filter((k) => k.kind === 'trip');
+  const path = stage.tripPath ?? [];
+  for (let i = 0; i < trip.length; i++) {
+    const k = trip[i];
+    if (toLoop(path, k.x, k.z) > 0.01) {
+      p.tripOff++;
+      note(`${where}: trip child ${i} off its path at (${k.x.toFixed(2)}, ${k.z.toFixed(2)})`);
+    }
+    if (stage.routes?.some((r) => distanceToLoop(r.path, k.x, k.z) < VEHICLES.bus.width / 2 + 0.34 + 1)) p.tripRoad++;
+    if (i === 0) continue;
+    const gap = Math.hypot(k.x - trip[i - 1].x, k.z - trip[i - 1].z);
+    p.tripLongest = Math.max(p.tripLongest, gap);
+    if (gap > TRIP_GAP + 1e-6 || gap < TRIP_GAP * 0.5) {
+      p.tripSplit++;
+      note(`${where}: trip children ${i - 1}-${i} ${gap.toFixed(3)} m apart`);
+    }
+  }
+}
+
+/**
+ * Scripted London people: three laps round the guard (once, then not again until his rest is
+ * over), a lap undone by doubling back, a bump into him (Ahem, no shrink), a busker's dance (only in
+ * range) and the living statue's BOO (once per rest).
+ */
+function londonPeopleScripted(stage: Stage): { laps: string; reverse: number; bump: string; dance: string; boo: number } {
+  const g = stage.guard!;
+  const R = 2.6;
+  const circle = (w: World, from: number, to: number, ticks: number, onTick: (t: number) => void) => {
+    const me = w.snake;
+    for (let t = 0; t < ticks; t++) {
+      if (w.cards) w.choose(0);
+      const a = from + ((to - from) * t) / ticks;
+      me.placeAt(g.x + Math.cos(a) * R, g.z + Math.sin(a) * R, a + Math.PI / 2);
+      me.immune = 10;
+      w.step({ x: 0, z: 0, active: false, dash: false });
+      onTick(w.tick);
+    }
+  };
+  const lapTicks = 4 * 60;
+
+  // ---- 25 laps in 100 s: paid at 3 laps, then nothing until the rest is over, then once more.
+  const w = new World(9, undefined, rulesFor('normal'), stage);
+  const paidAt: number[] = [];
+  circle(w, 0, 25 * Math.PI * 2, 25 * lapTicks, () => {
+    for (const e of w.events) if (e.type === 'guard' && e.who === w.me) paidAt.push(w.tick);
+    w.events.length = 0;
+  });
+  const laps = paidAt.map((t) => `${(t / lapTicks).toFixed(1)}`).join(', ');
+
+  // ---- 2.5 laps, back one, on two: never three in a row, so never paid.
+  const r = new World(10, undefined, rulesFor('normal'), stage);
+  let reverse = 0;
+  const count = () => {
+    for (const e of r.events) if (e.type === 'guard' && e.who === r.me) reverse++;
+    r.events.length = 0;
+  };
+  circle(r, 0, 5 * Math.PI, 2.5 * lapTicks, count);
+  circle(r, 5 * Math.PI, 3 * Math.PI, lapTicks, count);
+  circle(r, 3 * Math.PI, 7 * Math.PI, 2 * lapTicks, count);
+
+  // ---- a bump: slither straight at him for a second.
+  const b = new World(11, undefined, rulesFor('normal'), stage);
+  const me = b.snake;
+  me.placeAt(g.x, g.z + 2, -Math.PI / 2);
+  let ahem = 0;
+  let ouch = 0;
+  let inside = 0;
+  for (let t = 0; t < 90; t++) {
+    if (b.cards) b.choose(0);
+    me.immune = 0;
+    b.step({ x: 0, z: -1, active: true, dash: false });
+    for (const e of b.events) {
+      if (e.type === 'bump' && e.who === b.me && e.what === 'guard') ahem++;
+      if ((e.type === 'ouch' || e.type === 'vbonk' || e.type === 'chomp' || e.type === 'pelt') && e.who === b.me) ouch++;
+    }
+    b.events.length = 0;
+    if (Math.hypot(me.x - g.x, me.z - g.z) < 0.75 + me.radius - 0.05) inside++;
+  }
+  const bump = ahem > 0 && ouch === 0 && inside === 0 ? 'Ahem, no shrink' : `ahem ${ahem}, ouch ${ouch}, inside ${inside}`;
+
+  // ---- a busker's dance: faster in range, back to normal just outside it.
+  const d = new World(12, undefined, rulesFor('normal'), stage);
+  const busker = d.kids.find((k) => k.kind === 'busker')!;
+  const hold = (dx: number, secs: number): number => {
+    for (let t = 0; t < secs * 60; t++) {
+      if (d.cards) d.choose(0);
+      d.cooper.x = -80; // the Bobby's slow-down is not what this measures
+      d.cooper.z = 60;
+      d.snake.placeAt(busker.x + dx, busker.z - 1, 0);
+      d.snake.teaFor = 0;
+      d.snake.immune = 10;
+      d.step({ x: 0, z: 0, active: false, dash: false });
+      d.events.length = 0;
+    }
+    return d.snake.speedFactor;
+  };
+  const inRange = hold(2, 2);
+  const outside = hold(-(BUSK_REACH + 1.5), 3); // west, away from the other busker
+  const dance = inRange > 1.15 && Math.abs(outside - 1) < 0.01 ? 'in range only' : `in ${inRange.toFixed(3)}, out ${outside.toFixed(3)}`;
+
+  // ---- the statue: stand by it for 8 s: BOO at once, and again only after its rest.
+  const st = new World(13, undefined, rulesFor('normal'), stage);
+  const at = stage.statue!;
+  let boo = 0;
+  for (let t = 0; t < 8 * 60; t++) {
+    if (st.cards) st.choose(0);
+    st.snake.placeAt(at.x, at.z + 2.2, 0);
+    st.snake.immune = 10;
+    st.step({ x: 0, z: 0, active: false, dash: false });
+    for (const e of st.events) if (e.type === 'boo') boo++;
+    st.events.length = 0;
+  }
+  return { laps, reverse, bump, dance, boo };
+}
+
 function invariants(id: StageId, seeds: number, baseline: boolean): number {
   const stage = stageFor(id);
   const ticks = 200 * 60;
@@ -722,6 +902,8 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
   const zoo: Zoo | null = stage.animals.includes('swan') ? { swanGulps: 0, steals: 0, stealsOut: 0, cries: 0, teatimes: 0, teas: 0 } : null;
   // London's dangers: lions, ravens and the traffic.
   const danger: Danger | null = stage.predators.some((p) => p.kind === 'lion' || p.kind === 'raven') || stage.traffic ? newDanger() : null;
+  // London's people: the guard, the trip, the tourists, the statue.
+  const people: People | null = stage.guard ? newPeople() : null;
   const notes: string[] = [];
   const note = (msg: string) => {
     if (notes.length < 12) notes.push(msg);
@@ -738,11 +920,14 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
       const anchor = w.snakes.map((s) => ({ x: s.x, z: s.z, tick: 0, counted: false }));
       t.runs++;
       const dangerRun = danger ? newDangerRun(w) : null;
+      const kids = w.kids.length;
+      const paid = new Map<number, number>();
       for (let tick = 0; tick < ticks; tick++) {
         if (dangerRun) dangerBefore(w, dangerRun);
         stepSolo(w, thumb);
         if (zoo) tallyZoo(w, zoo, outside, note, `${id}/${mode}/seed ${seed}/t ${tick}`);
         if (danger && dangerRun) dangerAfter(w, danger, dangerRun, tick, note, `${id}/${mode}/seed ${seed}/t ${tick}`);
+        if (people) peopleAfter(w, people, paid, tick, note, `${id}/${mode}/seed ${seed}/t ${tick}`);
         w.events.length = 0;
         t.ticks++;
         const where = `${id}/${mode}/seed ${seed}/t ${tick}`;
@@ -805,7 +990,7 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
         }
         for (const h of w.hazards) t.seen.add('hazard:' + h.kind);
         if (w.cooper.active) check('warden', w.cooper.x, w.cooper.z, []);
-        if (w.animals.length !== animals || w.foods.length !== foods || w.pellets.length > 150 || w.projectiles.length > 24) {
+        if (w.animals.length !== animals || w.foods.length !== foods || w.kids.length !== kids || w.pellets.length > 150 || w.projectiles.length > 24) {
           t.tooMany++;
           note(`${where}: entity counts off (animals ${w.animals.length}, food ${w.foods.length}, pellets ${w.pellets.length})`);
         }
@@ -906,6 +1091,28 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
     row('snake on a zebra', scripted.zebra, scripted.zebra === 'waited, then went');
     row('lion visit', scripted.lion, scripted.lion.startsWith('home in') && parseFloat(scripted.lion.slice(8)) <= 30);
     row('Freeze on a lion', scripted.stone, scripted.stone === 'stone, still');
+  }
+  if (people) {
+    const info = (label: string, n: number | string) => console.log(`  ${label.padEnd(22)} ${String(n).padStart(8)}`);
+    info('guard smiles (thumb)', people.guards);
+    row('guard paid too soon', people.guardTooSoon, people.guardTooSoon === 0);
+    row('guard moved', people.guardMoved, people.guardMoved === 0);
+    row('trip split (ticks)', people.tripSplit, people.tripSplit === 0);
+    info('trip widest gap', `${people.tripLongest.toFixed(3)}m`);
+    row('trip off its path', people.tripOff, people.tripOff === 0);
+    row('trip by a bus lane', people.tripRoad, people.tripRoad === 0);
+    row('tourist photos', people.photos, people.photos > 0);
+    row('statue BOOs', people.boos, people.boos > 0);
+    row('Bobby whistles', people.whistles, people.whistles > 0);
+    row('soggy chips thrown', people.chipsThrown, people.chipsThrown > 0);
+    info('soggy chips landed', people.chipHits);
+    row('chatter lines', people.says, people.says > 0);
+    const scripted = londonPeopleScripted(stage);
+    row('guard laps paid at', scripted.laps, scripted.laps.split(', ').length === 2 && parseFloat(scripted.laps) <= 3.2);
+    row('guard, doubled back', scripted.reverse, scripted.reverse === 0);
+    row('bump the guard', scripted.bump, scripted.bump === 'Ahem, no shrink');
+    row('busker dance', scripted.dance, scripted.dance === 'in range only');
+    row('statue BOOs in 8 s', scripted.boo, scripted.boo === 2);
   }
   console.log(`  ${'longest stall'.padEnd(22)} ${(longest / 60).toFixed(1).padStart(7)}s`);
   row('kinds seen', `${want.size - missing.length}/${want.size}`, missing.length === 0);

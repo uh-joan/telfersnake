@@ -145,6 +145,13 @@ export interface Stage extends Terrain {
   plinths?: readonly Spot[];
   /** Where the Royal Guard stands (and never moves). */
   guard?: Spot;
+  /** London's people: where each tourist hangs about (in `kids` order), where the buskers play. */
+  touristSpots?: readonly Spot[];
+  buskerSpots?: readonly Spot[];
+  /** The school trip's walk: a closed loop on open ground, clear of the traffic. */
+  tripPath?: readonly Spot[];
+  /** The living statue's spot in Covent Garden. */
+  statue?: Spot;
   /** The classic follow camera's distance multiplier (London sits a little closer). Unset: 1. */
   cameraZoom?: number;
   /** Paint the fixed features onto the minimap. X/Z map metres to canvas pixels. */
