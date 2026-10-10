@@ -50,6 +50,8 @@ const HONK_AFTER = 2.5;
  * after this long the vehicle inches forward at CREEP, nudging it aside. Slower than a bonk.
  */
 const CREEP_AFTER = 2;
+/** How far ahead a vehicle watches for Tower Bridge's stop line while the bridge is shut. */
+const SPAN_WATCH = 30;
 export const CREEP = 0.25;
 
 export interface Vehicle {
@@ -292,10 +294,21 @@ export interface TrafficEvents {
  * One tick for one vehicle: pick a target speed from what is ahead (a stop, the vehicle in front,
  * a snake in the lane, a busy zebra), then roll forward, never further than the nearest obstacle.
  */
-export function driveVehicle(v: Vehicle, lane: Lane, others: readonly Vehicle[], walkers: readonly Walker[], dt: number, events: TrafficEvents): void {
+export function driveVehicle(
+  v: Vehicle, lane: Lane, others: readonly Vehicle[], walkers: readonly Walker[], dt: number, events: TrafficEvents, stops?: readonly number[],
+): void {
   const spec = VEHICLES[v.kind];
   v.dingIn -= dt;
   let gap = Infinity;
+
+  // London's Tower Bridge, shut for a lift: pull up short of the span (a vehicle already past the line rolls on).
+  if (stops) {
+    const front = v.s + spec.length / 2;
+    for (const line of stops) {
+      const d = ahead(lane, front, line);
+      if (d < SPAN_WATCH) gap = Math.min(gap, d);
+    }
+  }
 
   // A stop: pull up exactly at it, wait, then set off for the next one.
   if (spec.dwell > 0 && lane.stops.length > 0) {

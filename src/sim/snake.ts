@@ -33,6 +33,17 @@ export type MagicId = (typeof MAGIC_IDS)[number];
 const WINGS = MAGIC_IDS.indexOf('wings');
 const RIVER = MAGIC_IDS.indexOf('river');
 
+/** What can carry a snake about London (A6): the London Eye, the river bus. Index + 1 is its code on the wire. */
+export const CARRIERS = ['eye', 'boat'] as const;
+export type CarrierKind = (typeof CARRIERS)[number];
+
+/** A snake on a ride: who carries it, and till when (the Eye: a tick; the boat: the pier it gets off at). */
+export interface Carried {
+  by: CarrierKind;
+  until: number;
+  pier: number;
+}
+
 /** `gulps` is what a snake of that size can newly swallow, as pictures: the players are too young to read. */
 export const TIERS = [
   { name: 'Wiggly Worm', mass: 0, gulps: '🐌🐞' },
@@ -158,6 +169,12 @@ export class Snake {
   /** London's Crown Jewels picked up this run, and the crown for all five (kept for the rest of the run). */
   jewels = 0;
   crowned = false;
+  /** London's set pieces (A6): on the Eye or the river bus (moved by the ride, not the thumb; untouchable). */
+  carried: Carried | null = null;
+  /** London: seconds left of the WHEE! down Tower Bridge's ramp (a burst of speed). */
+  launchFor = 0;
+  /** London: flown over by the Red Arrows: a red, white and blue trail for the rest of the run. */
+  rwb = false;
   /** Seconds a spent helmet takes to come back. 0 = no helmet owned. */
   helmetRecharge = 0;
   helmetReady = false;
@@ -201,6 +218,9 @@ export class Snake {
     this.teaFor = this.teaStep = this.teaFrom = this.teaCool = 0;
     this.jewels = 0;
     this.crowned = false;
+    this.carried = null;
+    this.launchFor = 0;
+    this.rwb = false;
     for (let i = 0; i < this.magic.length; i++) this.magic[i] = 0;
     this.luckyCards = 0;
     refreshStats(this);

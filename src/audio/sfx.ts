@@ -414,6 +414,103 @@ export class Sfx {
     for (const [f, g] of [[165, 0.24], [330, 0.08], [494, 0.05], [660, 0.03]]) this.tone(f, 2.6, { type: 'sine', gain: g, delay: 1.75 });
   }
 
+  // ---------------------------------------------------------------- London's set pieces (A6)
+
+  /** One soft bell note: a sine with a couple of quiet overtones, ringing on. */
+  private bellNote(f: number, delay: number, length: number, gain = 0.1): void {
+    this.tone(f, length, { type: 'sine', gain, delay });
+    this.tone(f * 2.01, length * 0.6, { type: 'sine', gain: gain * 0.3, delay });
+    this.tone(f * 3.02, length * 0.3, { type: 'triangle', gain: gain * 0.12, delay });
+  }
+
+  /** The Westminster Quarters (the old public-domain chime): four phrases on soft bells, about 7 s. */
+  quarters(): void {
+    const E4 = 329.63;
+    const FS4 = 369.99;
+    const GS4 = 415.3;
+    const B3 = 246.94;
+    const phrases = [[E4, GS4, FS4, B3], [E4, FS4, GS4, E4], [GS4, E4, FS4, B3], [B3, FS4, GS4, E4]];
+    let t = 0;
+    for (const notes of phrases) {
+      notes.forEach((f, i) => {
+        this.bellNote(f, t, 1.8);
+        t += i === 3 ? 0.8 : 0.42;
+      });
+      t += 0.22;
+    }
+  }
+
+  /** BONG: Big Ben's great hour bell, deep and long. */
+  bong(): void {
+    for (const [f, g] of [[164.8, 0.26], [82.4, 0.1], [329.6, 0.07], [494, 0.04], [659, 0.025]]) this.tone(f, 3.2, { type: 'sine', gain: g });
+    this.hiss(0.08, 1500, 600, 0.06, 0, 2);
+  }
+
+  /** Tower Bridge's warning bells: a quick ting-ting run. */
+  bridgeBells(): void {
+    for (let i = 0; i < 10; i++) this.tone(i % 2 ? 1760 : 1480, 0.25, { type: 'sine', gain: 0.05, delay: i * 0.2 });
+  }
+
+  /** The bascules grinding up (or down): a low motor hum. */
+  grind(): void {
+    this.tone(70, 3.6, { type: 'sawtooth', gain: 0.035, slideTo: 92 });
+    this.hiss(3.6, 300, 520, 0.035, 0, 0.6);
+  }
+
+  /** The tall ship's horn as it comes under the bridge. */
+  shipHorn(): void {
+    this.tone(146.8, 1.3, { type: 'sawtooth', gain: 0.05 });
+    this.tone(220, 1.3, { type: 'square', gain: 0.02 });
+  }
+
+  /** WHEE! down the ramp: a rising slide whistle. */
+  whee(): void {
+    this.tone(400, 0.6, { type: 'sine', gain: 0.12, slideTo: 1600 });
+    this.hiss(0.5, 1000, 4000, 0.08, 0, 1);
+  }
+
+  /** A parade drum: rum-tum; `accent` on the first beat of the bar. */
+  drum(accent: boolean): void {
+    this.tone(accent ? 110 : 150, 0.18, { type: 'sine', gain: accent ? 0.2 : 0.12, slideTo: 60 });
+    this.hiss(0.07, 2600, 1200, accent ? 0.1 : 0.06, 0, 1.2);
+  }
+
+  /** "Mind the gap!" with no words: beep-boop, then the tunnel's whoosh in and out. */
+  mindTheGap(): void {
+    this.tone(988, 0.22, { type: 'square', gain: 0.05 });
+    this.tone(784, 0.3, { type: 'square', gain: 0.05, delay: 0.24 });
+    this.hiss(0.8, 300, 3200, 0.22, 0.5, 0.7);
+    this.hiss(0.7, 3200, 400, 0.16, 1.25, 0.7);
+  }
+
+  /** Up the London Eye: a slow rising arpeggio of wonder. */
+  rideUp(): void {
+    [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, 0.6, { type: 'sine', gain: 0.07, delay: i * 0.16 }));
+  }
+
+  /** The river bus: toot toot. */
+  toot(): void {
+    for (const d of [0, 0.3]) this.tone(392, 0.22, { type: 'square', gain: 0.045, delay: d });
+  }
+
+  /** A firework: a whistle up, then a crackling bang. `delay` lets a show overlap. */
+  firework(delay = 0): void {
+    this.tone(900, 0.45, { type: 'sine', gain: 0.025, slideTo: 2600, delay });
+    this.hiss(0.7, 3000, 200, 0.22, delay + 0.45, 0.5);
+    this.tone(60, 0.5, { type: 'sine', gain: 0.18, slideTo: 30, delay: delay + 0.45 });
+  }
+
+  /** The Red Arrows: a jet roar sweeping overhead. */
+  jets(): void {
+    this.hiss(2.6, 200, 1800, 0.22, 0, 0.5);
+    this.hiss(2.4, 1800, 300, 0.18, 1.2, 0.5);
+  }
+
+  /** The wobbly bridge: a boing that wobbles. */
+  wobble(): void {
+    this.tone(300, 0.7, { type: 'sine', gain: 0.1, vibrato: [60, 6] });
+  }
+
   /** Not enough stars yet: soft, never scolding. */
   nope(): void {
     this.tone(220, 0.14, { type: 'sine', gain: 0.12, slideTo: 180 });

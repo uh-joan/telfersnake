@@ -24,6 +24,8 @@ import { Sparkles } from './render/sparkles';
 import { TrailView } from './render/trailView';
 import { LondonPeople } from './render/london/people';
 import { JEWEL_COLOURS, LegendView } from './render/london/legends';
+import { SetPieceView } from './render/london/setPieceView';
+import { TUBE_NAMES } from './sim/londonLayout';
 import { Stage } from './render/stage';
 import { Weather } from './render/weather';
 import { UpgradeFx } from './render/upgradeFx';
@@ -112,6 +114,18 @@ function mountPeople(): void {
     else stage.scene.remove(people.group);
   }
 }
+/** London's set pieces: the bascules, the ship, the parade, the boat, fireworks, the Red Arrows, the Tube. */
+let setPieces: SetPieceView | null = null;
+function mountSetPieces(): void {
+  const spots = world.stage.setPieces;
+  if (spots && !setPieces) setPieces = new SetPieceView(spots, () => sfx, world.setPieceSeed);
+  if (!setPieces) return;
+  setPieces.reset(); // no sounds for marks the last world passed
+  if (spots) {
+    stage.scene.add(setPieces.group);
+    setPieces.bind(scenery?.group ?? null, world.stage.portals ?? []);
+  } else stage.scene.remove(setPieces.group);
+}
 const sceneryCache = new Map<StageId, School>();
 let scenery: School | null = null;
 function mountScenery(id: StageId): void {
@@ -126,6 +140,9 @@ function mountScenery(id: StageId): void {
   stage.scene.add(scenery.group);
   stage.setAtmosphere(id); // each place its own light and haze
   stage.zoom = stageFor(id).cameraZoom ?? 1; // London's camera sits a touch closer
+  // The London Eye's bird's-eye view: the whole map, from high above its middle.
+  const B = stageFor(id).bounds;
+  stage.overviewOf((B.minX + B.maxX) / 2, (B.minZ + B.maxZ) / 2 + 4, 150);
 }
 
 /** Everyone's hat, by seat: yours from the save, other players' as the server tells it. */
@@ -181,6 +198,7 @@ function mountWorld(next: WorldView): void {
   predatorView.bind(scenery?.group ?? null);
   mountWarden();
   mountPeople();
+  mountSetPieces();
   hud.setStage(world.stage);
   mountSnakes();
 }
@@ -896,6 +914,64 @@ function handleEvents(): void {
         hud.popup('📸', world.snake.x, world.snake.z, 'fun');
         sfx?.click();
         break;
+      // ---- London's set pieces (A6)
+      case 'bong':
+        // BONG! Everyone hears Big Ben; a ring of golden treats bursts out round him.
+        sfx?.bong();
+        sparkles.burst(e.x, e.z, GOLD, 18, 1.4);
+        if (nearMe(e.x, e.z, 40)) hud.popup(`🔔 BONG${e.n > 1 ? ` ${e.k + 1}` : ''}!`, e.x, e.z, 'fun');
+        break;
+      case 'launch':
+        // Tower Bridge rose under you: WHEE! down the ramp.
+        sparkles.burst(e.x, e.z, CONFETTI, 20, 1.2);
+        if (!mine) break;
+        hud.announce('WHEE!', '🌉 ⬆️ 💨');
+        sfx?.whee();
+        break;
+      case 'ride':
+        sparkles.burst(e.x, e.z, e.by === 'eye' ? CONFETTI : BUBBLES, 14, 1);
+        if (!mine) break;
+        if (e.on && e.by === 'eye') {
+          hud.announce('🎡 LONDON EYE!', '👀 💎 ✨');
+          sfx?.rideUp();
+        } else if (e.on) {
+          hud.popup('⛴️ ALL ABOARD!', e.x, e.z, 'fun');
+          sfx?.toot();
+        } else {
+          hud.popup(e.by === 'eye' ? '🎡 ⭐' : '⛴️ ⭐', e.x, e.z, 'good');
+          sfx?.levelUp();
+        }
+        break;
+      case 'warp': {
+        // Down the Tube, up at the next station: the tunnel whoosh and the little tube map.
+        sparkles.burst(e.x, e.z, SKATE_DUST, 14, 1);
+        if (!mine) break;
+        const ports = world.stage.portals ?? [];
+        hud.tube(ports.map((p) => TUBE_NAMES[p.id] ?? p.id), ports.map((p) => p.at), e.from, e.to);
+        hud.popup('🚇 Mind the gap!', e.x, e.z, 'fun');
+        sfx?.mindTheGap();
+        break;
+      }
+      case 'wobble':
+        if (!mine) break;
+        hud.popup('〰️ WOBBLE!', e.x, e.z, 'fun');
+        sfx?.wobble();
+        break;
+      case 'arrows':
+        // The Red Arrows flew over: a red, white and blue trail for the rest of the run.
+        sparkles.burst(e.x, e.z, [0xe8303a, 0xffffff, 0x2f5fd0], 24, 1.4);
+        if (!mine) break;
+        hud.announce('✈️ RED ARROWS!', '🔴⚪🔵 ✨');
+        sfx?.tierUp();
+        break;
+      case 'treat':
+        // A sparkle from the fireworks finale: a gem.
+        sparkles.burst(e.x, e.z, CONFETTI, 18, 1.2);
+        if (!mine) break;
+        earnGem();
+        hud.popup('🎆 💎', e.x, e.z, 'good');
+        sfx?.golden();
+        break;
       case 'boo':
         // The living statue moves! Then freezes again.
         people?.boo();
@@ -1027,8 +1103,10 @@ function frame(now: number): void {
       for (const o of world.snakes) {
         // Rainbow Rush overrides the usual trail with a bright rainbow ribbon (red, white and blue in
         // London); River Rider leaves a splash, the fairy her dust.
+        // The Red Arrows' gift: a red, white and blue trail for the rest of the run.
         const trailId = o.hasMagic('rainbow')
           ? (london ? 'union-trail' : 'rainbow-trail')
+          : london && o.rwb ? 'union-trail'
           : london && o.hasMagic('river') && o.swimming ? 'river-splash'
             : london && o.hasMagic('magnet') ? 'fairy-dust' : trailIdFor(o.id);
         if (trailId === 'no-trail' || !o.alive) continue;
@@ -1043,6 +1121,11 @@ function frame(now: number): void {
   handleEvents();
 
   for (const v of snakeViews) v.update(playing ? dt : 0, time, world.stage);
+  // Up on the London Eye: out of sight in the capsule (the camera has craned out to see the map).
+  world.snakes.forEach((o, id) => {
+    if (o.carried?.by === 'eye' && snakeViews[id]) snakeViews[id].group.visible = false;
+  });
+  if (setPieces && world.stage.setPieces) setPieces.update(world, playing ? dt : 0, time);
   foodView.update(world, time);
   animalView.update(world, time);
   predatorView.update(world, playing ? dt : 0);
@@ -1056,9 +1139,14 @@ function frame(now: number): void {
   sparkles.update(dt);
   trailView.update(dt, time);
   upgradeFx.update(world, playing ? dt : 0, time);
-  scenery?.reveal(s.x, s.z, dt);
+  // Up on the London Eye the camera sees the whole map: nothing stands between it and you, so nothing fades.
+  const craned = s.alive && s.carried?.by === 'eye';
+  scenery?.reveal(craned ? 1e4 : s.x, craned ? 1e4 : s.z, dt);
   cooperView.update(world.cooper, playing ? dt : 0, time);
   if (people && world.stage.id === 'london') people.update(world, playing ? dt : 0);
+  // The London Eye's ride: the camera cranes out to a bird's-eye view, with pins on every treasure.
+  stage.overview = craned;
+  hud.pins(world, stage, craned);
   // Dragon Wings: the camera pulls back to show the whole sky; a giant needs a little more room too.
   stage.follow(s.x, s.z, s.heading, s.radius + (s.hasMagic('wings') ? 0.4 : 0) + (s.hasMagic('giant') ? 0.2 : 0), dt);
   weather.update(dt, s.x, s.z);

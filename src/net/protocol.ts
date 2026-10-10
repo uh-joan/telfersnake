@@ -7,7 +7,7 @@ import { KID_KINDS, type Kid, PROJECTILE_KINDS, type Projectile } from '../sim/k
 import { PREDATOR_KINDS, type Predator } from '../sim/predators';
 import type { Mode } from '../sim/modes';
 import type { StageId } from '../sim/stage';
-import type { Snake, SnakeLook } from '../sim/snake';
+import { CARRIERS, type Snake, type SnakeLook } from '../sim/snake';
 import { type CardId, UPGRADE_IDS, type UpgradeId } from '../sim/upgrades';
 import { VEHICLE_KINDS, type Vehicle } from '../sim/vehicles';
 import type { Button, Treasure } from '../sim/treasures';
@@ -68,8 +68,12 @@ export type KidRow = [number, number, number, number];
 export type ProjectileRow = [number, number, number, number];
 /** London's Crown Jewels: x, z, present (0 while it is away). The gem is fixed per index (JEWEL_KINDS). */
 export type TreasureRow = [number, number, 0 | 1];
-/** London's per-snake extras, one per snake row: Crown Jewels picked up, and the crown (1) for all five. */
-export type SnakeExtra = [number, 0 | 1];
+/**
+ * London's per-snake extras, one per snake row: Crown Jewels picked up, the crown (1) for all five, and
+ * (A6) what is carrying it (0 nothing, else CARRIERS index + 1: the Eye, the river bus) and the Red
+ * Arrows' trail (1). Readers that know only the first two columns simply never look further.
+ */
+export type SnakeExtra = [number, 0 | 1] | [number, 0 | 1, number, 0 | 1];
 /** London's pearl buttons (the Pearly Lights' trail): x, z, born. */
 export type ButtonRow = [number, number, number];
 /** x, z, heading, speed, present (0 while faded after a gulp). Kind is fixed per index (welcome). */
@@ -131,6 +135,8 @@ export type ServerMessage =
       vehicleKinds?: number[];
       /** London's Crown Jewels: how many lie about (rows come in `tr`). Absent: none. */
       treasureCount?: number;
+      /** London's set pieces: the room's flavour (which ship, which way the jets fly). Absent: none. */
+      setPieceSeed?: number;
     }
   | { t: 'seats'; seats: Seat[] }
   | Snapshot
@@ -187,14 +193,14 @@ export const pelletRow = (p: Pellet): PelletRow => [r2(p.x), r2(p.z), r2(p.value
 export const hazardRow = (h: Hazard): HazardRow => [HAZARD_KINDS.indexOf(h.kind), r2(h.x), r2(h.z), h.r, r3(h.turn)];
 export const cooperRow = (c: CooperState): CooperRow => [r2(c.x), r2(c.z), r3(c.heading), r2(c.speed), r2(c.talking)];
 export const treasureRow = (t: Treasure): TreasureRow => [r2(t.x), r2(t.z), t.respawnIn > 0 ? 0 : 1];
-export const snakeExtra = (s: Snake): SnakeExtra => [s.jewels, s.crowned ? 1 : 0];
+export const snakeExtra = (s: Snake): SnakeExtra => [s.jewels, s.crowned ? 1 : 0, s.carried ? CARRIERS.indexOf(s.carried.by) + 1 : 0, s.rwb ? 1 : 0];
 export const buttonRow = (b: Button): ButtonRow => [r2(b.x), r2(b.z), b.born];
 export const animalKindIndex = (a: Animal) => ANIMAL_KINDS.indexOf(a.kind);
 
 /**
  * Events that are only about one player go only to that player; the rest everyone sees. Anything
  * missing from this list reaches the whole room, so each new per-player event must join it as it is
- * added (London's `guard`, `royal`, `ride`, `warp` and `launch` will): otherwise one child's gem
+ * added (as London's `guard`, `royal`, `ride`, `warp` and `launch` have): otherwise one child's gem
  * fanfare would play on every phone. Only events that carry a `who` can be listed.
  */
 const PER_SEAT: ReadonlySet<Extract<GameEvent, { who: number }>['type']> = new Set([
@@ -203,6 +209,8 @@ const PER_SEAT: ReadonlySet<Extract<GameEvent, { who: number }>['type']> = new S
   'guard', 'photo',
   // London's legends: the crown's gem payout, and the pearl buttons' little crunch.
   'royal', 'button',
+  // London's set pieces: your ride, your Tube trip, your WHEE!, your wobble, your Red Arrows trail, your finale gem.
+  'ride', 'warp', 'launch', 'wobble', 'arrows', 'treat',
 ] as const);
 
 export function eventIsFor(e: GameEvent, seat: number): boolean {

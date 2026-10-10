@@ -7,6 +7,7 @@ import type { KidKind } from './kids';
 import type { Box, Circle } from './layout';
 import type { PredatorKind } from './predators';
 import type { Rng } from './rng';
+import type { SetPieceSpots } from './setPieces';
 import type { VehicleKind } from './vehicles';
 
 /**
@@ -156,6 +157,8 @@ export interface Stage extends Terrain {
   tripPath?: readonly Spot[];
   /** The living statue's spot in Covent Garden. */
   statue?: Spot;
+  /** London's set pieces (A6): Big Ben, Tower Bridge, the Eye, the parade, the boat… Unset: none. */
+  setPieces?: SetPieceSpots;
   /** The classic follow camera's distance multiplier (London sits a little closer). Unset: 1. */
   cameraZoom?: number;
   /** Paint the fixed features onto the minimap. X/Z map metres to canvas pixels. */
