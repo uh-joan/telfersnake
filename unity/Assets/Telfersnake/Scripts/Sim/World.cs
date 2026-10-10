@@ -454,13 +454,14 @@ namespace Telfer.Sim
 
         void MeetAnimals(Snake s, float dt, bool flying = false)
         {
-            // Gog & Magog: a giant gulps like the next size up.
-            int tier = s.HasMagic(MagicId.Giant) ? s.Tier + 1 : s.Tier;
+            // Gog & Magog: a giant gulps like the next size up. The size is read afresh for every animal: a gulp
+            // can grow the snake a size mid-loop, and the next animal must already see it (as on main).
+            int boost = s.HasMagic(MagicId.Giant) ? 1 : 0;
             foreach (var a in Animals)
             {
                 var spec = a.Spec;
                 float d2 = (a.x - s.x) * (a.x - s.x) + (a.z - s.z) * (a.z - s.z);
-                if (tier >= spec.tier)
+                if (s.Tier + boost >= spec.tier)
                 {
                     float reach = s.BiteReach * GULP_REACH + spec.radius;
                     if (d2 > reach * reach) continue;
