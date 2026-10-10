@@ -36,6 +36,10 @@ export class SnakeView {
   private readonly tongue: THREE.Mesh;
   private readonly hat: THREE.Group | null;
   private readonly hatSpin: THREE.Object3D | null;
+  /** Tiny Big Ben's clock hands, ticking round. */
+  private readonly hatHands: THREE.Object3D | null;
+  /** Piccadilly Lights: the skin's colours, chased along the body every frame. */
+  private readonly lights: THREE.Color[] | null;
   private hatY = 0;
   /** Bubble Wrap: a see-through shell round every segment. Built the first time it is needed. */
   private wrap: THREE.InstancedMesh | null = null;
@@ -82,6 +86,7 @@ export class SnakeView {
     this.body = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 14, 10), this.bodyMat, MAX_SEGMENTS);
     this.body.frustumCulled = false;
     for (let i = 0; i < MAX_SEGMENTS; i++) this.body.setColorAt(i, pattern[i % pattern.length]);
+    this.lights = look.shimmer ? pattern : null;
 
     // Hedgehog Spikes: a little crest of cones, one per body segment.
     this.spikes = new THREE.InstancedMesh(
@@ -234,6 +239,7 @@ export class SnakeView {
 
     this.hat = makeHat(hatId);
     this.hatSpin = this.hat?.getObjectByName('spin') ?? null;
+    this.hatHands = this.hat?.getObjectByName('hands') ?? null;
     if (this.hat) {
       // Oversized on purpose: from the follow camera a true-to-scale hat is a few pixels.
       this.hat.scale.setScalar(1.3);
@@ -427,6 +433,13 @@ export class SnakeView {
     }
     this.body.count = count;
     this.body.instanceMatrix.needsUpdate = true;
+    if (this.lights && this.body.instanceColor) {
+      // The lights chase from head to tail, a step every eighth of a second.
+      const n = this.lights.length;
+      const shift = Math.floor(time * 8) % n;
+      for (let i = 0; i < count; i++) this.body.setColorAt(i, this.lights[(i - shift + n * 64) % n]);
+      this.body.instanceColor.needsUpdate = true;
+    }
     if (this.wrap) {
       this.wrap.count = wrapped ? count : 0;
       if (wrapped) this.wrap.instanceMatrix.needsUpdate = true;
@@ -508,5 +521,6 @@ export class SnakeView {
     // A hat somebody saved up for is never hidden: it perches on top of the helmet.
     if (this.hat) this.hat.position.y = this.hatY + (this.helmet.visible ? 0.4 : 0) + (this.crown.visible ? 0.9 : 0);
     if (this.hatSpin) this.hatSpin.rotation.y = time * 14;
+    if (this.hatHands) this.hatHands.rotation.z = -time * 1.5;
   }
 }

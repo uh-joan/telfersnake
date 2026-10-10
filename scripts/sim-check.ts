@@ -2,7 +2,7 @@
  * The sim's own check-up, run headless with tsx (`npm run sim:check -- …`). Two jobs:
  *
  *   fingerprint <stage> <mode> [ticks=3600] [seed=1]   one hash of a whole scripted run
- *   fingerprint --all [--baseline]                      school + common × easy/normal/god
+ *   fingerprint --all [stage…] [--baseline]             every guarded stage × easy/normal/god × seeds 1, 7, 42, 1234
  *   invariants <stage> [--seeds N] [--baseline]         N seeds × 3 modes × 200 s of health checks
  *
  * A fingerprint hashes every event and every actor's position (and every snake's score) on every
@@ -73,6 +73,8 @@ const BASELINES = join(HERE, 'baselines.json');
  * (`fingerprint london <mode> --baseline`, each mode) and says so; the school's and the Common's never move.
  */
 const GUARDED: StageId[] = ['school', 'common', 'london'];
+/** The seeds `fingerprint --all` plays each stage × mode with. */
+const FINGERPRINT_SEEDS = [1, 7, 42, 1234];
 
 // ---------------------------------------------------------------- the scripted thumb
 
@@ -1758,8 +1760,13 @@ function main(argv: string[]): number {
   if (cmd === 'fingerprint') {
     const baseline = flags.has('--baseline');
     if (flags.has('--all')) {
-      const cases: [StageId, Mode][] = GUARDED.flatMap((id) => MODES.map((m) => [id, m] as [StageId, Mode]));
-      return runFingerprints(cases, 3600, 1, baseline);
+      // Every guarded stage × mode × a handful of seeds (one seed alone missed a change that only
+      // showed on others). Naming stages after --all limits it, e.g. to re-baseline London alone.
+      const only = rest.filter((r) => GUARDED.includes(r as StageId)) as StageId[];
+      const cases: [StageId, Mode][] = (only.length ? only : GUARDED).flatMap((id) => MODES.map((m) => [id, m] as [StageId, Mode]));
+      let bad = 0;
+      for (const seed of FINGERPRINT_SEEDS) bad += runFingerprints(cases, 3600, seed, baseline);
+      return bad;
     }
     const [stage, mode, ticks = '3600', seed = '1'] = rest;
     if (!STAGE_IDS.includes(stage as StageId) || !MODES.includes(mode as Mode)) {

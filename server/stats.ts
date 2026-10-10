@@ -52,6 +52,9 @@ interface Stats {
   /** Tickets bought, by place (a beacon without one is from before London: the Common). */
   unlocksByStage: Record<string, number>;
   buys: { count: number; starSpent: number; gemSpent: number; byItem: Record<string, number> };
+  /** London's album: postcards unlocked (by card), and how often the album is opened. */
+  postcards: { count: number; byCard: Record<string, number> };
+  albumOpens: number;
   sells: { count: number; starRefund: number; gemRefund: number; byItem: Record<string, number> };
   daily: Record<string, { sessions: number; runs: number }>;
 }
@@ -66,6 +69,8 @@ function fresh(): Stats {
     unlocks: 0,
     unlocksByStage: {},
     buys: { count: 0, starSpent: 0, gemSpent: 0, byItem: {} },
+    postcards: { count: 0, byCard: {} },
+    albumOpens: 0,
     sells: { count: 0, starRefund: 0, gemRefund: 0, byItem: {} },
     daily: {},
   };
@@ -143,6 +148,13 @@ export function record(ev: Record<string, unknown>): void {
       bumpItem(stats.sells.byItem, clampStr(ev.id, 32));
       break;
     }
+    case 'postcard':
+      stats.postcards.count++;
+      bumpItem(stats.postcards.byCard, clampStr(ev.id, 32));
+      break;
+    case 'album':
+      stats.albumOpens++;
+      break;
     default:
       return; // unknown event: ignore
   }

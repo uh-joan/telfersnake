@@ -196,6 +196,15 @@ export const ST_JAMES: Box = { x: -26, z: -26, w: 16, d: 10 };
 export const COVENT_GARDEN: Box = { x: 8, z: -50, w: 16, d: 10 };
 export const BOROUGH: Box = { x: 40, z: 24, w: 14, d: 10 };
 export const SOUTH_BANK: Box = { x: -30, z: 38, w: 22, d: 12 };
+/**
+ * The south-west's dressing (A7): drawn only, nothing here is solid. The South Bank gardens with the
+ * carousel and the street-food stalls, a round park with a bandstand, and a row of pastel terraced
+ * houses along the bottom edge of the map.
+ */
+export const SOUTH_GARDENS: Box = { x: -64, z: 37, w: 22, d: 10 };
+export const CAROUSEL: Spot = { x: -57.5, z: 37.5 };
+export const BANDSTAND_PARK = { x: -38, z: 54, r: 8 };
+export const TERRACE = { x0: -80, x1: -50, z: 62 };
 /** St James's Park's lake (painted, like the Serpentine: not swimming water). Swans and ducks live on its banks. */
 export const ST_JAMES_LAKE = { x: ST_JAMES.x + 1, z: ST_JAMES.z + 0.5, rx: 5.5, rz: 1.8, rot: 0.1 };
 /** The City: St Paul's across to the Gherkin and the Bank (bagels and pies). */
@@ -655,8 +664,11 @@ export const LONDON: Stage = {
     };
     c.fillStyle = '#f3ead2'; // the cream paper
     c.fillRect(0, 0, (BOUNDS.maxX - BOUNDS.minX) * scale, (BOUNDS.maxZ - BOUNDS.minZ) * scale);
-    c.fillStyle = '#9ccc7a'; // the parks
-    for (const b of [HYDE_PARK, ST_JAMES]) box(b);
+    c.fillStyle = '#9ccc7a'; // the parks (and the south-west's gardens)
+    for (const b of [HYDE_PARK, ST_JAMES, SOUTH_BANK, SOUTH_GARDENS]) box(b);
+    disc(BANDSTAND_PARK);
+    c.fillStyle = '#f2b8c6'; // the pastel terrace
+    c.fillRect(X(TERRACE.x0), Z(TERRACE.z - 1.5), (TERRACE.x1 - TERRACE.x0) * scale, 3 * scale);
     c.lineJoin = 'round';
     c.lineCap = 'round';
     c.strokeStyle = '#c9c3b4'; // the streets
@@ -692,7 +704,7 @@ export const LONDON: Stage = {
  * A tiny picture of each sight for the minimap, centred on (cx, cy), drawn in metres × `u` px:
  * a gold clock tower for Big Ben, a ring for the Eye, a blue glass spike for the Shard, and so on.
  */
-function paintIcon(c: CanvasRenderingContext2D, id: string, cx: number, cy: number, u: number): void {
+export function paintIcon(c: CanvasRenderingContext2D, id: string, cx: number, cy: number, u: number): void {
   const ink = '#2b2118';
   c.save();
   c.translate(cx, cy);

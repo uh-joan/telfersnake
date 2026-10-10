@@ -34,11 +34,32 @@ const LEAD: (number | null)[][] = [
   [79, 74, 71, 74, 79, 83, 86, 88],
 ];
 
+// London (A7): a jaunty music-hall / brass-band take on two traditional (public-domain) London
+// songs: "London Bridge Is Falling Down" (bars 1–4) and, after "Oranges and Lemons", a run of
+// church-bell phrases (bars 5–8). Oom-pah bass, a brassy lead, glockenspiel bells and a march snare.
+const LONDON_TRIADS = [
+  [48, 52, 55], [55, 59, 62], [48, 52, 55], [55, 59, 62],
+  [48, 52, 55], [53, 57, 60], [48, 52, 55], [55, 59, 62],
+];
+const LONDON_BASS = [36, 43, 36, 43, 36, 41, 36, 43];
+const LONDON_LEAD: (number | null)[][] = [
+  [79, 81, 79, 77, 76, 77, 79, null], // Lon-don Bridge is fall-ing down,
+  [74, 76, 77, null, 76, 77, 79, null], // fall-ing down, fall-ing down,
+  [79, 81, 79, 77, 76, 77, 79, null], // Lon-don Bridge is fall-ing down,
+  [74, null, 79, null, 76, 72, null, null], // my fair la-dy.
+  [79, 76, 79, 76, 72, null, 72, 74], // O-ran-ges and le-mons…
+  [76, 77, 79, 77, 76, 74, 72, null], // …say the bells…
+  [79, 76, 79, 76, 72, 74, 76, 77],
+  [79, 77, 76, 74, 72, null, 67, null],
+];
+
 export class Music {
   private readonly bus: GainNode;
   private timer = 0;
   private nextTime = 0;
   private step = 0;
+  /** Whole times round the loop: London's rarer sounds (the ship's horn) come round every few. */
+  private loops = 0;
   private level = 0;
   private on = true;
   private ducked = false;
@@ -58,7 +79,7 @@ export class Music {
 
   /**
    * The Common softens the whole thing to a woodland lilt and adds birdsong; the school stays bright.
-   * London borrows the school's arrangement until its own music-hall one arrives (A7).
+   * London gets its own music-hall brass band, with pigeons, a bus bell, gulls and a ship's horn.
    */
   setPlace(place: StageId): void {
     this.place = place;
@@ -98,10 +119,15 @@ export class Music {
       if (this.on) this.playStep(this.step, this.nextTime - ctx.currentTime);
       this.nextTime += STEP;
       this.step = (this.step + 1) % (STEPS_PER_BAR * LEAD.length);
+      if (this.step === 0) this.loops++;
     }
   }
 
   private playStep(step: number, delay: number): void {
+    if (this.place === 'london') {
+      this.playLondon(step, delay);
+      return;
+    }
     const s = this.sfx;
     const bar = Math.floor(step / STEPS_PER_BAR);
     const i = step % STEPS_PER_BAR; // 0..15
@@ -153,6 +179,67 @@ export class Music {
         s.tone(hz(c + 4), 0.07, { type: 'triangle', gain: 0.035, delay: delay + 0.1, slideTo: hz(c + 1) }, to);
       }
       if (i === 0) s.hiss(0.6, 500, 200, 0.02, delay, 0.6, to); // a soft wind swell each bar
+    }
+  }
+
+  /** London's brass band, one sixteenth at a time, with the city humming round it. */
+  private playLondon(step: number, delay: number): void {
+    const s = this.sfx;
+    const bar = Math.floor(step / STEPS_PER_BAR);
+    const i = step % STEPS_PER_BAR;
+    const to = this.bus;
+    const triad = LONDON_TRIADS[bar];
+    const root = LONDON_BASS[bar];
+
+    // Oom-pah: the tuba on beats one and three (root, then fifth), the band's "pah" on two and four.
+    if (i === 0 || i === 8) {
+      const note = i === 0 ? root : root + 7;
+      s.tone(hz(note), STEP * 3, { type: 'triangle', gain: 0.2, delay }, to);
+      s.tone(hz(note), STEP * 2.5, { type: 'square', gain: 0.04, delay }, to);
+    }
+    if (i === 4 || i === 12) {
+      for (const n of triad) s.tone(hz(n + 12), STEP * 1.2, { type: 'square', gain: 0.022, delay }, to);
+    }
+
+    // The tune on a brassy cornet: a sawtooth with a square under it and a little vibrato.
+    if (i % 2 === 0) {
+      const note = LONDON_LEAD[bar][i / 2];
+      if (note !== null) {
+        s.tone(hz(note), STEP * 1.8, { type: 'sawtooth', gain: 0.04, delay, vibrato: [3, 6] }, to);
+        s.tone(hz(note), STEP * 1.8, { type: 'square', gain: 0.03, delay }, to);
+        if (this.level >= 4) s.tone(hz(note + 12), STEP * 1.2, { type: 'triangle', gain: 0.03, delay }, to);
+      }
+    }
+
+    // Glockenspiel bells: the chord rung high, every eighth.
+    if (this.level >= 1 && i % 2 === 1) {
+      const note = triad[((i - 1) / 2) % triad.length] + 24;
+      s.tone(hz(note), STEP * 1.4, { type: 'sine', gain: 0.022, delay }, to);
+    }
+
+    // A march: a tap on the snare's off-beats, then bass drum and snare, and a roll into the top.
+    if (this.level >= 2 && i % 4 === 2) s.hiss(0.04, 3000, 2200, 0.035, delay, 1.2, to);
+    if (this.level >= 3) {
+      if (i === 0 || i === 8) s.tone(110, 0.16, { type: 'sine', gain: 0.26, slideTo: 50, delay }, to);
+      if (i === 4 || i === 12) s.hiss(0.1, 2600, 1300, 0.1, delay, 1.1, to);
+      if (bar === 7 && i >= 12) s.hiss(0.05, 2800, 2000, 0.05 + (i - 12) * 0.012, delay, 1.2, to);
+    }
+
+    // The city: pigeons cooing, a bus's ding-ding up the road, gulls over the river, a ship's horn.
+    if (bar % 4 === 1 && i === 10) {
+      s.tone(400, 0.22, { type: 'sine', gain: 0.03, delay, slideTo: 340, vibrato: [12, 14] }, to);
+      s.tone(380, 0.3, { type: 'sine', gain: 0.028, delay: delay + 0.26, slideTo: 300, vibrato: [12, 14] }, to);
+    }
+    if (bar === 6 && i === 2 && this.loops % 2 === 0) {
+      for (const d of [0, 0.2]) s.tone(1568, 0.4, { type: 'sine', gain: 0.022, delay: delay + d }, to);
+    }
+    if (bar === 3 && i === 12) {
+      s.tone(1250, 0.3, { type: 'sawtooth', gain: 0.01, delay, slideTo: 850, vibrato: [40, 9] }, to);
+      s.tone(1150, 0.26, { type: 'sawtooth', gain: 0.008, delay: delay + 0.32, slideTo: 800, vibrato: [40, 9] }, to);
+    }
+    if (bar === 0 && i === 0 && this.loops % 3 === 2) {
+      s.tone(110, 1.4, { type: 'sawtooth', gain: 0.018, delay }, to);
+      s.tone(165, 1.4, { type: 'square', gain: 0.008, delay }, to);
     }
   }
 }

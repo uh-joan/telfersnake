@@ -25,6 +25,8 @@ export interface Skin extends Item {
   head: number;
   /** Segment colours from the neck back, repeating. */
   pattern: number[];
+  /** The pattern chases along the body like a string of lights (Piccadilly Lights). */
+  shimmer?: boolean;
 }
 
 export interface Trail extends Item {
@@ -64,6 +66,18 @@ export const SKINS: Skin[] = [
   { id: 'fox', kind: 'skin', name: 'Sly Fox', price: 30, gem: true, place: 'common', icon: '🦊', head: 0xd9662a, pattern: [0xd9662a, 0xd9662a, 0xf3ead3] },
   { id: 'toadstool', kind: 'skin', name: 'Toadstool', price: 25, gem: true, place: 'common', icon: '🍄', head: 0xd23b32, pattern: [0xd23b32, 0xffffff, 0xd23b32, 0xd23b32] },
   { id: 'stag', kind: 'skin', name: 'White Stag', price: 45, gem: true, place: 'common', icon: '🦌', head: 0xf3efe6, pattern: [0xe9e4d8, 0xe6c766, 0xe9e4d8] },
+  // London-only (A7): everyday ones in stars, the special ones in blue gems. Ids and prices are
+  // mirrored in the HD build's Catalogue.cs (docs/london-catalogue.md).
+  { id: 'black-cab', kind: 'skin', name: 'Black Cab', price: 150, place: 'london', icon: '🚕', head: 0x1d1f24, pattern: [0x1d1f24, 0x1d1f24, 0x1d1f24, 0xffc93c] },
+  { id: 'union-jack', kind: 'skin', name: 'Union Jack', price: 200, place: 'london', icon: '🇬🇧', head: 0x1f3fa8, pattern: [0xc8102e, 0xffffff, 0x1f3fa8, 0xffffff] },
+  { id: 'royal-guard', kind: 'skin', name: 'Royal Guard', price: 180, place: 'london', icon: '💂', head: 0x1c1c1f, pattern: [0xd8342c, 0xd8342c, 0xf2c230, 0xd8342c, 0xd8342c, 0x1c1c1f] },
+  { id: 'postbox', kind: 'skin', name: 'Postbox Red', price: 90, place: 'london', icon: '📮', head: 0xd62d20, pattern: [0xd62d20, 0xd62d20, 0xd62d20, 0x1c1c1f] },
+  { id: 'corgi', kind: 'skin', name: 'Corgi', price: 120, place: 'london', icon: '🐶', head: 0xe39b4c, pattern: [0xe39b4c, 0xe39b4c, 0xfff6e8, 0xe39b4c] },
+  { id: 'tower-blue', kind: 'skin', name: 'Tower Bridge Blue', price: 110, place: 'london', icon: '🌉', head: 0xd9cdb3, pattern: [0x8cc8ec, 0x8cc8ec, 0xffffff, 0x8cc8ec] },
+  { id: 'thames', kind: 'skin', name: 'The Thames', price: 140, place: 'london', icon: '🌊', head: 0x1f8a96, pattern: [0x1f8a96, 0x2fa6b0, 0x6fd0cf, 0x2fa6b0, 0xffffff] },
+  { id: 'trafalgar-bronze', kind: 'skin', name: 'Trafalgar Bronze', price: 160, place: 'london', icon: '🦁', head: 0x9a7444, pattern: [0x9a7444, 0xb88a52, 0xd1aa70, 0xb88a52] },
+  { id: 'pearly-king', kind: 'skin', name: 'Pearly King', price: 45, gem: true, place: 'london', icon: '✨', head: 0x1c1c1f, pattern: [0x1c1c1f, 0xfffaf0, 0x1c1c1f, 0x1c1c1f, 0xfffaf0] },
+  { id: 'piccadilly-lights', kind: 'skin', name: 'Piccadilly Lights', price: 60, gem: true, place: 'london', icon: '🌃', head: 0x2b1d4e, pattern: [0xff3fa4, 0xffd23f, 0x3fb6ff, 0x5cff8a, 0xff7a2f, 0xb36bff], shimmer: true },
 ];
 
 export const HATS: Item[] = [
@@ -87,6 +101,16 @@ export const HATS: Item[] = [
   { id: 'acorn', kind: 'hat', name: 'Acorn Cap', price: 20, gem: true, place: 'common', icon: '🌰' },
   { id: 'flower-crown', kind: 'hat', name: 'Flower Crown', price: 25, gem: true, place: 'common', icon: '🌸' },
   { id: 'antlers', kind: 'hat', name: 'Antlers', price: 30, gem: true, place: 'common', icon: '🦌' },
+  // London-only (A7).
+  { id: 'bowler', kind: 'hat', name: 'Bowler Hat', price: 90, place: 'london', icon: '🎩' },
+  { id: 'deerstalker', kind: 'hat', name: 'Deerstalker', price: 110, place: 'london', icon: '🔍' },
+  { id: 'bobby', kind: 'hat', name: 'Bobby Helmet', price: 120, place: 'london', icon: '👮' },
+  { id: 'pearly-cap', kind: 'hat', name: 'Pearly King Cap', price: 130, place: 'london', icon: '🧢' },
+  { id: 'beefeater', kind: 'hat', name: 'Beefeater Hat', price: 140, place: 'london', icon: '🏰' },
+  { id: 'tiara', kind: 'hat', name: 'Tiara', price: 150, place: 'london', icon: '👸' },
+  { id: 'union-top-hat', kind: 'hat', name: 'Union Jack Top Hat', price: 160, place: 'london', icon: '🇬🇧' },
+  { id: 'tiny-bigben', kind: 'hat', name: 'Tiny Big Ben', price: 220, place: 'london', icon: '🕰️' },
+  { id: 'bearskin', kind: 'hat', name: 'Bearskin', price: 50, gem: true, place: 'london', icon: '💂' },
 ];
 
 export const TRAILS: Trail[] = [
@@ -106,6 +130,14 @@ export const TRAILS: Trail[] = [
   { id: 'petals', kind: 'trail', name: 'Petals', price: 25, gem: true, place: 'common', icon: '🌸', palette: [0xffc9de, 0xff8fab, 0xffffff] },
   { id: 'fireflies', kind: 'trail', name: 'Fireflies', price: 30, gem: true, place: 'common', icon: '💫', palette: [0xfff6a0, 0xc0eb75, 0xffffff] },
   { id: 'magic-dust', kind: 'trail', name: 'Magic Dust', price: 40, gem: true, place: 'common', icon: '🔮', palette: [0x9775fa, 0xc0ffe6, 0xffd43b, 0xffffff] },
+  // London-only (A7).
+  { id: 'raindrops', kind: 'trail', name: 'Raindrops', price: 70, place: 'london', icon: '☔', palette: [0x74c0fc, 0xa5d8ff, 0xe7f5ff] },
+  { id: 'pigeon-feathers', kind: 'trail', name: 'Pigeon Feathers', price: 70, place: 'london', icon: '🕊️', palette: [0x9aa0aa, 0xc9ced6, 0xffffff, 0x7f8f9a] },
+  { id: 'tea-bubbles', kind: 'trail', name: 'Tea Bubbles', price: 80, place: 'london', icon: '🫖', palette: [0xc98a45, 0xf3e3c3, 0xffffff] },
+  { id: 'bunting', kind: 'trail', name: 'Bunting', price: 90, place: 'london', icon: '🎏', palette: [0xc8102e, 0xffffff, 0x1f3fa8] },
+  { id: 'thames-spray', kind: 'trail', name: 'Thames Spray', price: 100, place: 'london', icon: '🫧', palette: [0x1f8a96, 0x6fd0cf, 0xffffff] },
+  { id: 'red-arrows', kind: 'trail', name: 'Red Arrows', price: 140, place: 'london', icon: '✈️', palette: [0xe8303a, 0xffffff, 0x2f5fd0] },
+  { id: 'fireworks', kind: 'trail', name: 'Fireworks', price: 40, gem: true, place: 'london', icon: '🎆', palette: [0xff3fa4, 0xffd23f, 0x3fb6ff, 0x5cff8a, 0xffffff] },
 ];
 
 export const CATALOGUE: Record<ItemKind, Item[]> = { skin: SKINS, hat: HATS, trail: TRAILS };
@@ -113,7 +145,9 @@ export const CATALOGUE: Record<ItemKind, Item[]> = { skin: SKINS, hat: HATS, tra
 /** The look of a skin. `name` is what other players read over your head. */
 export function skinLook(id: string, name = 'You'): SnakeLook {
   const skin = SKINS.find((s) => s.id === id) ?? SKINS[0];
-  return { name, body: skin.pattern[0], stripe: skin.pattern[skin.pattern.length - 1], head: skin.head, pattern: skin.pattern };
+  const look: SnakeLook = { name, body: skin.pattern[0], stripe: skin.pattern[skin.pattern.length - 1], head: skin.head, pattern: skin.pattern };
+  if (skin.shimmer) look.shimmer = true;
+  return look;
 }
 
 export function trailPalette(id: string): number[] {

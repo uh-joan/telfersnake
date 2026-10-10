@@ -168,8 +168,8 @@ export function loadSave(): Save {
 }
 
 /**
- * Catch up on what another tab has unlocked since this one loaded (the sticky flags only), so a
- * stale tab never sells a child a ticket they already hold.
+ * Catch up on what another tab has unlocked since this one loaded (the sticky flags and London's
+ * stamps and postcards), so a stale tab never sells a child a ticket they already hold.
  */
 export function refreshSave(save: Save): void {
   const disk = readDisk();
@@ -177,6 +177,9 @@ export function refreshSave(save: Save): void {
   save.commonSeen ||= disk.commonSeen;
   save.londonUnlocked ||= disk.londonUnlocked;
   save.londonSeen ||= disk.londonSeen;
+  // London's collections only ever grow: take in whatever the other tab collected.
+  save.stamps = union(save.stamps, disk.stamps);
+  save.postcards = union(save.postcards, disk.postcards);
 }
 
 /**

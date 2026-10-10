@@ -314,3 +314,49 @@ A0 ──► A1 ══► deploy ──► A2 ──► A3 ──► A4 ──�
 ```
 
 Each arrow is a merged, verified PR; ══► is a production deploy (every phase from A1 on deploys after merge).
+
+## 9. Progress log
+
+### 🌙 Nightly build, 2026-10-09 → 10 — classic and HD both complete
+
+Built end to end as a stack of PRs, one per phase. Each PR was verified and reviewed by a separate reviewer before the next phase started. **Nothing is merged or deployed:** merging to `main` needs a human review.
+
+| Phase | PR | Branch |
+|---|---|---|
+| A0 · Ticket & groundwork | uh-joan/telfersnake#12 | `london-a0` |
+| A1 · Map & twelve landmarks | uh-joan/telfersnake#13 | `london-a1` |
+| A2 · Menu & zoo | uh-joan/telfersnake#14 | `london-a2` |
+| A3 · Danger | uh-joan/telfersnake#15 | `london-a3` |
+| A4 · People | uh-joan/telfersnake#16 | `london-a4` |
+| A5 · Legends | uh-joan/telfersnake#17 | `london-a5` |
+| A6 · Set pieces | uh-joan/telfersnake#18 | `london-a6` |
+| A7 · Keepsakes | uh-joan/telfersnake#20 | `london-a7` |
+| HD B0–B2 · Stage, map, landmarks | uh-joan/telfersnake#19 | `london-b0` (on A6) |
+| HD B3 · Cast & set pieces | uh-joan/telfersnake#21 | `london-b3` |
+| HD B4–B5 · Polish, online, postcards, WebGL | uh-joan/telfersnake#22 | `london-b4` |
+
+**Merge order:** #12 → #13 → #14 → #15 → #16 → #17 → #18 → #20 (A7), then #19 → #21 → #22. The HD branches sit on A6. They only touch `unity/` and `scripts/trace.ts`, so they merge cleanly after A7.
+
+**HD:** cross-play was verified (HD and the web in one London room). The WebGL build is 12 MB. The School/Common fingerprints for HD match. Parity with classic is exact for about 100–200 ticks; after that the C# floats drift and event counts agree within about 10–15%.
+
+**Classic end-to-end verification (on `london-a7`): PASS.**
+- Build clean. 36/36 fingerprints pass (4 seeds × 3 modes × school/Common/London), and school/Common invariants equal main.
+- A fresh player can buy the ticket (⭐700 → 100), gets the first-visit welcome, earns stamps and postcards, and can buy and wear a London hat.
+- Two-tab London, School and Common rooms all stayed in sync.
+- The phone layout is clean.
+- Draw calls / triangles: Westminster 177 / 351k, Trafalgar 153 / 328k, Tower Bridge 145 / 286k (budget 250 / 400k).
+- The guardrails grep is clean.
+
+**Changes from the plan, decided during the build:**
+- The Thames bends south at its east end, so the camera sees Tower Bridge from the side (end-on it wasn't recognisable).
+- The Royal Guard stands at the head of the Mall, away from the bus lane.
+- Ravens are the predator pair; six perch on the Tower and two fly out.
+- Deferred: jelly-baby trails, the museum dino's walkabout, the Tate chimney.
+
+**Regression caught:** A5 changed Common bot behaviour on seeds the old single-seed fingerprint didn't cover. It was found by bisect and fixed in A7 (0bbc39c), and the fingerprints now cover 4 seeds.
+
+**Before deploying:**
+1. Run the kid naming test on `docs/images/london-landmarks.jpg`.
+2. Show Mr Cooper and Miss Sami their London looks.
+3. Review and merge the stack in order. A0 must never ship without A1.
+4. Measure real fps on a phone (Westminster has the least headroom).

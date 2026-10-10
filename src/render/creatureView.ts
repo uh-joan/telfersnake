@@ -177,7 +177,7 @@ const MODELS: Record<CreatureKind, () => Geo[]> = {
     ...eyes(0.05, 0.09, 1.04, 0.22),
     sphere(0.04, 0x2a2a2e, 0, 0.93, 0.25, 1, 1.3, 0.6),
   ],
-  // Gog & Magog: two tiny giants walking side by side, beards and tunics, a spear and a club.
+  // Gog & Magog: two tiny giants walking side by side, beards and tunics, a pennant staff and a lantern stick.
   gog: () => [
     ...[-1, 1].flatMap((s) => [
       paint(new THREE.CapsuleGeometry(0.13, 0.22, 4, 8), s < 0 ? 0x6b8a3a : 0x8a3a3a, (g) => g.translate(s * 0.28, 0.44, 0)),
@@ -187,11 +187,15 @@ const MODELS: Record<CreatureKind, () => Geo[]> = {
       ...eyes(0.02, 0.04, 0.8, 0.12).map((g) => g.translate(s * 0.28, 0, 0)),
       ...[-1, 1].map((k) => leg(0.045, 0.24, 0x5a3a24, s * 0.28 + k * 0.06, 0)),
     ]),
-    // Gog's spear and shield, Magog's club.
-    paint(new THREE.CylinderGeometry(0.018, 0.018, 0.9, 5), 0x8a6a40, (g) => g.translate(-0.48, 0.55, 0.05)),
-    paint(new THREE.ConeGeometry(0.04, 0.12, 4), 0xc8ccd6, (g) => g.translate(-0.48, 1.04, 0.05)),
-    paint(new THREE.CylinderGeometry(0.13, 0.13, 0.03, 10), 0xd8b030, (g) => g.rotateX(Math.PI / 2).translate(-0.3, 0.44, 0.16)),
-    paint(new THREE.CylinderGeometry(0.06, 0.025, 0.4, 6), 0x6b4a2a, (g) => g.rotateZ(0.5).translate(0.5, 0.56, 0.05)),
+    // Gog's blunt pennant staff (a round knob on top, a little red-and-white flag), Magog's walking stick and glowing lantern.
+    paint(new THREE.CylinderGeometry(0.02, 0.02, 0.9, 6), 0x8a6a40, (g) => g.translate(-0.48, 0.55, 0.05)),
+    sphere(0.045, 0xd8b030, -0.48, 1.02, 0.05),
+    paint(new THREE.BoxGeometry(0.14, 0.05, 0.02), 0xd81e1e, (g) => g.translate(-0.41, 0.97, 0.05)),
+    paint(new THREE.BoxGeometry(0.14, 0.05, 0.02), 0xffffff, (g) => g.translate(-0.41, 0.92, 0.05)),
+    paint(new THREE.CylinderGeometry(0.02, 0.02, 0.8, 6), 0x6b4a2a, (g) => g.translate(0.5, 0.5, 0.05)),
+    sphere(0.04, 0x6b4a2a, 0.5, 0.91, 0.05),
+    paint(new THREE.BoxGeometry(0.1, 0.1, 0.1), 0xffe9a0, (g) => g.translate(0.5, 0.74, 0.12)),
+    sphere(0.045, 0xfff6c0, 0.5, 0.74, 0.12),
   ],
   // An Elfin Oak fairy: a tiny sprite in a leaf dress, gauzy wings, a starry wand.
   fairy: () => [

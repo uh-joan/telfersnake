@@ -13,6 +13,19 @@ function mat(color: number): THREE.MeshLambertMaterial {
   return m;
 }
 
+const doubles = new Map<number, THREE.MeshLambertMaterial>();
+
+/** The same, seen from both sides (flat cut-outs such as the flag's crosses). */
+function matBoth(color: number): THREE.MeshLambertMaterial {
+  let m = doubles.get(color);
+  if (!m) {
+    m = new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide });
+    m.userData.shared = true;
+    doubles.set(color, m);
+  }
+  return m;
+}
+
 /**
  * Tuck Shop hats, modelled for a head of radius 1 facing +z, brim resting on top of the skull.
  * A child called "spin" (if any) is turned by the snake view every frame.
@@ -258,6 +271,208 @@ export function makeHat(id: string): THREE.Group | null {
           g.add(tine);
         }
       }
+      break;
+    }
+    // ── London (A7) ──────────────────────────────────────────────────────────
+    case 'bearskin': {
+      // The Guards' tall black fur hat: a lumpy column, a gold chin strap and a red plume.
+      const fur = mat(0x16161a);
+      const column = new THREE.Mesh(new THREE.CapsuleGeometry(0.72, 1.2, 4, 12), fur);
+      column.scale.set(1, 1, 0.92);
+      column.position.y = 1.15;
+      g.add(column);
+      for (const [x, y, z] of [[0.4, 1.7, 0.35], [-0.45, 1.3, 0.3], [0.1, 2.0, -0.3], [-0.3, 0.75, -0.45]]) {
+        const tuft = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 0), fur);
+        tuft.position.set(x, y, z);
+        g.add(tuft);
+      }
+      const plume = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.7, 3, 6), mat(0xd8342c));
+      plume.position.set(-0.72, 1.4, 0);
+      plume.rotation.z = 0.12;
+      const strap = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.05, 6, 20, Math.PI), mat(0xf2c230));
+      strap.rotation.y = Math.PI / 2;
+      strap.position.y = 0.05;
+      g.add(plume, strap);
+      g.position.y = -0.2;
+      break;
+    }
+    case 'bobby': {
+      // The custodian helmet: a tall navy dome, a silver star badge and a little rose on top.
+      const navy = mat(0x1f2a52);
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.85, 14, 10), navy);
+      dome.scale.set(1, 1.45, 1.05);
+      dome.position.y = 0.55;
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.88, 0.1, 6, 18), navy);
+      rim.rotation.x = Math.PI / 2;
+      rim.position.y = 0.05;
+      const badge = new THREE.Mesh(new THREE.CircleGeometry(0.3, 8), mat(0xd3dae2));
+      badge.position.set(0, 0.75, 0.88);
+      badge.rotation.x = -0.25;
+      const rose = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), mat(0xd3dae2));
+      rose.position.y = 1.78;
+      g.add(dome, rim, badge, rose);
+      g.position.y = -0.3;
+      break;
+    }
+    case 'union-top-hat': {
+      // A top hat in the flag: blue crown with a red-and-white cross on each side, red brim.
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.1, 18), mat(0xc8102e));
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.7, 1.25, 16), mat(0x1f3fa8));
+      crown.position.y = 0.67;
+      g.add(brim, crown);
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2;
+        for (const [w, h, c, d] of [[0.42, 1.2, 0xffffff, 0.7], [0.22, 1.2, 0xc8102e, 0.72], [0.95, 0.3, 0xffffff, 0.7], [0.95, 0.15, 0xc8102e, 0.72]] as const) {
+          const bar = new THREE.Mesh(new THREE.PlaneGeometry(w, h), matBoth(c));
+          bar.position.set(Math.sin(a) * d, 0.67, Math.cos(a) * d);
+          bar.rotation.y = a;
+          g.add(bar);
+        }
+      }
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.68, 0.04, 16), mat(0xffffff));
+      top.position.y = 1.3;
+      g.add(top);
+      break;
+    }
+    case 'beefeater': {
+      // The Yeoman Warder's Tudor bonnet: a flat navy crown, a red band and red-white-blue rosettes.
+      const navy = mat(0x1d2557);
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.2, 0.18, 18), navy);
+      brim.position.y = 0.05;
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 0.82, 0.42, 18), navy);
+      crown.position.y = 0.38;
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.86, 0.86, 0.14, 18), mat(0xc8102e));
+      band.position.y = 0.22;
+      g.add(brim, crown, band);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2 + Math.PI / 2;
+        for (const [r, c, out] of [[0.17, 0xc8102e, 0.9], [0.11, 0xffffff, 0.93], [0.06, 0x1f3fa8, 0.96]] as const) {
+          const ros = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.06, 10), mat(c));
+          ros.position.set(Math.cos(a) * out, 0.24, Math.sin(a) * out);
+          ros.lookAt(Math.cos(a) * 3, 0.24, Math.sin(a) * 3);
+          ros.rotateX(Math.PI / 2);
+          g.add(ros);
+        }
+      }
+      break;
+    }
+    case 'bowler': {
+      // A City gent's bowler: a round black dome and a curled brim.
+      const felt = mat(0x1c1c1f);
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.78, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), felt);
+      dome.scale.set(1, 1.05, 1.05);
+      dome.position.y = 0.12;
+      const brim = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.1, 6, 20), felt);
+      brim.rotation.x = Math.PI / 2;
+      brim.scale.set(1, 1.12, 1);
+      brim.position.y = 0.12;
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.14, 16), mat(0x3a3a40));
+      band.position.y = 0.2;
+      g.add(dome, brim, band);
+      break;
+    }
+    case 'tiara': {
+      // A sparkly tiara: a silver arc across the front with a fan of points and jewels.
+      const silver = mat(0xe8ecf2);
+      const arc = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.1, 6, 20, Math.PI), silver);
+      arc.rotation.x = -Math.PI / 2;
+      arc.position.y = 0.15;
+      g.add(arc);
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 6) * Math.PI;
+        const tall = 0.45 + 0.6 * Math.sin(a); // tallest in the middle, over the nose
+        const point = new THREE.Mesh(new THREE.ConeGeometry(0.12, tall, 4), silver);
+        point.position.set(Math.cos(a) * 0.85, 0.15 + tall / 2, Math.sin(a) * 0.85);
+        const jewel = new THREE.Mesh(new THREE.OctahedronGeometry(i === 3 ? 0.24 : 0.13), mat(i === 3 ? 0x4dabf7 : i % 2 ? 0xff8fab : 0xffffff));
+        jewel.position.set(Math.cos(a) * 0.9, 0.3, Math.sin(a) * 0.9);
+        g.add(point, jewel);
+      }
+      break;
+    }
+    case 'deerstalker': {
+      // The detective's cap: tweed dome, a peak front and back, ear flaps tied up in a bow.
+      const tweed = mat(0x9a7b52);
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.95, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), tweed);
+      dome.scale.set(1.1, 0.8, 1.15);
+      g.add(dome);
+      for (const side of [-1, 1]) {
+        const peak = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 4, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x8a6b45));
+        peak.scale.set(1.1, 0.12, 0.8);
+        peak.position.set(0, 0.06, side * 1.0);
+        const flap = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.6), tweed);
+        flap.position.set(side * 0.9, 0.55, 0);
+        flap.rotation.z = -side * 0.5;
+        g.add(peak, flap);
+      }
+      const bow = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.05, 6, 10), mat(0x5a3a24));
+      bow.position.y = 0.82;
+      g.add(bow);
+      for (let i = 0; i < 3; i++) {
+        const check = new THREE.Mesh(new THREE.TorusGeometry(0.75 - i * 0.2, 0.025, 4, 18), mat(0x6b5236));
+        check.rotation.x = Math.PI / 2;
+        check.position.y = 0.2 + i * 0.22;
+        g.add(check);
+      }
+      g.position.y = -0.2;
+      break;
+    }
+    case 'pearly-cap': {
+      // The Pearly King's flat cap, sewn all over with pearl buttons.
+      const cloth = mat(0x1c1c1f);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.95, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), cloth);
+      cap.scale.set(1.12, 0.5, 1.2);
+      const peak = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.08, 0.65), cloth);
+      peak.position.set(0, 0.06, 1.15);
+      g.add(cap, peak);
+      const pearl = mat(0xfffaf0);
+      for (let ring = 0; ring < 3; ring++) {
+        const n = 10 - ring * 3;
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2 + ring * 0.3;
+          const r = 0.9 - ring * 0.32;
+          const y = Math.sqrt(Math.max(0, 1 - (r / 1.05) ** 2)) * 0.48 + 0.04;
+          const b = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 4), pearl);
+          b.position.set(Math.cos(a) * r * 1.12, y, Math.sin(a) * r * 1.2);
+          g.add(b);
+        }
+      }
+      for (let i = 0; i < 4; i++) {
+        const b = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 4), pearl);
+        b.position.set(-0.45 + i * 0.3, 0.12, 1.3);
+        g.add(b);
+      }
+      g.position.y = -0.1;
+      break;
+    }
+    case 'tiny-bigben': {
+      // A clock tower for a hat: honey stone, a clock face with ticking hands, a slate spire.
+      const stone = mat(0xe2b85c);
+      const tower = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.5, 0.7), stone);
+      tower.position.y = 0.75;
+      const clockBox = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.75, 0.86), stone);
+      clockBox.position.y = 1.85;
+      const face = new THREE.Mesh(new THREE.CircleGeometry(0.3, 16), mat(0xfffbea));
+      face.position.set(0, 1.85, 0.44);
+      const hands = new THREE.Group();
+      hands.name = 'hands';
+      hands.position.set(0, 1.85, 0.46);
+      const long = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.24, 0.02), mat(0x1c1c1f));
+      long.position.y = 0.1;
+      const short = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 0.02), mat(0x1c1c1f));
+      short.position.x = 0.07;
+      hands.add(long, short);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(0.62, 0.9, 4), mat(0x434a57));
+      roof.rotation.y = Math.PI / 4;
+      roof.position.y = 2.67;
+      const spire = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.5, 6), mat(0xf2c230));
+      spire.position.y = 3.3;
+      for (const [x, z] of [[0, -0.44], [0.44, 0], [-0.44, 0]]) {
+        const back = new THREE.Mesh(new THREE.CircleGeometry(0.3, 16), mat(0xfffbea));
+        back.position.set(x, 1.85, z);
+        back.lookAt(x * 3, 1.85, z * 3);
+        g.add(back);
+      }
+      g.add(tower, clockBox, face, hands, roof, spire);
       break;
     }
     default:

@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { HYDE_PARK, LONDON, LONDON_BOUNDS, ROADS, SERPENTINE, SOUTH_BANK, ST_JAMES, type Road } from '../../sim/londonLayout';
+import {
+  BANDSTAND_PARK, CAROUSEL, HYDE_PARK, LONDON, LONDON_BOUNDS, ROADS, SERPENTINE, SOUTH_BANK, SOUTH_GARDENS, ST_JAMES, TERRACE, type Road,
+} from '../../sim/londonLayout';
 import type { Box } from '../../sim/layout';
 import { Rng } from '../../sim/rng';
 import { clearOfSights, COMPASS, distanceToPath, MARGIN, ST_JAMES_LAKE, ZEBRAS } from './ground';
@@ -340,6 +342,20 @@ export function makeFurniture(): THREE.Group {
       if (free(p.x, p.z, 0.5) && offStreet(p.x, p.z)) trees.push({ ...p, s: 0.9 });
     }
   }
+  // The south-west (A7): plane trees round the gardens (clear of the carousel and the stalls), a ring
+  // round the bandstand, and a row behind the terrace. Their own dice, so the rest stay put.
+  const sw = new Rng(1908);
+  for (const p of inPark(sw, SOUTH_GARDENS, 10, 1.2)) {
+    const stalls = p.z > SOUTH_GARDENS.z && p.x < CAROUSEL.x - 4;
+    if (Math.hypot(p.x - CAROUSEL.x, p.z - CAROUSEL.z) > 4.6 && !stalls) trees.push(p);
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    trees.push({ x: BANDSTAND_PARK.x + Math.cos(a) * BANDSTAND_PARK.r * 0.82, z: BANDSTAND_PARK.z + Math.sin(a) * BANDSTAND_PARK.r * 0.82, rot: a, s: 0.85 });
+  }
+  for (let x = TERRACE.x0 + 1; x < TERRACE.x1; x += 5) trees.push({ x, z: TERRACE.z - 3.4, rot: x, s: 0.75 });
+  for (const [x, z] of [[-48, 44], [-24, 50], [-26, 60], [-52, 52], [-82, 40], [-80, 30]]) trees.push({ x, z, rot: x * z, s: 1 });
+
   const benches = inPark(rng, HYDE_PARK, 6, 3).concat(inPark(rng, ST_JAMES, 2, 2), inPark(rng, SOUTH_BANK, 4, 2));
   for (let seg = 0; seg + 1 < emb.path.length; seg++) {
     const p = roadside(emb, seg, 0.5, -0.7);
