@@ -119,6 +119,10 @@ export interface Stage extends Terrain {
   creatureCount: number;
   /** Which creatures may be picked, in draw order. Unset: all of CREATURE_KINDS. */
   creatureKinds?: readonly CreatureKind[];
+  /** Where each kind of creature haunts (London's legends). Unset: the woods and the Glade, via homePoint. */
+  creatureHome?: (rng: Rng, kind: CreatureKind) => Spot;
+  /** London's Crown Jewels: where they may lie. The first is always used (the Tower). Unset: no jewels. */
+  jewelSpots?: readonly Spot[];
   /** Extra rival bots this (bigger) stage seats on top of the mode's roster, so it isn't sparse. 0: none. */
   extraRivals: number;
   /** Miss Sami and a mum, nattering at the edge of the Common. Null on a stage without them. */

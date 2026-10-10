@@ -8,6 +8,7 @@ import { blankPredator, PREDATOR_KINDS, type Predator } from '../sim/predators';
 import { isSolidHazard } from '../sim/hazards';
 import type { Circle } from '../sim/layout';
 import { blankVehicle, type Vehicle, VEHICLE_KINDS, VEHICLES } from '../sim/vehicles';
+import { blankTreasure, type Button, type Treasure } from '../sim/treasures';
 import { type Input, Snake } from '../sim/snake';
 import type { Stage } from '../sim/stage';
 import type { CardId } from '../sim/upgrades';
@@ -64,6 +65,8 @@ export class Replica implements WorldView {
   readonly vehicles: Vehicle[];
   readonly kids: Kid[];
   readonly creatures: Creature[];
+  readonly treasures: Treasure[];
+  buttons: Button[] = [];
   projectiles: Projectile[] = [];
   pellets: Pellet[];
   readonly events: GameEvent[] = [];
@@ -116,6 +119,7 @@ export class Replica implements WorldView {
     this.solids = this.hazards.filter(isSolidHazard); // the same objects: a 'rock' event moves them in both
     this.kids = welcome.kidKinds.map((k) => blankKid(KID_KINDS[k]));
     this.creatures = welcome.creatureKinds.map((k) => blankCreature(CREATURE_KINDS[k]));
+    this.treasures = Array.from({ length: welcome.treasureCount ?? 0 }, blankTreasure);
     this.pellets = welcome.pellets.map(this.toPellet);
     this.ghost = new Snake(-1, welcome.seats[0].look, false);
     this.setSeats(welcome.seats);
@@ -169,6 +173,15 @@ export class Replica implements WorldView {
     if (this.snaps.length > KEEP_SNAPSHOTS) this.snaps.shift();
     for (const row of snap.f) this.setFood(row);
     if (snap.p) this.pellets = snap.p.map(this.toPellet);
+    // London: the Crown Jewels sit still (taken straight), the buttons come whole when they change.
+    snap.tr?.forEach(([x, z, present], i) => {
+      const t = this.treasures[i];
+      if (!t) return;
+      t.x = x;
+      t.z = z;
+      t.respawnIn = present ? 0 : 1;
+    });
+    if (snap.pb) this.buttons = snap.pb.map(([x, z, born]) => ({ x, z, born }));
     // Pebbles and kisses are brief: take the newest list straight, arc height from the flight progress.
     this.projectiles = snap.pj.map(([x, z, kind, t]) => ({ kind: PROJECTILE_KINDS[kind], x, z, dx: 0, dz: 0, speed: 0, left: 1 - t, total: 1 }));
     for (const e of snap.e) {
@@ -199,6 +212,11 @@ export class Replica implements WorldView {
       s.respawnIn = respawnIn;
       s.immune = immune;
       s.setMagic(magic);
+      const extra = snap.sx?.[id];
+      if (extra) {
+        s.jewels = extra[0];
+        s.crowned = extra[1] === 1;
+      }
       s.setUpgrades(unpackUpgrades(upgrades));
       s.helmetReady = (flags & HELMET_READY) !== 0;
       s.highestTier = Math.max(s.highestTier, s.tier);
@@ -235,6 +253,8 @@ export class Replica implements WorldView {
     g.mass = mass;
     g.speedFactor = snap.you.speedFactor;
     g.speedMul = this.snake.speedMul;
+    // Its spells too: Dragon Wings and River Rider change how move() goes (over walls, down the river).
+    g.setMagic(snap.s[this.me][9]);
     // Its wall memory belongs to the previous replay, not to this starting point; steer() must not act on it.
     g.touchingWall = false;
     this.updateBlockers();

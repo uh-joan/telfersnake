@@ -2,7 +2,8 @@ import { ANIMALS } from '../sim/animals';
 import { awake } from '../sim/predators';
 import { SCHOOL } from '../sim/layout';
 import type { Stage as PlayStage } from '../sim/stage';
-import { TIERS } from '../sim/snake';
+import { MAGIC_IDS, type MagicId, TIERS } from '../sim/snake';
+import { JEWELS_FOR_CROWN } from '../sim/treasures';
 import { UPGRADES, xpForLevel } from '../sim/upgrades';
 import type { WorldView } from '../sim/view';
 import type { ScreenPoint, Stage } from '../render/stage';
@@ -14,6 +15,14 @@ const MAP_SCALE = 2; // minimap px per metre
 const POPUP_LIFE = 0.9;
 const BUBBLE_LIFE = 2.6;
 const HUD_TOP = 96; // px taken by the XP bar and score at the top of the screen
+
+/** Each timed magic's picture on the HUD, and how long it lasts (for its little bar). Unlisted: not shown. */
+const MAGIC_ICON: Partial<Record<MagicId, [string, number]>> = {
+  rainbow: ['🌈', 20], hidden: ['👻', 15], magnet: ['🧲', 20], owl: ['🦉', 30], halo: ['✨', 8],
+  wings: ['🪽', 12], river: ['🌊', 20], giant: ['🗿', 15], phoenix: ['🔥', 30],
+};
+/** The gems' colours, by jewel index (ruby, sapphire, emerald, diamond, amethyst). */
+const JEWEL_CSS = ['#e0115f', '#1f5fe0', '#14b86a', '#bfe6ff', '#9b4de0'];
 
 interface Popup {
   el: HTMLElement;
@@ -68,9 +77,63 @@ export class Hud {
   private shownProgress = -1;
   private shownScore = -1;
   private shownTier = -1;
+  /** London's legends: the Crown Jewels counter (five slots) and the magic timers, under the score. */
+  private readonly jewelsEl = document.createElement('div');
+  private readonly magicsEl = document.createElement('div');
+  private shownJewels = '';
+  private shownMagics = '';
+  private readonly magicBars: HTMLElement[] = [];
 
   constructor() {
     this.setStage(SCHOOL);
+    this.jewelsEl.id = 'jewels';
+    this.jewelsEl.setAttribute('aria-label', 'Crown Jewels');
+    this.magicsEl.id = 'magics';
+    $('stats').append(this.jewelsEl, this.magicsEl);
+  }
+
+  /** The Crown Jewels you hold (London only), and a picture and a draining bar per magic at work on you. */
+  private updateLegends(world: WorldView): void {
+    const s = world.snake;
+    const jewels = world.treasures.length > 0 ? `${Math.min(s.jewels, JEWELS_FOR_CROWN)}${s.crowned ? 'c' : ''}` : '';
+    if (jewels !== this.shownJewels) {
+      this.shownJewels = jewels;
+      this.jewelsEl.classList.toggle('show', jewels !== '');
+      this.jewelsEl.classList.toggle('royal', s.crowned);
+      const crown = document.createElement('span');
+      crown.textContent = '👑';
+      const slots = Array.from({ length: JEWELS_FOR_CROWN }, (_, i) => {
+        const el = document.createElement('i');
+        if (i < s.jewels || s.crowned) el.style.background = JEWEL_CSS[i];
+        return el;
+      });
+      this.jewelsEl.replaceChildren(crown, ...slots);
+    }
+    let key = '';
+    for (let i = 0; i < MAGIC_IDS.length; i++) if (s.magic[i] > 0 && MAGIC_ICON[MAGIC_IDS[i]]) key += i + ',';
+    if (!s.alive) key = '';
+    if (key !== this.shownMagics) {
+      this.shownMagics = key;
+      this.magicBars.length = 0;
+      const pills = key.split(',').filter(Boolean).map((i) => {
+        const [icon] = MAGIC_ICON[MAGIC_IDS[Number(i)]]!;
+        const el = document.createElement('span');
+        el.className = 'magic';
+        el.textContent = icon;
+        const bar = document.createElement('i');
+        bar.dataset.magic = i;
+        el.appendChild(bar);
+        this.magicBars.push(bar);
+        return el;
+      });
+      this.magicsEl.replaceChildren(...pills);
+    }
+    // Solo play counts each magic down for real; a shared room only knows it is on (the bar stays full).
+    for (const bar of this.magicBars) {
+      const i = Number(bar.dataset.magic);
+      const [, full] = MAGIC_ICON[MAGIC_IDS[i]]!;
+      bar.style.width = `${Math.round(Math.min(1, s.magic[i] / full) * 100)}%`;
+    }
   }
 
   /** Point the minimap at a stage: size it to that stage's bounds and paint its fixed base once. */
@@ -209,6 +272,7 @@ export class Hud {
       );
     }
 
+    this.updateLegends(world);
     this.updateBoard(world, dt);
     this.updateTags(world, stage);
 
@@ -345,6 +409,23 @@ export class Hud {
       c.arc(X(k.x), Z(k.z), 1.6, 0, Math.PI * 2);
       c.fill();
     }
+
+    // London's Crown Jewels: little gem diamonds in their own colours (a whole-run treasure hunt),
+    // and the pearly buttons' trail as tiny white dots.
+    world.treasures.forEach((t, i) => {
+      if (t.respawnIn > 0) return;
+      c.save();
+      c.translate(X(t.x), Z(t.z));
+      c.rotate(Math.PI / 4);
+      c.fillStyle = JEWEL_CSS[i % JEWEL_CSS.length];
+      c.strokeStyle = '#fff';
+      c.lineWidth = 1.2;
+      c.fillRect(-3.2, -3.2, 6.4, 6.4);
+      c.strokeRect(-3.2, -3.2, 6.4, 6.4);
+      c.restore();
+    });
+    c.fillStyle = '#fffaf0';
+    for (const b of world.buttons) c.fillRect(X(b.x) - 1, Z(b.z) - 1, 2, 2);
 
     // Fantastic creatures are hidden — unless Owl Eyes is active, which reveals them as violet stars.
     if (world.snake.hasMagic('owl')) {

@@ -25,7 +25,11 @@
  * they check the guard never moves and never pays inside his rest, the school trip never splits or leaves its path
  * (or comes near a bus lane), the tourists, statue, whistle and chips all happen; and script 25 laps round the
  * guard (paid twice: 3 laps, then after the rest), a lap undone by doubling back, a bump (Ahem, no shrink), a
- * busker's dance (faster only in range) and the statue's BOO (once per rest). `--baseline` records what
+ * busker's dance (faster only in range) and the statue's BOO (once per rest). With London's legends
+ * they check all nine creatures are gulped and their magics seen, every flight lands on free dry ground,
+ * no giant is bonked by a bus, and every run's five Crown Jewels lie on free, reachable ground; and script
+ * wings running out over the river and two landmarks, the phoenix taking one hit, the roar, River Rider,
+ * a giant's gulp, the pearly trail and a ROYAL crown. `--baseline` records what
  * `main` already does (the school's bots do sometimes nose a wall for a few seconds), so a later
  * run fails only when a count gets worse; a stage with no record must be spotless.
  *
@@ -89,6 +93,19 @@ class Thumb {
           best = d;
           a = Math.atan2(f.z - s.z, f.x - s.x);
         }
+      }
+      // London's legends: a child spotting a magic creature or a Crown Jewel goes for it. (No RNG,
+      // and only where creatures have homes, so the school's and the Common's thumbs are unchanged.)
+      if (w.stage.creatureHome) {
+        let near = 30 * 30;
+        const chase = (o: { x: number; z: number }) => {
+          const d = (o.x - s.x) ** 2 + (o.z - s.z) ** 2;
+          if (d >= near) return;
+          near = d;
+          a = Math.atan2(o.z - s.z, o.x - s.x);
+        };
+        for (const c of w.creatures) if (c.respawnIn <= 0) chase(c);
+        for (const t of w.treasures) if (t.respawnIn <= 0) chase(t);
       }
     }
     this.input.x = Math.cos(a);
@@ -213,6 +230,223 @@ function runFingerprints(cases: [StageId, Mode][], ticks: number, seed: number, 
   return bad;
 }
 
+// ---------------------------------------------------------------- London: the legends (A5)
+
+/** What each London legend's magic must be seen doing in the sweep. */
+const LEGEND_EFFECTS: Record<string, string> = {
+  dragon: 'flew and landed', unicorn: 'golden bites', lionroyal: 'golden ring', phoenix: 'rose again', mermaid: 'river rider',
+  ghost: 'hidden', gog: 'giant', fairy: 'fairy magnet', pearly: 'button trail',
+};
+
+interface Legends {
+  gulped: Set<string>;
+  effects: Set<string>;
+  landings: number;
+  badLandings: number;
+  royals: number;
+  jewels: number;
+  giantBonks: number;
+  rises: number;
+  /** Seeds whose five jewels were not all on free ground the walk/swim flood-fill reaches. */
+  jewelSeedsBad: number;
+}
+
+const newLegends = (): Legends => ({
+  gulped: new Set(), effects: new Set(), landings: 0, badLandings: 0, royals: 0, jewels: 0, giantBonks: 0, rises: 0, jewelSeedsBad: 0,
+});
+
+/** Read a tick's events (before they are cleared) and the snakes' spells for the legends' tally. */
+function legendsAfter(w: World, g: Legends, note: (m: string) => void, where: string): void {
+  const stage = w.stage;
+  for (const e of w.events) {
+    if (e.type === 'magic') {
+      g.gulped.add(e.kind);
+      const spell = { ghost: 'hidden', fairy: 'magnet', gog: 'giant', phoenix: 'phoenix', mermaid: 'river', dragon: 'wings' }[e.kind as string];
+      const s = w.snakes[e.who];
+      if (spell === 'hidden' && s.hasMagic('hidden')) g.effects.add('ghost');
+      if (spell === 'magnet' && s.hasMagic('magnet')) g.effects.add('fairy');
+      if (spell === 'giant' && s.hasMagic('giant')) g.effects.add('gog');
+    } else if (e.type === 'land') {
+      g.landings++;
+      g.effects.add('dragon');
+      if (!isFree(stage, e.x, e.z, 0) || inWater(stage, e.x, e.z)) {
+        g.badLandings++;
+        note(`${where}: snake ${e.who} landed in a solid or the river at (${e.x.toFixed(2)}, ${e.z.toFixed(2)})`);
+      }
+    } else if (e.type === 'ring') g.effects.add('lionroyal');
+    else if (e.type === 'rise') {
+      g.rises++;
+      g.effects.add('phoenix');
+    } else if (e.type === 'pearly') {
+      if (w.buttons.length > 0) g.effects.add('pearly');
+    } else if (e.type === 'eat' && e.golden && w.snakes[e.who].hasMagic('rainbow') && w.creatures.some((c) => c.kind === 'unicorn')) {
+      g.effects.add('unicorn');
+    } else if (e.type === 'vbonk' && w.snakes[e.who].hasMagic('giant')) {
+      g.giantBonks++;
+      note(`${where}: a giant was bonked by a ${e.kind}`);
+    } else if (e.type === 'jewel') g.jewels++;
+    else if (e.type === 'royal') g.royals++;
+  }
+  for (const s of w.snakes) if (s.alive && s.hasMagic('river') && s.swimming) g.effects.add('mermaid');
+}
+
+/** Every jewel spot this world uses: free ground the flood-fill (walking or swimming) reaches from the arrival spot. */
+function jewelsReachable(w: World, reach: Uint8Array): boolean {
+  const B = w.stage.bounds;
+  const W = Math.round(B.maxX - B.minX);
+  if (w.treasures.length !== 5) return false;
+  return w.treasures.every((t) => isFree(w.stage, t.x, t.z, 1) && reach[Math.floor(t.z - B.minZ) * W + Math.floor(t.x - B.minX)] === 1);
+}
+
+/**
+ * Scripted legends: Dragon Wings running out over the river and over St Paul's dome and the Tower
+ * (it must come down on free, dry ground); the phoenix taking exactly one hit; the Royal Lion's roar
+ * pushing a rival back; River Rider beating the paddle; a giant gulping the next size up; the pearly
+ * buttons leading to a jewel; and one snake collecting all five jewels (ROYAL exactly once).
+ */
+function londonLegendsScripted(stage: Stage): Record<string, string> {
+  const out: Record<string, string> = {};
+  const go = { x: 1, z: 0, active: true, dash: false };
+  const drain = (w: World) => {
+    const ev = [...w.events];
+    w.events.length = 0;
+    return ev;
+  };
+
+  // Flight: expiring over the river, over St Paul's dome, inside the Tower's walls.
+  const spots: [string, number, number, number][] = [['river', 0, -14, 0], ['dome', 30, -42, -Math.PI / 2], ['tower', 62, -16, 0]];
+  const landed: string[] = [];
+  for (const [name, x, z, heading] of spots) {
+    const w = new World(11, undefined, rulesFor('normal'), stage);
+    const s = w.snake;
+    s.mass = 20;
+    s.placeAt(x, z, heading);
+    s.giveMagic('wings', 0.3);
+    let at: { x: number; z: number } | null = null;
+    for (let tick = 0; tick < 60 && !at; tick++) {
+      if (w.cards) w.choose(0);
+      w.step({ x: Math.cos(heading), z: Math.sin(heading), active: true, dash: false });
+      for (const e of drain(w)) if (e.type === 'land' && e.who === s.id) at = { x: e.x, z: e.z };
+    }
+    const ok = at !== null && isFree(stage, at.x, at.z, s.radius) && !inWater(stage, at.x, at.z);
+    landed.push(ok ? `${name} ok` : `${name} BAD`);
+  }
+  out.landing = landed.join(', ');
+
+  // Phoenix: two pebbles, a moment apart. The first is undone (and grows you), the second lands.
+  {
+    const w = new World(12, undefined, rulesFor('normal'), stage);
+    const s = w.snake;
+    s.mass = 50;
+    s.immune = 0;
+    s.giveMagic('phoenix', 30);
+    const pebble = () => ({ kind: 'pebble' as const, x: s.x, z: s.z, dx: 1, dz: 0, speed: 1, left: 1, total: 1 });
+    const m0 = s.mass;
+    w['strikeProjectile'](pebble(), s);
+    const m1 = s.mass;
+    s.immune = 0;
+    w['strikeProjectile'](pebble(), s);
+    const m2 = s.mass;
+    const rises = drain(w).filter((e) => e.type === 'rise').length;
+    out.phoenix = m1 > m0 && m2 < m1 && rises === 1 && !s.hasMagic('phoenix') ? 'one hit undone' : `rises ${rises}, ${m0}→${m1.toFixed(1)}→${m2.toFixed(1)}`;
+  }
+
+  // Roar: a rival 5 m away is pushed out and dazed; a swooping raven turns for home.
+  {
+    const w = new World(13, undefined, rulesFor('normal'), stage);
+    const s = w.snake;
+    s.placeAt(0, -32, 0);
+    const rival = w.snakes[1];
+    rival.placeAt(5, -32, 0);
+    rival.immune = 0;
+    const raven = w.predators.find((p) => p.kind === 'raven')!;
+    raven.state = 2; // RAVEN.swoop
+    raven.x = -3;
+    raven.z = -32;
+    w['castMagic'](s, 'lionroyal');
+    const d = Math.hypot(rival.x - s.x, rival.z - s.z);
+    const ev = drain(w);
+    out.roar = d > 6.5 && rival.frozenFor > 0 && raven.state === 3 && ev.some((e) => e.type === 'ring') ? 'pushed, dazed, raven home' : `d ${d.toFixed(1)}, raven ${raven.state}`;
+  }
+
+  // River Rider: two seconds' swim down the Thames, with and without the mermaid.
+  {
+    const swim = (river: boolean) => {
+      const w = new World(14, undefined, rulesFor('normal'), stage);
+      const s = w.snake;
+      s.mass = 10;
+      s.placeAt(-6, -13.5, 0);
+      if (river) s.giveMagic('river', 20);
+      const x0 = s.x;
+      for (let tick = 0; tick < 120; tick++) {
+        if (w.cards) w.choose(0);
+        w.step(go);
+        drain(w);
+      }
+      return s.x - x0;
+    };
+    const fast = swim(true);
+    const slow = swim(false);
+    out.river = fast > slow * 2 ? 'faster than the paddle' : `${fast.toFixed(1)} vs ${slow.toFixed(1)} m`;
+  }
+
+  // Giant: a Wiggly Worm under Gog & Magog's spell gulps a duck (the next size's animal).
+  {
+    const w = new World(15, undefined, rulesFor('normal'), stage);
+    const s = w.snake;
+    s.mass = 0;
+    s.giveMagic('giant', 15);
+    const duck = w.animals.find((a) => a.kind === 'duck')!;
+    let gulped = false;
+    for (let tick = 0; tick < 30 && !gulped; tick++) {
+      if (w.cards) w.choose(0);
+      s.placeAt(duck.x - 0.5, duck.z, 0);
+      w.step(go);
+      gulped = drain(w).some((e) => e.type === 'gulp' && e.kind === 'duck');
+    }
+    out.giant = gulped ? 'gulped a duck' : 'no gulp';
+  }
+
+  // Pearly: the buttons lie on free, dry ground and lead to the nearest jewel; one is good to eat.
+  {
+    const w = new World(16, undefined, rulesFor('normal'), stage);
+    const s = w.snake;
+    s.placeAt(-20, -40, 0);
+    w['castMagic'](s, 'pearly');
+    const b = w.buttons;
+    const near = [...w.treasures].sort((p, q) => Math.hypot(p.x - s.x, p.z - s.z) - Math.hypot(q.x - s.x, q.z - s.z))[0];
+    const last = b[b.length - 1];
+    const dry = b.every((p) => isFree(stage, p.x, p.z, 0.2) && !inWater(stage, p.x, p.z));
+    const leads = last !== undefined && Math.hypot(last.x - near.x, last.z - near.z) < 4;
+    const m0 = s.mass;
+    s.placeAt(b[0].x, b[0].z, 0);
+    w['eatButtons'](s);
+    out.pearly = b.length > 3 && dry && leads && s.mass > m0 ? `${b.length} buttons to a jewel` : `${b.length} buttons, dry ${dry}, leads ${leads}`;
+  }
+
+  // Jewels: one snake visits a jewel five times (waiting for each to come back): ROYAL once.
+  {
+    const w = new World(17, undefined, rulesFor('normal'), stage);
+    const s = w.snake;
+    let royals = 0;
+    let picked = 0;
+    for (let tick = 0; tick < 60 * 140 && picked < 6; tick++) {
+      if (w.cards) w.choose(0);
+      const t = w.treasures.find((j) => j.respawnIn <= 0);
+      if (t) s.placeAt(t.x - 0.5, t.z, 0);
+      s.immune = 5;
+      w.step({ x: 0, z: 0, active: false, dash: false });
+      for (const e of drain(w)) {
+        if (e.type === 'jewel' && e.who === s.id) picked++;
+        if (e.type === 'royal' && e.who === s.id) royals++;
+      }
+      if (s.crowned && picked >= 5) break;
+    }
+    out.jewels = picked === 5 && royals === 1 && s.crowned ? 'five, ROYAL once' : `picked ${picked}, royals ${royals}`;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- invariants
 
 interface Tally {
@@ -274,7 +508,7 @@ const dry = (stage: Stage): Terrain => ({ bounds: stage.bounds, solidBoxes: stag
  * Flood-fill a 1 m grid from the arrival spot. A cell is open if a small snake fits there (and,
  * with `swim` false, it is dry or on a bridge). Returns how many open cells were never reached.
  */
-function floodFill(stage: Stage, swim: boolean): { open: number; unreached: number; sample: string } {
+function floodFill(stage: Stage, swim: boolean): { open: number; unreached: number; sample: string; reach: Uint8Array } {
   const B = stage.bounds;
   const W = Math.round(B.maxX - B.minX);
   const H = Math.round(B.maxZ - B.minZ);
@@ -317,7 +551,10 @@ function floodFill(stage: Stage, swim: boolean): { open: number; unreached: numb
   for (let c = 0; c < W * H && !sample; c++) {
     if (open[c] && !seen[c]) sample = `(${(B.minX + (c % W) + 0.5).toFixed(1)}, ${(B.minZ + Math.floor(c / W) + 0.5).toFixed(1)})`;
   }
-  return { open: total, unreached: total - reached, sample };
+  // The cells actually reached (open and seen), for checking spots like the Crown Jewels'.
+  const reach = new Uint8Array(W * H);
+  for (let c = 0; c < W * H; c++) reach[c] = open[c] & seen[c];
+  return { open: total, unreached: total - reached, sample, reach };
 }
 
 /**
@@ -586,7 +823,7 @@ function dangerAfter(w: World, d: Danger, run: DangerRun, tick: number, note: (m
     }
     const spec = VEHICLES[v.kind];
     for (const s of w.snakes) {
-      if (!s.alive) continue;
+      if (!s.alive || s.hasMagic('wings')) continue; // a flyer passes over the roof
       local(v, s.x, s.z, loc);
       if (Math.abs(loc.f) < spec.length / 2 + s.radius - 0.15 && Math.abs(loc.l) < spec.width / 2 + s.radius - 0.15) {
         d.inVehicle++;
@@ -904,6 +1141,9 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
   const danger: Danger | null = stage.predators.some((p) => p.kind === 'lion' || p.kind === 'raven') || stage.traffic ? newDanger() : null;
   // London's people: the guard, the trip, the tourists, the statue.
   const people: People | null = stage.guard ? newPeople() : null;
+  // London's legends and Crown Jewels.
+  const legends: Legends | null = stage.creatureHome ? newLegends() : null;
+  const reach = legends ? floodFill(stage, true).reach : null;
   const notes: string[] = [];
   const note = (msg: string) => {
     if (notes.length < 12) notes.push(msg);
@@ -922,12 +1162,17 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
       const dangerRun = danger ? newDangerRun(w) : null;
       const kids = w.kids.length;
       const paid = new Map<number, number>();
+      if (legends && reach && !jewelsReachable(w, reach)) {
+        legends.jewelSeedsBad++;
+        note(`${id}/${mode}/seed ${seed}: a Crown Jewel is not on free, reachable ground`);
+      }
       for (let tick = 0; tick < ticks; tick++) {
         if (dangerRun) dangerBefore(w, dangerRun);
         stepSolo(w, thumb);
         if (zoo) tallyZoo(w, zoo, outside, note, `${id}/${mode}/seed ${seed}/t ${tick}`);
         if (danger && dangerRun) dangerAfter(w, danger, dangerRun, tick, note, `${id}/${mode}/seed ${seed}/t ${tick}`);
         if (people) peopleAfter(w, people, paid, tick, note, `${id}/${mode}/seed ${seed}/t ${tick}`);
+        if (legends) legendsAfter(w, legends, note, `${id}/${mode}/seed ${seed}/t ${tick}`);
         w.events.length = 0;
         t.ticks++;
         const where = `${id}/${mode}/seed ${seed}/t ${tick}`;
@@ -943,7 +1188,8 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
             note(`${where}: ${what} in the water at (${x.toFixed(2)}, ${z.toFixed(2)})`);
           }
         };
-        for (const s of w.snakes) if (s.alive) check(`snake ${s.id}`, s.x, s.z, stage.logs, true);
+        // A flyer (Dragon Wings) is above it all: only the fence holds it, and it must land free (legendsAfter).
+        for (const s of w.snakes) if (s.alive && !s.hasMagic('wings')) check(`snake ${s.id}`, s.x, s.z, stage.logs, true);
         for (const a of w.animals) {
           check(a.kind, a.x, a.z, []);
           t.seen.add('animal:' + a.kind);
@@ -1113,6 +1359,31 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
     row('bump the guard', scripted.bump, scripted.bump === 'Ahem, no shrink');
     row('busker dance', scripted.dance, scripted.dance === 'in range only');
     row('statue BOOs in 8 s', scripted.boo, scripted.boo === 2);
+  }
+  if (legends) {
+    const info = (label: string, n: number | string) => console.log(`  ${label.padEnd(22)} ${String(n).padStart(8)}`);
+    const kinds = stage.creatureKinds ?? [];
+    const notGulped = kinds.filter((k) => !legends.gulped.has(k));
+    row('legends gulped', `${kinds.length - notGulped.length}/${kinds.length}`, notGulped.length === 0);
+    if (notGulped.length) console.log(`    never gulped: ${notGulped.join(', ')}`);
+    const noEffect = kinds.filter((k) => !legends.effects.has(k));
+    row('legend magics seen', `${kinds.length - noEffect.length}/${kinds.length}`, noEffect.length === 0);
+    if (noEffect.length) console.log(`    never seen: ${noEffect.map((k) => `${k} (${LEGEND_EFFECTS[k]})`).join(', ')}`);
+    info('flights landed', legends.landings);
+    row('bad landings', legends.badLandings, legends.badLandings === 0);
+    info('phoenix rises', legends.rises);
+    row('giants bonked by buses', legends.giantBonks, legends.giantBonks === 0);
+    info('jewels picked up', legends.jewels);
+    info('ROYAL crowns', legends.royals);
+    row('runs, 5/5 jewels reachable', `${t.runs - legends.jewelSeedsBad}/${t.runs}`, legends.jewelSeedsBad === 0);
+    const scripted = londonLegendsScripted(stage);
+    row('wings run out', scripted.landing, !scripted.landing.includes('BAD'));
+    row('phoenix', scripted.phoenix, scripted.phoenix === 'one hit undone');
+    row('mighty roar', scripted.roar, scripted.roar === 'pushed, dazed, raven home');
+    row('river rider', scripted.river, scripted.river === 'faster than the paddle');
+    row('giant snake', scripted.giant, scripted.giant === 'gulped a duck');
+    row('pearly lights', scripted.pearly, scripted.pearly.endsWith('buttons to a jewel'));
+    row('crown jewels', scripted.jewels, scripted.jewels === 'five, ROYAL once');
   }
   console.log(`  ${'longest stall'.padEnd(22)} ${(longest / 60).toFixed(1).padStart(7)}s`);
   row('kinds seen', `${want.size - missing.length}/${want.size}`, missing.length === 0);

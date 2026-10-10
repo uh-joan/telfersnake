@@ -13,6 +13,11 @@ const LICK_FOR = 0.2; // seconds a Long Tongue lash lasts
 /** The Thames' surface sits this far below the paper (render/london/water.ts WATER_Y). */
 const WATER_Y = -0.3;
 const RIPPLES = 2;
+/** Dragon Wings: how high a flying snake rides (metres), eased up and down. */
+const FLY_Y = 2.6;
+/** Gog & Magog: the giant's body is drawn this much wider (and a little taller). */
+const GIANT_WIDE = 2;
+const GIANT_TALL = 1.5;
 
 /** One snake: instanced body, googly-eyed head, and whatever kit its upgrades have earned it. */
 export class SnakeView {
@@ -53,15 +58,28 @@ export class SnakeView {
   private headSink = 0;
   /** Swimming: rings spreading out from the head. Built the first time the snake gets wet. */
   private ripples: THREE.Mesh[] = [];
+  // London's legends (A5): flight, the giant, the ghost, the crown.
+  /** Eased 0..1: up in the air (Dragon Wings) and drawn giant (Gog & Magog). */
+  private fly = 0;
+  private giant = 0;
+  /** Silver-and-red dragon wings that flap at the neck while flying. */
+  private readonly wings = new THREE.Group();
+  private readonly wingL = new THREE.Group();
+  private readonly wingR = new THREE.Group();
+  /** A shadow left on the ground under a flyer, so you can see where you will come down. */
+  private readonly shadow: THREE.Mesh;
+  /** The crown for all five Crown Jewels, for the rest of the run. */
+  private readonly crown = new THREE.Group();
+  private readonly bodyMat: THREE.MeshLambertMaterial;
+  private readonly skullMat: THREE.MeshLambertMaterial;
 
   /** `hatId` is a Tuck Shop hat. */
   constructor(private readonly snake: Snake, hatId = 'no-hat') {
     const look = snake.look;
     const pattern = (look.pattern ?? [look.body, look.body, look.body, look.body, look.stripe]).map((c) => new THREE.Color(c));
 
-    this.body = new THREE.InstancedMesh(
-      new THREE.SphereGeometry(1, 14, 10), new THREE.MeshLambertMaterial({ color: 0xffffff }), MAX_SEGMENTS,
-    );
+    this.bodyMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    this.body = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 14, 10), this.bodyMat, MAX_SEGMENTS);
     this.body.frustumCulled = false;
     for (let i = 0; i < MAX_SEGMENTS; i++) this.body.setColorAt(i, pattern[i % pattern.length]);
 
@@ -74,7 +92,8 @@ export class SnakeView {
     this.group.add(this.body, this.spikes);
 
     // Head is modelled at radius 1 facing +z, then scaled to the snake.
-    const skull = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshLambertMaterial({ color: look.head }));
+    this.skullMat = new THREE.MeshLambertMaterial({ color: look.head });
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), this.skullMat);
     skull.scale.set(1.2, 1, 1.35);
     this.head.add(skull);
     const white = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -225,6 +244,57 @@ export class SnakeView {
       this.head.add(this.hat);
     }
 
+    // Dragon Wings: a silver arm and a red membrane each side, hinged at the neck.
+    const silver = new THREE.MeshLambertMaterial({ color: 0xc8ccd6 });
+    const membrane = new THREE.MeshLambertMaterial({ color: 0xc8102e, side: THREE.DoubleSide });
+    for (const [side, wing] of [[-1, this.wingL], [1, this.wingR]] as const) {
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, 2.2, 6), silver);
+      arm.rotation.z = Math.PI / 2;
+      arm.position.x = side * 1.1;
+      const sail = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([
+        new THREE.Vector2(0, 0), new THREE.Vector2(side * 2.2, 0), new THREE.Vector2(side * 1.6, 0.9), new THREE.Vector2(side * 0.9, 0.6), new THREE.Vector2(side * 0.4, 1.1),
+      ])), membrane);
+      sail.rotation.x = -Math.PI / 2;
+      wing.add(arm, sail);
+      wing.position.set(side * 0.7, 0.5, -0.5);
+      this.wings.add(wing);
+    }
+    this.wings.visible = false;
+    this.head.add(this.wings);
+    this.shadow = new THREE.Mesh(
+      new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false }),
+    );
+    this.shadow.visible = false;
+    this.group.add(this.shadow);
+
+    // The crown: a gold band, five points with pearls, a red velvet cap and a little cross on top.
+    const gold = new THREE.MeshLambertMaterial({ color: 0xffc93c });
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.56, 0.36, 16, 1, true), gold);
+    band.material.side = THREE.DoubleSide;
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.55, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0xc8102e }));
+    cap.position.y = 0.05;
+    this.crown.add(band, cap);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const point = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.38, 4), gold);
+      point.position.set(Math.cos(a) * 0.58, 0.32, Math.sin(a) * 0.58);
+      const pearl = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), white);
+      pearl.position.set(Math.cos(a) * 0.58, 0.54, Math.sin(a) * 0.58);
+      const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.1), new THREE.MeshLambertMaterial({ color: [0xe0115f, 0x1f5fe0, 0x14b86a, 0xe8f6ff, 0x9b4de0][i] }));
+      gem.position.set(Math.cos(a + 0.63) * 0.6, 0, Math.sin(a + 0.63) * 0.6);
+      this.crown.add(point, pearl, gem);
+    }
+    const cross = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.08), gold);
+    cross.position.y = 0.7;
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.08), gold);
+    bar.position.y = 0.74;
+    this.crown.add(cross, bar);
+    this.crown.position.set(0, 1.1, -0.15);
+    this.crown.scale.setScalar(1.3);
+    this.crown.visible = false;
+    this.head.add(this.crown);
+
     this.group.add(this.head);
   }
 
@@ -283,6 +353,21 @@ export class SnakeView {
 
     const r = snake.radius;
     const length = snake.length;
+    // London's legends: flying (eased up and down), drawn giant, see-through as a ghost.
+    this.fly += ((snake.hasMagic('wings') ? 1 : 0) - this.fly) * Math.min(1, dt * 3);
+    this.giant += ((snake.hasMagic('giant') ? 1 : 0) - this.giant) * Math.min(1, dt * 4);
+    const lift = this.fly * (FLY_Y + Math.sin(time * 2.4) * 0.2);
+    const wide = 1 + (GIANT_WIDE - 1) * this.giant;
+    const tall = 1 + (GIANT_TALL - 1) * this.giant;
+    const ghostly = snake.hasMagic('hidden') && (terrain as { id?: string } | undefined)?.id === 'london';
+    if (ghostly !== this.bodyMat.transparent) {
+      for (const m of [this.bodyMat, this.skullMat]) {
+        m.transparent = ghostly;
+        m.opacity = ghostly ? 0.45 : 1;
+        m.depthWrite = !ghostly;
+        m.needsUpdate = true;
+      }
+    }
     let kept = 0;
     for (let i = 0; i < this.bumps.length; i++) {
       const d = this.bumps[i] + BUMP_SPEED * dt;
@@ -317,13 +402,13 @@ export class SnakeView {
       for (const b of this.bumps) swell += Math.exp(-(((d - b) / BUMP_WIDTH) ** 2));
       s *= 1 + bulge * Math.min(1.5, swell);
       // Swimming: the body rides with its back just out of the water, bobbing along in a wave.
-      let y = s;
-      if (wet) {
+      let y = s * tall + lift;
+      if (wet && this.fly < 0.5) {
         const target = inWater(terrain, this.p.x, this.p.z) ? s * 0.55 - WATER_Y : 0;
         this.sink[i] += (target - this.sink[i]) * ease;
         if (this.sink[i] > 0.01) y += -this.sink[i] + Math.sin(time * 3.2 - i * 0.7) * 0.06 * Math.min(1, this.sink[i]);
       } else this.sink[i] = 0;
-      this.m.makeScale(s, s, s).setPosition(this.p.x, y, this.p.z);
+      this.m.makeScale(s * wide, s * tall, s * wide).setPosition(this.p.x, y, this.p.z);
       this.body.setMatrixAt(i, this.m);
       if (wrapped && this.wrap) {
         const w = s * (1.22 + Math.sin(time * 4 + i) * 0.03);
@@ -379,14 +464,29 @@ export class SnakeView {
         f.position.z = 1.5 + i * 0.12 + 0.1 * flick;
       }
     }
-    const hs = r * 1.18 * (isDragon ? 1.15 : 1);
+    const hs = r * 1.18 * (isDragon ? 1.15 : 1) * (1 + (GIANT_WIDE * 0.85 - 1) * this.giant);
     this.head.scale.setScalar(hs);
     // The head floats a little higher than the body, bobbing: a doggy-paddling snake.
-    const swimming = wet && inWater(terrain, snake.x, snake.z);
+    const swimming = wet && this.fly < 0.5 && inWater(terrain, snake.x, snake.z);
     this.headSink += ((swimming ? hs * 0.45 - WATER_Y : 0) - this.headSink) * ease;
     const bob = this.headSink > 0.01 ? Math.sin(time * 3.2 + 0.7) * 0.07 * Math.min(1, this.headSink) : 0;
-    this.head.position.set(snake.x, hs - this.headSink + bob, snake.z);
+    this.head.position.set(snake.x, hs - this.headSink + bob + lift, snake.z);
     this.splash(swimming, hs, time);
+    // Flying: the wings flap, and a shadow stays on the ground below.
+    this.wings.visible = this.fly > 0.05;
+    if (this.wings.visible) {
+      const flap = Math.sin(time * 9) * 0.6;
+      this.wingL.rotation.z = flap;
+      this.wingR.rotation.z = -flap;
+      this.wings.scale.setScalar(this.fly * 1.7);
+    }
+    this.shadow.visible = this.fly > 0.05;
+    if (this.shadow.visible) {
+      this.shadow.position.set(snake.x, (wet && inWater(terrain, snake.x, snake.z) ? WATER_Y : 0) + 0.04, snake.z);
+      this.shadow.scale.setScalar(hs * (1.2 - 0.3 * this.fly));
+    }
+    // ROYAL!: the crown, perched on whatever hat they wear.
+    this.crown.visible = snake.crowned;
     this.head.rotation.y = Math.PI / 2 - snake.heading;
     this.lickLeft -= dt;
     if (this.lickLeft > 0 && snake.reachBonus > 0) {
@@ -406,7 +506,7 @@ export class SnakeView {
     // The helmet is on while it can take a bonk and gone while it recharges: that is the feedback.
     this.helmet.visible = snake.helmetRecharge > 0 && snake.helmetReady;
     // A hat somebody saved up for is never hidden: it perches on top of the helmet.
-    if (this.hat) this.hat.position.y = this.hatY + (this.helmet.visible ? 0.4 : 0);
+    if (this.hat) this.hat.position.y = this.hatY + (this.helmet.visible ? 0.4 : 0) + (this.crown.visible ? 0.9 : 0);
     if (this.hatSpin) this.hatSpin.rotation.y = time * 14;
   }
 }

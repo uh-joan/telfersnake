@@ -5,7 +5,7 @@ import {
   animalKindIndex, animalRow, type ClientMessage, cooperRow, creatureKindIndex, creatureRow, eventIsFor, foodRow, hazardRow,
   kidKindIndex, kidRow, pelletRow, predatorKindIndex, predatorRow, projectileRow, type Seat, type ServerMessage, SNAPSHOT_EVERY,
   vehicleKindIndex, vehicleRow,
-  snakeRow, type Snapshot,
+  snakeRow, type Snapshot, buttonRow, snakeExtra, treasureRow,
 } from '../src/net/protocol';
 import { type Mode, rulesFor } from '../src/sim/modes';
 import type { StageId } from '../src/sim/stage';
@@ -50,6 +50,7 @@ export class Room {
   private events: GameEvent[] = [];
   private sentFoods: string[] = [];
   private sentPellets = '';
+  private sentButtons = '';
   /** Someone changed clothes: tell the room, at most once a second. */
   private seatsChanged = false;
 
@@ -105,6 +106,7 @@ export class Room {
       creatureKinds: w.creatures.map(creatureKindIndex),
       foods: w.foods.map(foodRow), pellets: w.pellets.map(pelletRow),
       ...(w.vehicles.length > 0 ? { vehicleKinds: w.vehicles.map(vehicleKindIndex) } : {}),
+      ...(w.treasures.length > 0 ? { treasureCount: w.treasures.length } : {}),
     });
     this.broadcast({ t: 'seats', seats: this.seats() });
     return true;
@@ -183,11 +185,19 @@ export class Room {
     const pelletsChanged = pelletKey !== this.sentPellets;
     this.sentPellets = pelletKey;
 
+    // The pearl buttons hardly change either: the whole list, only when it did.
+    const buttons = w.buttons.map(buttonRow);
+    const buttonKey = buttons.join(';');
+    const buttonsChanged = buttonKey !== this.sentButtons;
+    this.sentButtons = buttonKey;
+
     const shared = {
       t: 'snap' as const, k: w.tick, s: w.snakes.map(snakeRow), a: w.animals.map(animalRow),
       pd: w.predators.map(predatorRow), kd: w.kids.map(kidRow), cr: w.creatures.map(creatureRow),
       pj: w.projectiles.map(projectileRow),
       ...(w.vehicles.length > 0 ? { vh: w.vehicles.map(vehicleRow) } : {}),
+      ...(w.treasures.length > 0 ? { tr: w.treasures.map(treasureRow), sx: w.snakes.map(snakeExtra) } : {}),
+      ...(buttonsChanged ? { pb: buttons } : {}),
       f: foods, c: cooperRow(w.cooper), ...(pelletsChanged ? { p: pellets } : {}),
     };
     for (const p of this.players.values()) {
@@ -198,7 +208,7 @@ export class Room {
         p.missedFood = true;
         continue;
       }
-      const caughtUp = p.missedFood ? { f: w.foods.map(foodRow), p: pellets } : {};
+      const caughtUp = p.missedFood ? { f: w.foods.map(foodRow), p: pellets, pb: buttons } : {};
       p.missedFood = false;
       send(p.socket, {
         ...shared,

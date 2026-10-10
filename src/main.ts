@@ -23,6 +23,7 @@ import { disposeTree } from './render/paint';
 import { Sparkles } from './render/sparkles';
 import { TrailView } from './render/trailView';
 import { LondonPeople } from './render/london/people';
+import { JEWEL_COLOURS, LegendView } from './render/london/legends';
 import { Stage } from './render/stage';
 import { Weather } from './render/weather';
 import { UpgradeFx } from './render/upgradeFx';
@@ -36,7 +37,7 @@ import { mountVersionSwitch } from './ui/versionSwitch';
 import { MEGA_TIER, TIERS } from './sim/snake';
 import { POWER_GEM_COST, POWER_IDS, UPGRADES } from './sim/upgrades';
 import type { WorldView } from './sim/view';
-import { BUSK_REACH, STEP, World } from './sim/world';
+import { BUSK_REACH, ROAR_REACH, ROYAL_GEMS, STEP, World } from './sim/world';
 import { CardPicker } from './ui/cards';
 import { Hud } from './ui/hud';
 import { Shop } from './ui/shop';
@@ -79,6 +80,7 @@ let vehicleView = new VehicleView(world.vehicles.length);
 let kidView = new KidView(world.kids.length);
 let projectileView = new ProjectileView();
 let creatureView = new CreatureView(world.creatures.length);
+let legendView = new LegendView(world.treasures.length);
 let hazardView = new HazardView(world.hazards);
 let cooperView = new CooperView(world.stage.cooper?.persona ?? 'cooper');
 const beeView = new BeeView();
@@ -159,7 +161,7 @@ function wearOutfit(): void {
 
 /** Point the renderer at a different world: its own rocks, food, animals and snakes. */
 function mountWorld(next: WorldView): void {
-  for (const old of [hazardView.group, foodView.group, animalView.group, predatorView.group, vehicleView.group, kidView.group, projectileView.group, creatureView.group]) {
+  for (const old of [hazardView.group, foodView.group, animalView.group, predatorView.group, vehicleView.group, kidView.group, projectileView.group, creatureView.group, legendView.group]) {
     stage.scene.remove(old);
     disposeTree(old);
   }
@@ -172,7 +174,8 @@ function mountWorld(next: WorldView): void {
   kidView = new KidView(world.kids.length);
   projectileView = new ProjectileView();
   creatureView = new CreatureView(world.creatures.length);
-  stage.scene.add(hazardView.group, foodView.group, animalView.group, predatorView.group, vehicleView.group, kidView.group, projectileView.group, creatureView.group);
+  legendView = new LegendView(world.treasures.length);
+  stage.scene.add(hazardView.group, foodView.group, animalView.group, predatorView.group, vehicleView.group, kidView.group, projectileView.group, creatureView.group, legendView.group);
   mountScenery(world.stage.id);
   // London's lions and ravens swap places with the statues and the roosting birds in the scenery.
   predatorView.bind(scenery?.group ?? null);
@@ -211,7 +214,22 @@ const MAGIC_LABEL: Record<string, [string, string]> = {
   pixie: ['🧚 Pixie Dust', '🧲 super magnet'],
   squirrel: ['🐿️ Acorn Hoard', '🌰 ➕'],
   wisp: ['🌟 Wisp Cache', '✨ treasure!'],
+  // London's legends: one short word each, and pictures.
+  dragon: ['🐉 WINGS!', '🪽 fly!'],
+  lionroyal: ['🦁 ROAR!', '👑'],
+  phoenix: ['🔥 PHOENIX!', '🪶 ❤️'],
+  mermaid: ['🧜 SPLASH!', '🌊 ⚡'],
+  ghost: ['👻 BOO!', '🙈'],
+  gog: ['🗿 GIANT!', '🗿🗿'],
+  fairy: ['🧚 FAIRY DUST!', '🧲 ✨'],
+  pearly: ['✨ FOLLOW!', '🔘🔘🔘 💎'],
 };
+/** London's unicorn says it in red, white and blue. */
+const UNION_LABEL: [string, string] = ['🦄 RAINBOW!', '🇬🇧 all gold'];
+const FLAME_FEATHERS = [0xff4d00, 0xff7b00, 0xffb703, 0xffe066, 0xffffff];
+const PEARL_FX = [0xfffaf0, 0xffffff, 0xe8e0d0];
+const FAIRY_FX = [0x9bffc0, 0xfff6a0, 0xd8b4ff, 0xffffff];
+const SILVER_WING = [0xc8ccd6, 0xffffff, 0xc8102e];
 
 const outfit = (): Outfit => ({ skin: save.skin, hat: save.hat, trail: save.trail, name: save.name });
 
@@ -756,13 +774,71 @@ function handleEvents(): void {
         sparkles.burst(e.x, e.z, [glow, 0xffffff, 0xffe066], 34, 1.7);
         if (e.who === world.me) {
           for (let i = 0; i < e.gems; i++) earnGem();
-          const [title, sub] = MAGIC_LABEL[e.kind];
+          const [title, sub] = e.kind === 'unicorn' && world.stage.id === 'london' ? UNION_LABEL : MAGIC_LABEL[e.kind];
           hud.announce(title, sub);
           sfx?.golden();
-          if (e.kind === 'stag') sfx?.tierUp();
+          if (e.kind === 'stag' || e.kind === 'dragon') sfx?.tierUp();
+          if (e.kind === 'dragon') sfx?.whoosh();
         }
         break;
       }
+      // ── London's legends ──
+      case 'ring':
+        // The Royal Lion's Mighty Roar: a golden ring blowing outward.
+        for (let i = 0; i < 24; i++) {
+          const a = (i / 24) * Math.PI * 2;
+          sparkles.burst(e.x + Math.cos(a) * ROAR_REACH * 0.5, e.z + Math.sin(a) * ROAR_REACH * 0.5, GOLD, 2, 1.4);
+        }
+        sparkles.burst(e.x, e.z, GOLD, 30, 2.2);
+        if (nearMe(e.x, e.z, 20)) {
+          hud.popup('ROAR!', e.x, e.z, 'fun');
+          sfx?.growl();
+        }
+        break;
+      case 'roared':
+        sparkles.burst(e.x, e.z, GOLD, 8, 0.8);
+        if (mine) hud.popup('🦁 ROAR!', e.x, e.z, 'bad');
+        break;
+      case 'rise':
+        // The phoenix undid a hit: flame-feathers, and you pop back a little bigger.
+        sparkles.burst(e.x, e.z, FLAME_FEATHERS, 36, 1.8);
+        if (!mine) break;
+        hud.announce('🔥 RISE!', '🪶 ➕');
+        sfx?.golden();
+        sfx?.tierUp();
+        break;
+      case 'land':
+        sparkles.burst(e.x, e.z, DUST, 12, 0.9);
+        if (mine) hud.popup('🪽 LAND!', e.x, e.z, 'fun');
+        break;
+      case 'pearly':
+        sparkles.burst(e.x, e.z, PEARL_FX, 24, 1.2);
+        sparkles.burst(e.tx, e.tz, PEARL_FX, 18, 1.2);
+        break;
+      case 'button':
+        sparkles.burst(e.x, e.z, PEARL_FX, 4, 0.5);
+        sfx?.pellet();
+        break;
+      case 'jewel': {
+        // A Crown Jewel: a burst in its own colour; the HUD's crown fills a slot.
+        const colour = JEWEL_COLOURS[e.i % JEWEL_COLOURS.length];
+        sparkles.burst(e.x, e.z, [colour, 0xffffff, 0xffd84a], 26, 1.4);
+        if (!mine) break;
+        hud.popup(`💎 ${e.n}/5`, e.x, e.z, 'good');
+        sfx?.golden();
+        sfx?.chaChing();
+        break;
+      }
+      case 'royal':
+        // All five: ROYAL! A crown for the rest of the run, and gems.
+        sparkles.burst(e.x, e.z, CONFETTI, 40, 1.8);
+        sparkles.burst(e.x, e.z, GOLD, 30, 1.6);
+        if (!mine) break;
+        for (let i = 0; i < ROYAL_GEMS; i++) earnGem();
+        hud.announce('👑 ROYAL!', '💎💎💎💎💎');
+        sfx?.goldenTicket();
+        sfx?.tierUp();
+        break;
       case 'cry':
         // London's animals: a swan's HONK, a corgi's yip, a whole flock of pigeons lifting off.
         if (!nearMe(e.x, e.z)) break;
@@ -881,6 +957,7 @@ function frame(now: number): void {
     music?.duck(screen !== null);
   }
   const s = world.snake;
+  const london = world.stage.id === 'london';
   if (playing) {
     if (!connection) {
       backlog += dt;
@@ -931,6 +1008,12 @@ function frame(now: number): void {
         if (o.hasMagic('hidden') && Math.random() < 0.4) sparkles.drift(o.x, o.z, ICE);
         if (o.hasMagic('magnet') && Math.random() < 0.3) sparkles.drift(o.x, o.z, PIXIE_FX);
         if (o.hasMagic('owl') && Math.random() < 0.15) sparkles.drift(o.x, o.z, OWL_FX);
+        // London's legends.
+        if (o.hasMagic('wings') && Math.random() < 0.4) sparkles.drift(o.x, o.z, SILVER_WING);
+        if (o.hasMagic('phoenix') && Math.random() < 0.35) sparkles.drift(o.x, o.z, FLAME_FEATHERS);
+        if (o.hasMagic('giant') && Math.random() < 0.25) sparkles.drift(o.x, o.z, BRONZE_DUST);
+        if (o.hasMagic('river') && o.swimming && Math.random() < 0.5) sparkles.drift(o.x, o.z, BUBBLES);
+        if (o.hasMagic('magnet') && london && Math.random() < 0.4) sparkles.drift(o.x, o.z, FAIRY_FX);
       }
       // The fantastic creatures glimmer with their own aura, in their own colour, all round them.
       for (const c of world.creatures) {
@@ -942,8 +1025,12 @@ function frame(now: number): void {
     if ((trailIn -= dt) <= 0) {
       trailIn = TRAIL_EVERY;
       for (const o of world.snakes) {
-        // Rainbow Rush overrides the usual trail with a bright rainbow ribbon.
-        const trailId = o.hasMagic('rainbow') ? 'rainbow-trail' : trailIdFor(o.id);
+        // Rainbow Rush overrides the usual trail with a bright rainbow ribbon (red, white and blue in
+        // London); River Rider leaves a splash, the fairy her dust.
+        const trailId = o.hasMagic('rainbow')
+          ? (london ? 'union-trail' : 'rainbow-trail')
+          : london && o.hasMagic('river') && o.swimming ? 'river-splash'
+            : london && o.hasMagic('magnet') ? 'fairy-dust' : trailIdFor(o.id);
         if (trailId === 'no-trail' || !o.alive) continue;
         o.sampleAt(o.length, tail);
         trailView.add(tail.x, tail.z, trailId);
@@ -963,6 +1050,7 @@ function frame(now: number): void {
   kidView.update(world, playing ? dt : 0);
   projectileView.update(world, time);
   creatureView.update(world, time);
+  legendView.update(world, time);
   hazardView.update(world, time);
   beeView.update(world, time);
   sparkles.update(dt);
@@ -971,7 +1059,8 @@ function frame(now: number): void {
   scenery?.reveal(s.x, s.z, dt);
   cooperView.update(world.cooper, playing ? dt : 0, time);
   if (people && world.stage.id === 'london') people.update(world, playing ? dt : 0);
-  stage.follow(s.x, s.z, s.heading, s.radius, dt);
+  // Dragon Wings: the camera pulls back to show the whole sky; a giant needs a little more room too.
+  stage.follow(s.x, s.z, s.heading, s.radius + (s.hasMagic('wings') ? 0.4 : 0) + (s.hasMagic('giant') ? 0.2 : 0), dt);
   weather.update(dt, s.x, s.z);
   hud.update(world, stage, dt);
   stage.render();
@@ -1211,7 +1300,7 @@ hud.teachDash = !save.dashed; // the dash button introduces itself until it has 
 applyAudio();
 
 if (import.meta.env.DEV) {
-  Object.assign(window, { __game: { get world() { return world; }, get connection() { return connection; }, solo, stage, save } });
+  Object.assign(window, { __game: { get world() { return world; }, get connection() { return connection; }, solo, stage, save, pump: (n = 1) => { for (let i = 0; i < n; i++) frame(last + 1000 / 60); } } }); // pump(n): run n frames by hand (screenshots while the pane is hidden)
 }
 
 requestAnimationFrame(frame);

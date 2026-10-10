@@ -39,6 +39,16 @@ const STYLES: Record<string, Style> = {
   snow: S('flake', -0.1, 0.35, 1.2, 0.75, 1.0),
   hearts: S('heart', 1.0, 0.3, 0, 1.0, 1.2),
   bubbles: S('bubble', 1.4, -0.15, 0, 1.0, 1.6),
+  // London's legends: Rainbow Rush in red, white and blue; River Rider's splash; the fairy's dust.
+  'union-trail': S('orb', 0.9, 0.4, 0, 1.1, 0.2, true),
+  'river-splash': S('bubble', 1.6, 0.4, 0, 1.0, 1.2),
+  'fairy-dust': S('orb', 0.7, 0.2, 0, 0.8, 0.9, true),
+};
+/** Trails a magic lends (not sold in the Tuck Shop), and their colours. */
+const MAGIC_PALETTES: Record<string, number[]> = {
+  'union-trail': [0xc8102e, 0xffffff, 0x1f3fa8, 0xc8102e, 0xffffff, 0x1f3fa8],
+  'river-splash': [0xdff3ff, 0x7fe0d8, 0xffffff],
+  'fairy-dust': [0x9bffc0, 0xfff6a0, 0xffffff, 0xd8b4ff],
 };
 const DEFAULT = STYLES.sparkle;
 
@@ -155,7 +165,7 @@ export class TrailView {
   /** Drop a mote for `trailId` at the tail, in its own shape, motion and colours. */
   add(x: number, z: number, trailId: string): void {
     const style = STYLES[trailId] ?? DEFAULT;
-    const palette = trailPalette(trailId);
+    const palette = MAGIC_PALETTES[trailId] ?? trailPalette(trailId);
     if (palette.length === 0) return;
     const em = this.emitters[style.shape];
     if (em.motes.length >= 300) return;

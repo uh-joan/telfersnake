@@ -21,9 +21,17 @@ export interface Input {
  *   magnet  — a huge food magnet (Pixie)
  *   owl     — the minimap reveals the shy creatures, and your next card is epic-or-better (Wise Owl)
  *   halo    — a cosmetic glow after the Stag's Blessing
+ * London's legends (A5), appended so the bitmask only grows:
+ *   wings   — FLIGHT: over water, solids, buses and bonks; lands on free dry ground (Silver Dragon)
+ *   river   — the Thames is a fast lane and its current pushes you along (Thames Mermaid)
+ *   giant   — the next size's gulp, drawn twice as wide, buses bounce off you (Gog & Magog)
+ *   phoenix — the next bonk, bite, pelt or bus is undone, and you rise again (Phoenix of St Paul's)
+ *   roar    — a brief golden ring after the Royal Lion's Mighty Roar (cosmetic)
  */
-export const MAGIC_IDS = ['rainbow', 'hidden', 'magnet', 'owl', 'halo'] as const;
+export const MAGIC_IDS = ['rainbow', 'hidden', 'magnet', 'owl', 'halo', 'wings', 'river', 'giant', 'phoenix', 'roar'] as const;
 export type MagicId = (typeof MAGIC_IDS)[number];
+const WINGS = MAGIC_IDS.indexOf('wings');
+const RIVER = MAGIC_IDS.indexOf('river');
 
 /** `gulps` is what a snake of that size can newly swallow, as pictures: the players are too young to read. */
 export const TIERS = [
@@ -43,6 +51,8 @@ const TRAIL_CAP = 4096;
 const DASH_BOOST = 1.6;
 /** Scratch for the river's current at the head. */
 const FLOW = { x: 0, z: 0 };
+/** River Rider (the mermaid): the current pushes a swimmer along its own heading, this much harder. */
+const RIVER_PUSH = 2;
 const DASH_COST = 0.8; // mass per second
 const DASH_MIN_MASS = 2;
 const MAX_RADIUS = 1.1;
@@ -145,6 +155,9 @@ export class Snake {
   teaFrom = 0;
   /** London: seconds after a Tea Time before bites count toward the next one. */
   teaCool = 0;
+  /** London's Crown Jewels picked up this run, and the crown for all five (kept for the rest of the run). */
+  jewels = 0;
+  crowned = false;
   /** Seconds a spent helmet takes to come back. 0 = no helmet owned. */
   helmetRecharge = 0;
   helmetReady = false;
@@ -186,6 +199,8 @@ export class Snake {
     this.laserIn = this.stinkIn = this.zapIn = this.freezeIn = 0;
     this.frozenFor = 0;
     this.teaFor = this.teaStep = this.teaFrom = this.teaCool = 0;
+    this.jewels = 0;
+    this.crowned = false;
     for (let i = 0; i < this.magic.length; i++) this.magic[i] = 0;
     this.luckyCards = 0;
     refreshStats(this);
@@ -199,6 +214,11 @@ export class Snake {
   giveMagic(id: MagicId, secs: number): void {
     const i = MAGIC_IDS.indexOf(id);
     this.magic[i] = Math.max(this.magic[i], secs);
+  }
+
+  /** Spend a buff at once (the phoenix, when it undoes a hit). */
+  clearMagic(id: MagicId): void {
+    this.magic[MAGIC_IDS.indexOf(id)] = 0;
   }
 
   /** Count every buff down; called once a tick for a living snake. */
@@ -381,20 +401,29 @@ export class Snake {
     const speed = this.baseSpeed * this.speedFactor * (this.dashing ? DASH_BOOST : 1);
     let nx = this.x + Math.cos(this.heading) * speed * dt;
     let nz = this.z + Math.sin(this.heading) * speed * dt;
+    // Dragon Wings (London): up in the air, over the river, the buildings and the rocks alike; only
+    // the edge of the map holds a flyer. Keyed off the magic bitmask, which the client is sent too,
+    // so its replay of its own inputs (replica.ts) flies exactly as the server does.
+    const flying = this.magic[WINGS] > 0;
     // The current carries a swimmer along. Here, keyed off position alone, so a client replaying
     // its own inputs (replica.ts) drifts exactly as the server does. (The ×0.5 paddle is the
     // world's speedFactor, which the client is sent.) No rivers: no branch.
     if (terrain.water) {
-      const river = waterAt(terrain, this.x, this.z);
+      const river = flying ? null : waterAt(terrain, this.x, this.z);
       this.swimming = river !== null;
-      if (river) {
+      if (river && this.magic[RIVER] > 0) {
+        // River Rider: the current is on your side, whichever way you swim.
+        const push = Math.hypot(river.drift.x, river.drift.z) * RIVER_PUSH;
+        nx += Math.cos(this.heading) * push * dt;
+        nz += Math.sin(this.heading) * push * dt;
+      } else if (river) {
         flowAt(river, this.x, this.z, FLOW);
         nx += FLOW.x * dt;
         nz += FLOW.z * dt;
       }
     }
 
-    const hit = resolveCircle(terrain, nx, nz, this.radius, this.hit, rocks);
+    const hit = flying ? this.fence(terrain, nx, nz) : resolveCircle(terrain, nx, nz, this.radius, this.hit, rocks);
     this.x = hit.x;
     this.z = hit.z;
     this.wasTouchingWall = this.touchingWall;
@@ -404,6 +433,22 @@ export class Snake {
       this.wallNz = hit.nz;
       this.deflect(hit.nx, hit.nz, dt);
     }
+  }
+
+  /** A flyer meets only the edge of the map. */
+  private fence(t: Terrain, px: number, pz: number): ReturnType<typeof makeHit> {
+    const out = this.hit;
+    const r = this.radius;
+    const B = t.bounds;
+    out.hit = false;
+    out.nx = out.nz = 0;
+    if (px < B.minX + r) { px = B.minX + r; out.hit = true; out.nx = 1; }
+    if (px > B.maxX - r) { px = B.maxX - r; out.hit = true; out.nx = -1; }
+    if (pz < B.minZ + r) { pz = B.minZ + r; out.hit = true; out.nz = 1; }
+    if (pz > B.maxZ - r) { pz = B.maxZ - r; out.hit = true; out.nz = -1; }
+    out.x = px;
+    out.z = pz;
+    return out;
   }
 
   /**

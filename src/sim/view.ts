@@ -6,6 +6,7 @@ import type { Kid, Projectile } from './kids';
 import type { Predator } from './predators';
 import type { Snake } from './snake';
 import type { Vehicle } from './vehicles';
+import type { Button, Treasure } from './treasures';
 import type { Stage } from './stage';
 import type { CardId } from './upgrades';
 import type { GameEvent } from './world';
@@ -43,6 +44,9 @@ export interface WorldView {
   readonly kids: readonly Kid[];
   readonly projectiles: readonly Projectile[];
   readonly creatures: readonly Creature[];
+  /** London's Crown Jewels and the pearly buttons (empty elsewhere). */
+  readonly treasures: readonly Treasure[];
+  readonly buttons: readonly Button[];
   readonly pellets: readonly Pellet[];
   /** Things that happened since whoever is drawing last emptied this. */
   readonly events: GameEvent[];

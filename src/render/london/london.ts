@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { LANDMARKS } from '../../sim/londonLayout';
+import { ELFIN_OAK, LANDMARKS } from '../../sim/londonLayout';
+import { makeElfinOak } from './legends';
 import type { School } from '../school';
 import { makeBridges } from './bridges';
 import { makeFurniture } from './furniture';
@@ -159,6 +160,7 @@ export function makeLondon(maxAnisotropy: number, maxTextureSize = 4096, camera?
 
   const thames = makeThames();
   group.add(tableMesh, makePaperMap(maxAnisotropy, maxTextureSize), thames.group, makeBridges(), makeFurniture());
+  group.add(makeElfinOak(ELFIN_OAK)); // the legends' glade in Kensington Gardens
 
   // ---- the twelve landmarks, each built round its own origin and set down at its `at`
   const builds: LandmarkBuild[] = [];
