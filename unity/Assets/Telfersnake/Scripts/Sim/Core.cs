@@ -162,7 +162,26 @@ namespace Telfer.Sim
                     float rr = c.r + margin;
                     if ((x - c.x) * (x - c.x) + (z - c.z) * (z - c.z) < rr * rr) return false;
                 }
+            // On a stage with rivers, only dry land is somewhere to stand or spawn.
+            if (t is Stage st && st.Water != null && Water.At(st, x, z, Math.Max(0, margin)) != null) return false;
             return true;
+        }
+
+        /// <summary>
+        /// ResolveCircle for things that walk but never swim (animals, the warden, the wild): a step from
+        /// dry land into a river is refused and reported as a bump against the bank, so the walker's own
+        /// wall handling turns it round (collide.ts resolveAshore). Without water it is ResolveCircle.
+        /// </summary>
+        public static Hit ResolveAshore(ITerrain t, float fromX, float fromZ, float px, float pz, float r, Hit o, System.Collections.Generic.IReadOnlyList<Circle> extra = null)
+        {
+            ResolveCircle(t, px, pz, r, o, extra);
+            if (!(t is Stage st) || st.Water == null) return o;
+            var w = Water.At(st, o.x, o.z);
+            if (w == null || Water.At(st, fromX, fromZ) != null) return o; // already wet: let it climb out
+            Water.ShoreNormal(w, fromX, fromZ, out float nx, out float nz);
+            o.x = fromX; o.z = fromZ;
+            o.hit = true; o.nx = nx; o.nz = nz;
+            return o;
         }
 
         public const float PI = (float)Math.PI;

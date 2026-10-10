@@ -29,8 +29,8 @@ namespace Telfer.Game
 
         enum State { Title, Play, Cards, Paused }
 
-        /// <summary>Stars pay ×1.25 on the Common, half on Easy (main.ts).</summary>
-        const float COMMON_BONUS = 1.25f;
+        /// <summary>Stars pay ×1.25 on the Common and ×1.5 in London, half on Easy (main.ts PLACES bonus).</summary>
+        const float COMMON_BONUS = 1.25f, LONDON_BONUS = 1.5f;
 
         State state = State.Title;
         World world;
@@ -40,6 +40,7 @@ namespace Telfer.Game
         readonly List<SnakeView> snakeViews = new List<SnakeView>();
         Scenery scenery;
         CommonEnv common;
+        LondonEnv london;
         Atmosphere atmo;
         CameraRig rig;
         Hud hud;
@@ -117,7 +118,7 @@ namespace Telfer.Game
             controls = new Controls();
             headOf = i => snakeViews[i].HeadPos;
             block = new MaterialPropertyBlock();
-            Shots.BeforeRender = () => { rig.Refit(); if (state != State.Title) hud.Sync(world, rig.Cam, headOf, 0); };
+            Shots.BeforeRender = () => { rig.Refit(); if (state != State.Title) hud.Sync(world, rig.Cam, headOf, 0); SyncLondon(0); };
             NewWorld(P.Mode, P.Stage, true);
             rig.TitleOrbit(0);
             hud.RefreshTitle();
@@ -156,22 +157,46 @@ namespace Telfer.Game
                 life.Build(School.Stage);
             }
             if (id == StageId.Common && common == null) common = new CommonEnv(envRoot, !mobile);
+            if (id == StageId.London && london == null) london = new LondonEnv(envRoot, !mobile);
             if (schoolRoot) schoolRoot.gameObject.SetActive(id == StageId.School);
             if (common != null) common.root.gameObject.SetActive(id == StageId.Common);
-            synth.SetPlace(id == StageId.Common);
+            if (london != null) london.root.gameObject.SetActive(id == StageId.London);
+            synth.SetPlace(id != StageId.School);
+            atmo.SetPlace(id);
         }
 
-        List<Occluder> Occluders => shownStage == StageId.Common ? common.Occluders : scenery.Occluders;
+        /// <summary>London's own life: landmark animations, props, ribbons and the see-through fade toward the snake.</summary>
+        void SyncLondon(float dt)
+        {
+            if (shownStage != StageId.London || london == null) return;
+            var me = world.Me;
+            bool looking = LookAt.HasValue;
+            var focus = looking ? W.P(LookAt.Value.x, LookAt.Value.y) : snakeViews[MeIx].HeadPos;
+            london.Sync(rig.Cam, focus, looking || state != State.Title && me.alive, looking || state != State.Title, Time.time, dt);
+        }
 
-        /// <summary>Tapping the Common pays the 300 stars the first time (if you can), then picks it.</summary>
+        List<Occluder> Occluders => shownStage == StageId.Common ? common.Occluders : shownStage == StageId.London ? london.Occluders : scenery.Occluders;
+
+        /// <summary>How close the chase camera sits in each place.</summary>
+        static float ZoomFor(StageId id) => id == StageId.Common ? CameraRig.COMMON_ZOOM : id == StageId.London ? CameraRig.LONDON_ZOOM : 1;
+
+        /// <summary>
+        /// Tapping a locked place buys its ticket the first time (if you can), then picks it: the Common for
+        /// 300 stars, London for 600 once the Common is open (main.ts chooseStage).
+        /// </summary>
         void ChooseStage(StageId id)
         {
             if (joining != null) return;
-            if (id == StageId.Common && !P.commonUnlocked)
+            P.Refresh(); // another tab may have bought this ticket already: never charge twice
+            bool locked = id == StageId.Common ? !P.commonUnlocked : id == StageId.London && !P.londonUnlocked;
+            if (locked)
             {
-                if (P.stars < Profile.COMMON_COST) { synth.Play("nope"); hud.ShakeStage(id); return; }
-                P.stars -= Profile.COMMON_COST;
-                P.commonUnlocked = true;
+                int cost = id == StageId.London ? Profile.LONDON_COST : Profile.COMMON_COST;
+                bool needsFirst = id == StageId.London && !P.commonUnlocked;
+                if (needsFirst || P.stars < cost) { synth.Play("nope"); hud.ShakeStage(id); return; }
+                P.stars -= cost;
+                if (id == StageId.London) P.londonUnlocked = true;
+                else P.commonUnlocked = true;
                 synth.Play("chaChing");
                 Fx.I.Confetti(rig.transform.position + rig.transform.forward * 20, 120, 9);
             }
@@ -198,6 +223,7 @@ namespace Telfer.Game
             world = new World((uint)System.Environment.TickCount, mode, Stage.For(stageId), look, !attractMode && !Autopilot && P.gems >= Upgrades.POWER_GEM_COST);
             bubbleFromSami = false;
             hud.ClearBubble();
+            SnakeView.WaterStage = world.Stage.Water != null ? world.Stage : null;
             views = new Views(world, runRoot);
             wild = new WildViews(world, runRoot);
             var skin = Catalogue.FindSkin(P.skin);
@@ -229,15 +255,27 @@ namespace Telfer.Game
             worn = Outfit;
             hud.ShowTitle(false);
             var me = world.Me;
-            rig.Zoom = world.Stage.Id == StageId.Common ? CameraRig.COMMON_ZOOM : 1;
+            rig.Zoom = ZoomFor(world.Stage.Id);
             rig.Snap(W.P(me.x, me.z), me.Length);
             synth.SetMusicLevel(0);
             Fx.I.Ring(W.P(me.x, me.z), Color.white, 4, 0.6f);
+            FirstVisit();
+        }
+
+        /// <summary>A one-time fanfare the first time a child plays a place they bought.</summary>
+        void FirstVisit()
+        {
             if (world.Stage.Id == StageId.Common && !P.commonSeen)
             {
                 P.commonSeen = true;
                 P.Save();
                 hud.Banner("The Common!", null);
+            }
+            else if (world.Stage.Id == StageId.London && !P.londonSeen && RealRun)
+            {
+                P.londonSeen = true;
+                P.Save();
+                hud.Banner("London!", null);
             }
         }
 
@@ -256,6 +294,8 @@ namespace Telfer.Game
             if (joining != null || state != State.Title) return;
             synth.Play("pick");
             hud.ShowTitle(true);
+            // London's rooms carry its buses, lions and legends, which this client cannot draw yet (B5): solo.
+            if (P.Stage == StageId.London) { StartRun(); return; }
             hud.Connecting(true);
             StartOnline(P.name);
         }
@@ -343,14 +383,9 @@ namespace Telfer.Game
             runLongest = 0;
             worn = Outfit;
             hud.ShowTitle(false);
-            if (world.Stage.Id == StageId.Common && !P.commonSeen)
-            {
-                P.commonSeen = true;
-                P.Save();
-                hud.Banner("The Common!", null);
-            }
+            FirstVisit();
             var me = world.Me;
-            rig.Zoom = world.Stage.Id == StageId.Common ? CameraRig.COMMON_ZOOM : 1;
+            rig.Zoom = ZoomFor(world.Stage.Id);
             rig.Snap(W.P(me.x, me.z), me.Length);
             synth.Play("bell");
             synth.SetMusicLevel(0);
@@ -368,6 +403,7 @@ namespace Telfer.Game
             runRoot.SetParent(transform, false);
             net = r;
             world = r.World;
+            SnakeView.WaterStage = world.Stage.Water != null ? world.Stage : null;
             bubbleFromSami = false;
             hud.ClearBubble();
             views = new Views(world, runRoot);
@@ -436,7 +472,7 @@ namespace Telfer.Game
         {
             var me = world.Me;
             float raw = Catalogue.StarsFor(me.score, me.highestTier, runBonks);
-            float stage = world.Stage.Id == StageId.Common ? COMMON_BONUS : 1;
+            float stage = world.Stage.Id == StageId.Common ? COMMON_BONUS : world.Stage.Id == StageId.London ? LONDON_BONUS : 1;
             return Mathf.FloorToInt(raw * (world.Mode == Mode.Easy ? 0.5f : 1) * stage);
         }
 
@@ -500,9 +536,9 @@ namespace Telfer.Game
         void EarnGem(Vector3 at, int n = 1)
         {
             if (!RealRun || n <= 0) return;
-            // The Common pays ×1.25: each gem has a one-in-four chance of a bonus gem (main.ts earnGem).
-            if (world.Stage.Id == StageId.Common)
-                for (int i = 0, k = n; i < k; i++) if (Random.value < COMMON_BONUS - 1) n++;
+            // The Common pays ×1.25 and London ×1.5: each gem has a one-in-four (one-in-two) chance of a bonus gem (main.ts earnGem).
+            float bonus = world.Stage.Id == StageId.Common ? COMMON_BONUS - 1 : world.Stage.Id == StageId.London ? LONDON_BONUS - 1 : 0;
+            for (int i = 0, k = n; i < k; i++) if (Random.value < bonus) n++;
             P.gems += n;
             runGems += n;
             P.Save();
@@ -611,7 +647,11 @@ namespace Telfer.Game
             // Camera.
             if (LookAtFn != null) LookAt = LookAtFn();
             if (LookAt.HasValue) rig.Follow(W.P(LookAt.Value.x, LookAt.Value.y), Vector3.zero, (LookDistance - 21) / 0.45f, false, realDt);
-            else if (state == State.Title) rig.TitleOrbit(realDt, world.Stage.Id == StageId.Common ? W.P(4, 4) : new Vector3(-6, 0, 4), world.Stage.Id == StageId.Common ? 80 : 62);
+            else if (state == State.Title)
+            {
+                var id = world.Stage.Id;
+                rig.TitleOrbit(realDt, id == StageId.Common ? W.P(4, 4) : id == StageId.London ? W.P(-18, -6) : new Vector3(-6, 0, 4), id == StageId.Common ? 80 : id == StageId.London ? 92 : 62);
+            }
             else
             {
                 var vel = W.Dir(me.heading) * (me.alive ? me.BaseSpeed * me.speedFactor : 0);
@@ -628,6 +668,7 @@ namespace Telfer.Game
             }
 
             Occlusion(realDt);
+            SyncLondon(realDt);
             Pushers();
 
             hud.ShowStick(controls.StickOn && state == State.Play, controls.StickBase, controls.StickKnob);

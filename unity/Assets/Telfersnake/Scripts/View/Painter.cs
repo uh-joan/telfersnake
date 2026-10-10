@@ -138,20 +138,115 @@ namespace Telfer.View
             }, c);
         }
 
-        public void Line(float x0, float z0, float x1, float z1, float w, Color c, float dash = 0, float gap = -1)
+        /// <summary>A round-capped stroke; `phase` (metres) carries a dash pattern on from the previous segment.</summary>
+        public void Line(float x0, float z0, float x1, float z1, float w, Color c, float dash = 0, float gap = -1, float phase = 0)
         {
             if (gap < 0) gap = dash;
-            float dx = x1 - x0, dz = z1 - z0, len2 = dx * dx + dz * dz, len = Mathf.Sqrt(len2);
+            float dx = x1 - x0, dz = z1 - z0, len2 = Mathf.Max(1e-8f, dx * dx + dz * dz), len = Mathf.Sqrt(len2);
             Shape(Mathf.Min(x0, x1) - w, Mathf.Min(z0, z1) - w, Mathf.Max(x0, x1) + w, Mathf.Max(z0, z1) + w, (x, z) =>
             {
                 float t = Mathf.Clamp01(((x - x0) * dx + (z - z0) * dz) / len2);
-                if (dash > 0 && (t * len) % (dash + gap) > dash) return 1;
+                if (dash > 0 && (t * len + phase) % (dash + gap) > dash) return 1;
                 float ex = x - (x0 + dx * t), ez = z - (z0 + dz * t);
                 return Mathf.Sqrt(ex * ex + ez * ez) - w / 2;
             }, c);
         }
 
         public void Circle(float cx, float cz, float r, Color c) => FillEllipse(cx, cz, r, r, 0, c);
+
+        /// <summary>A stroke along a polyline (x, z pairs); a dashed one keeps its rhythm round the corners.</summary>
+        public void Polyline(IList<Vector2> pts, float w, Color c, float dash = 0, float gap = -1)
+        {
+            float run = 0;
+            for (int i = 0; i + 1 < pts.Count; i++)
+            {
+                Line(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, w, c, dash, gap, run);
+                run += Vector2.Distance(pts[i], pts[i + 1]);
+            }
+        }
+
+        /// <summary>Fill a polygon (x, z points), anti-aliased on its edges.</summary>
+        public void Polygon(IList<Vector2> pts, Color c)
+        {
+            float x0 = float.MaxValue, z0 = float.MaxValue, x1 = float.MinValue, z1 = float.MinValue;
+            foreach (var p in pts) { x0 = Mathf.Min(x0, p.x); x1 = Mathf.Max(x1, p.x); z0 = Mathf.Min(z0, p.y); z1 = Mathf.Max(z1, p.y); }
+            int n = pts.Count;
+            Shape(x0, z0, x1, z1, (x, z) =>
+            {
+                float d = float.MaxValue;
+                bool inside = false;
+                for (int i = 0, j = n - 1; i < n; j = i++)
+                {
+                    Vector2 a = pts[j], b = pts[i];
+                    if ((b.y > z) != (a.y > z) && x < (a.x - b.x) * (z - b.y) / (a.y - b.y) + b.x) inside = !inside;
+                    float ex = a.x - b.x, ez = a.y - b.y;
+                    float t = Mathf.Clamp01(((x - b.x) * ex + (z - b.y) * ez) / Mathf.Max(1e-8f, ex * ex + ez * ez));
+                    float qx = x - b.x - ex * t, qz = z - b.y - ez * t;
+                    d = Mathf.Min(d, qx * qx + qz * qz);
+                }
+                d = Mathf.Sqrt(d);
+                return inside ? -d : d;
+            }, c);
+        }
+
+        /// <summary>A rectangle w × d centred on (cx, cz), turned `angle` radians (from +x toward +z).</summary>
+        public void RotRect(float cx, float cz, float w, float d, float angle, Color c)
+        {
+            float cs = Mathf.Cos(angle), sn = Mathf.Sin(angle);
+            Vector2 P(float u, float v) => new Vector2(cx + u * cs - v * sn, cz + u * sn + v * cs);
+            Polygon(new[] { P(-w / 2, -d / 2), P(w / 2, -d / 2), P(w / 2, d / 2), P(-w / 2, d / 2) }, c);
+        }
+
+        /// <summary>Make a shape see-through: alpha falls to 0 inside it (the Thames is cut out of London's paper).</summary>
+        public void Erase(float x0, float z0, float x1, float z1, Func<float, float, float> sdf)
+        {
+            int ix0 = Mathf.Max(0, X(x0) - 2), ix1 = Mathf.Min(Size - 1, X(x1) + 2);
+            int iz0 = Mathf.Max(0, Z(z0) - 2), iz1 = Mathf.Min(Size - 1, Z(z1) + 2);
+            float m = 1 / PxPerM;
+            for (int iz = iz0; iz <= iz1; iz++)
+            {
+                float z = MinZ + (iz + 0.5f) * m;
+                for (int ix = ix0; ix <= ix1; ix++)
+                {
+                    float x = MinX + (ix + 0.5f) * m;
+                    float cover = Mathf.Clamp01(0.5f - sdf(x, z) * PxPerM);
+                    if (cover <= 0) continue;
+                    int i = iz * Size + ix;
+                    var d = px[i];
+                    px[i] = new Color32(d.r, d.g, d.b, (byte)(d.a * (1 - cover)));
+                }
+            }
+        }
+
+        /// <summary>Tint every pixel of a box by a colour that depends on where it is (gradients, fibres of a sheet).</summary>
+        public void Tint(float x0, float z0, float x1, float z1, Func<float, float, Color> col)
+        {
+            int ix0 = Mathf.Max(0, X(x0)), ix1 = Mathf.Min(Size - 1, X(x1));
+            int iz0 = Mathf.Max(0, Z(z0)), iz1 = Mathf.Min(Size - 1, Z(z1));
+            float m = 1 / PxPerM;
+            for (int iz = iz0; iz <= iz1; iz++)
+            {
+                float z = MinZ + (iz + 0.5f) * m;
+                for (int ix = ix0; ix <= ix1; ix++)
+                {
+                    var c = col(MinX + (ix + 0.5f) * m, z);
+                    if (c.a > 0.001f) Blend(iz * Size + ix, c, 1);
+                }
+            }
+        }
+
+        /// <summary>A tiny axis-aligned dab, `wPx` × `hPx` whole pixels at (x, z): paper fibres, specks.</summary>
+        public void Dab(float x, float z, int wPx, int hPx, Color c)
+        {
+            int ix = X(x), iz = Z(z);
+            for (int a = 0; a < hPx; a++)
+                for (int b = 0; b < wPx; b++)
+                {
+                    int px_ = ix + b, pz = iz + a;
+                    if (px_ < 0 || pz < 0 || px_ >= Size || pz >= Size) continue;
+                    Blend(pz * Size + px_, c, 1);
+                }
+        }
 
         // ------------------------------------------------------------------ blocky painted lettering
 
@@ -168,6 +263,11 @@ namespace Telfer.View
             ['8'] = new[] { ".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###." },
             ['9'] = new[] { ".###.", "#...#", "#...#", ".####", "....#", "....#", ".###." },
             ['A'] = new[] { ".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#" },
+            ['B'] = new[] { "####.", "#...#", "#...#", "####.", "#...#", "#...#", "####." },
+            ['D'] = new[] { "####.", "#...#", "#...#", "#...#", "#...#", "#...#", "####." },
+            ['H'] = new[] { "#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#" },
+            ['M'] = new[] { "#...#", "##.##", "#.#.#", "#.#.#", "#...#", "#...#", "#...#" },
+            ['V'] = new[] { "#...#", "#...#", "#...#", "#...#", ".#.#.", ".#.#.", "..#.." },
             ['C'] = new[] { ".###.", "#...#", "#....", "#....", "#....", "#...#", ".###." },
             ['E'] = new[] { "#####", "#....", "#....", "####.", "#....", "#....", "#####" },
             ['F'] = new[] { "#####", "#....", "#....", "####.", "#....", "#....", "#...." },

@@ -118,6 +118,26 @@ namespace Telfer.View
             fg.intensity.Override(mobile ? 0 : 0.12f);
         }
 
+        /// <summary>
+        /// Each place's light (stage.ts atmospheres): London is bright and a little cool with a light
+        /// haze that lets the far landmarks fade back; the school and the Common keep the warm afternoon.
+        /// </summary>
+        public void SetPlace(Telfer.Sim.StageId id)
+        {
+            bool london = id == Telfer.Sim.StageId.London;
+            RenderSettings.fogStartDistance = london ? 85 : 70;
+            RenderSettings.fogEndDistance = london ? 240 : 260;
+            RenderSettings.fogColor = london ? new Color(0.8f, 0.88f, 0.95f) : new Color(0.78f, 0.86f, 0.94f);
+            Shader.SetGlobalColor(AmbientSky, london ? new Color(0.62f, 0.69f, 0.84f) : new Color(0.56f, 0.64f, 0.8f));
+            Shader.SetGlobalColor(AmbientGround, london ? new Color(0.5f, 0.47f, 0.42f) : new Color(0.42f, 0.38f, 0.34f));
+            Shader.SetGlobalColor(ShadowTint, london ? new Color(0.66f, 0.7f, 0.96f) : new Color(0.62f, 0.66f, 0.95f));
+            sunWarm = london ? new Color(1f, 0.97f, 0.9f) : new Color(1f, 0.95f, 0.85f);
+            sunLow = london ? new Color(1f, 0.9f, 0.76f) : new Color(1f, 0.86f, 0.68f);
+            Sun.intensity = london ? 1.3f : 1.25f;
+        }
+
+        Color sunWarm = new Color(1f, 0.95f, 0.85f), sunLow = new Color(1f, 0.86f, 0.68f);
+
         /// <summary>Keep the miniature focus on whatever the camera is looking at.</summary>
         public void Focus(float distance)
         {
@@ -150,7 +170,7 @@ namespace Telfer.View
             float yaw = Mathf.Lerp(40, 85, swing);
             float pitch = Mathf.Lerp(50, 38, swing);
             Sun.transform.rotation = Quaternion.Euler(pitch, yaw, 0);
-            Sun.color = Color.Lerp(new Color(1f, 0.95f, 0.85f), new Color(1f, 0.86f, 0.68f), swing);
+            Sun.color = Color.Lerp(sunWarm, sunLow, swing);
         }
 
         /// <summary>Feed the grass the positions of everything that should part it.</summary>
@@ -217,6 +237,11 @@ namespace Telfer.View
         /// </summary>
         public float Zoom = 1;
         public const float COMMON_ZOOM = 0.82f;
+        /// <summary>
+        /// London sits a touch closer than the school (classic's cameraZoom 0.9): the map is big, but the
+        /// pop-up landmarks are tall, and a closer camera keeps more of them standing up in the frame.
+        /// </summary>
+        public const float LONDON_ZOOM = 0.88f;
 
         /// <summary>
         /// How much further back to sit on a narrow screen. The view's width shrinks with the aspect, so

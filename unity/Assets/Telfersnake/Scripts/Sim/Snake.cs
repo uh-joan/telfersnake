@@ -193,6 +193,8 @@ namespace Telfer.Sim
         public float x, z, heading, mass, score;
         public float speedFactor = 1;
         public bool dashing, touchingWall, wasTouchingWall, slowed;
+        /// <summary>In a river (London's Thames): paddling at half speed, drifting downstream.</summary>
+        public bool swimming;
         public float steerX, steerZ;
         float wallNx, wallNz;
         public float bumpQuiet, immune;
@@ -356,6 +358,19 @@ namespace Telfer.Sim
             float speed = BaseSpeed * speedFactor * (dashing ? DASH_BOOST : 1);
             float nx = x + (float)Math.Cos(heading) * speed * dt;
             float nz = z + (float)Math.Sin(heading) * speed * dt;
+            // London: the current carries a swimmer downstream. Keyed off position alone, so a client
+            // replaying its own inputs drifts exactly as the server does (snake.ts move). The ×0.5
+            // paddle is the world's speedFactor. No rivers: no branch.
+            if (terrain is Stage st && st.Water != null)
+            {
+                var river = Water.At(st, x, z);
+                swimming = river != null;
+                if (river != null)
+                {
+                    Water.Flow(river, x, z, out float fx, out float fz);
+                    nx += fx * dt; nz += fz * dt;
+                }
+            }
 
             Collide.ResolveCircle(terrain, nx, nz, Radius, hit, rocks);
             x = hit.x; z = hit.z;

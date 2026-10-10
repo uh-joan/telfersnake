@@ -332,7 +332,8 @@ namespace Telfer.View
         public sealed class Rig { public Transform root, body, legL, legR, armL, armR, head; }
 
         /// <summary>Mr Cooper: tall, thin, immaculate in a navy suit, short white hair. Jointed for running.</summary>
-        public static Rig Cooper(Transform parent)
+        /// <summary>Mr Cooper; `bobby` dresses him as London's policeman (cooperView.ts persona 'bobby').</summary>
+        public static Rig Cooper(Transform parent, bool bobby = false)
         {
             var rig = new Rig { root = new GameObject("Mr Cooper").transform };
             rig.root.SetParent(parent, false);
@@ -341,10 +342,26 @@ namespace Telfer.View
                 k.Tint(0x1f2a44).RoundBox(new Vector3(0, 1.25f, 0), new Vector3(0.56f, 0.75f, 0.3f), 0.12f);
                 k.Tint(0x1f2a44).Sphere(new Vector3(-0.27f, 1.56f, 0), 0.09f, 10, 8);
                 k.Tint(0x1f2a44).Sphere(new Vector3(0.27f, 1.56f, 0), 0.09f, 10, 8);
-                k.Tint(0xffffff).Box(new Vector3(0, 1.45f, 0.13f), new Vector3(0.16f, 0.3f, 0.04f));
-                k.Tint(0xc92a2a).Box(new Vector3(0, 1.38f, 0.155f), new Vector3(0.07f, 0.34f, 0.02f));
-                k.Tint(0x1f2a44).Box(new Vector3(-0.1f, 1.48f, 0.145f), new Vector3(0.08f, 0.22f, 0.02f));
-                k.Tint(0x1f2a44).Box(new Vector3(0.1f, 1.48f, 0.145f), new Vector3(0.08f, 0.22f, 0.02f));
+                if (bobby)
+                {
+                    // The tunic: a high collar, a row of silver buttons, a belt, collar numbers and a whistle on its chain.
+                    k.Tint(0x16213d).Cylinder(new Vector3(0, 1.56f, 0), new Vector3(0, 1.66f, 0), 0.11f, 0.1f, 12);
+                    k.Tint(0x0a0f1c).Box(new Vector3(0, 0.98f, 0), new Vector3(0.6f, 0.07f, 0.33f));
+                    k.Tint(0xc9ced6).Box(new Vector3(0, 0.98f, 0.165f), new Vector3(0.09f, 0.07f, 0.02f));
+                    for (int i = 0; i < 4; i++) k.Tint(0xdfe4ea).Sphere(new Vector3(0, 1.5f - i * 0.13f, 0.155f), 0.026f, 8, 6);
+                    foreach (int s in new[] { -1, 1 }) k.Tint(0xdfe4ea).Box(new Vector3(s * 0.12f, 1.58f, 0.1f), new Vector3(0.04f, 0.04f, 0.02f));
+                    k.M = Matrix4x4.TRS(new Vector3(0.09f, 1.46f, 0.16f), Quaternion.Euler(0, 0, -30), Vector3.one);
+                    k.Tint(0xdfe4ea).Box(Vector3.zero, new Vector3(0.18f, 0.014f, 0.012f));
+                    k.M = Matrix4x4.identity;
+                    k.Tint(0xdfe4ea).RoundBox(new Vector3(0.17f, 1.41f, 0.18f), new Vector3(0.04f, 0.04f, 0.1f), 0.015f);
+                }
+                else
+                {
+                    k.Tint(0xffffff).Box(new Vector3(0, 1.45f, 0.13f), new Vector3(0.16f, 0.3f, 0.04f));
+                    k.Tint(0xc92a2a).Box(new Vector3(0, 1.38f, 0.155f), new Vector3(0.07f, 0.34f, 0.02f));
+                    k.Tint(0x1f2a44).Box(new Vector3(-0.1f, 1.48f, 0.145f), new Vector3(0.08f, 0.22f, 0.02f));
+                    k.Tint(0x1f2a44).Box(new Vector3(0.1f, 1.48f, 0.145f), new Vector3(0.08f, 0.22f, 0.02f));
+                }
                 k.Tint(0xf1c9a5).Cylinder(new Vector3(0, 1.6f, 0), new Vector3(0, 1.72f, 0), 0.07f, 0.07f, 8);
             });
             rig.head = Part(rig.body, "head", new Vector3(0, 1.86f, 0), k =>
@@ -372,12 +389,32 @@ namespace Telfer.View
                     Vector3 P(float a) => new Vector3(Mathf.Sin(a) * 0.06f, -0.09f + (1 - Mathf.Cos(a)) * 0.04f, 0.185f);
                     k.Tint(0x7a3b2e).Cylinder(P(a0), P(a1), 0.009f, 0.009f, 4, false, false);
                 }
+                if (bobby)
+                {
+                    // The custodian helmet: tall, black, domed, a silver Brunswick star and a little top knob.
+                    // Drawn generously tall: it is the whole joke.
+                    const uint HELMET = 0x141a2c, SILVER = 0xdfe4ea;
+                    var h0 = new Vector3(0, 0.1f, -0.005f);
+                    k.Tint(HELMET).Cylinder(h0, h0 + Vector3.up * 0.04f, 0.235f, 0.225f, 16);
+                    k.Tint(HELMET).Cylinder(h0 + Vector3.up * 0.03f, h0 + Vector3.up * 0.42f, 0.205f, 0.17f, 16, false, false);
+                    k.Tint(HELMET).Sphere(h0 + Vector3.up * 0.42f, new Vector3(0.17f, 0.15f, 0.17f), 16, 8, 0, 0.5f);
+                    k.Tint(SILVER).Cylinder(h0 + Vector3.up * 0.55f, h0 + Vector3.up * 0.62f, 0.05f, 0.035f, 8);
+                    k.M = Matrix4x4.TRS(h0 + new Vector3(0, 0.22f, 0.19f), Quaternion.Euler(-6, 0, 0), Vector3.one);
+                    for (int i = 0; i < 8; i++) k.Tint(SILVER).Triangle(Vector3.zero, Quaternion.Euler(0, 0, i * 45 - 14) * new Vector3(0, 0.1f, 0), Quaternion.Euler(0, 0, i * 45 + 14) * new Vector3(0, 0.1f, 0));
+                    k.Tint(0x2a4a9a).Cylinder(new Vector3(0, 0, 0.004f), new Vector3(0, 0, 0.012f), 0.035f, 0.035f, 12);
+                    k.M = Matrix4x4.identity;
+                    // The chin strap.
+                    k.Tint(0x0a0f1c).Box(new Vector3(0, -0.17f, 0.13f), new Vector3(0.2f, 0.025f, 0.02f));
+                }
             });
             Transform Limb(Vector3 at, System.Action<MeshKit> build) => Part(rig.body, "limb", at, build);
             rig.legL = Limb(new Vector3(-0.12f, 0.9f, 0), k => { k.Tint(0x1f2a44).Capsule(new Vector3(0, -0.05f, 0), new Vector3(0, -0.78f, 0), 0.08f, 8); k.Tint(0x111111).RoundBox(new Vector3(0, -0.86f, 0.07f), new Vector3(0.12f, 0.08f, 0.28f), 0.04f); });
             rig.legR = Limb(new Vector3(0.12f, 0.9f, 0), k => { k.Tint(0x1f2a44).Capsule(new Vector3(0, -0.05f, 0), new Vector3(0, -0.78f, 0), 0.08f, 8); k.Tint(0x111111).RoundBox(new Vector3(0, -0.86f, 0.07f), new Vector3(0.12f, 0.08f, 0.28f), 0.04f); });
-            rig.armL = Limb(new Vector3(-0.31f, 1.55f, 0), k => { k.Tint(0x1f2a44).Capsule(Vector3.zero, new Vector3(0, -0.6f, 0), 0.065f, 8); k.Tint(0xf1c9a5).Sphere(new Vector3(0, -0.68f, 0), 0.065f, 8, 6); });
-            rig.armR = Limb(new Vector3(0.31f, 1.55f, 0), k => { k.Tint(0x1f2a44).Capsule(Vector3.zero, new Vector3(0, -0.6f, 0), 0.065f, 8); k.Tint(0xf1c9a5).Sphere(new Vector3(0, -0.68f, 0), 0.065f, 8, 6); });
+            // The Bobby wears white gloves, a touch bigger so they read from the camera.
+            uint hand = bobby ? 0xf6f6f2u : 0xf1c9a5u;
+            float handR = bobby ? 0.08f : 0.065f;
+            rig.armL = Limb(new Vector3(-0.31f, 1.55f, 0), k => { k.Tint(0x1f2a44).Capsule(Vector3.zero, new Vector3(0, -0.6f, 0), 0.065f, 8); k.Tint(hand).Sphere(new Vector3(0, -0.68f, 0), handR, 8, 6); });
+            rig.armR = Limb(new Vector3(0.31f, 1.55f, 0), k => { k.Tint(0x1f2a44).Capsule(Vector3.zero, new Vector3(0, -0.6f, 0), 0.065f, 8); k.Tint(hand).Sphere(new Vector3(0, -0.68f, 0), handR, 8, 6); });
             return rig;
         }
 

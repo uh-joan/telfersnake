@@ -206,7 +206,7 @@ namespace Telfer.Sim
 
         void MovePredator(Predator p, float speed, float dt, bool rewander)
         {
-            var hit = Collide.ResolveCircle(Stage, p.x + (float)Math.Cos(p.heading) * speed * dt, p.z + (float)Math.Sin(p.heading) * speed * dt, p.Spec.radius, ScratchHit, Stage.Logs);
+            var hit = Collide.ResolveAshore(Stage, p.x, p.z, p.x + (float)Math.Cos(p.heading) * speed * dt, p.z + (float)Math.Sin(p.heading) * speed * dt, p.Spec.radius, ScratchHit, Stage.Logs);
             p.travel += Collide.Hypot(hit.x - p.x, hit.z - p.z);
             p.x = hit.x; p.z = hit.z;
             p.speed = speed;
@@ -273,7 +273,7 @@ namespace Telfer.Sim
                     if (k.wanderIn <= 0 || Collide.Hypot(k.x - k.tx, k.z - k.tz) < 0.8f) WanderKid(k);
                     k.heading = Collide.TurnToward(k.heading, (float)Math.Atan2(k.tz - k.z, k.tx - k.x), 6 * dt);
                     float speed = Sim.Kids.ROAM[(int)k.kind];
-                    var hit = Collide.ResolveCircle(Stage, k.x + (float)Math.Cos(k.heading) * speed * dt, k.z + (float)Math.Sin(k.heading) * speed * dt, Sim.Kids.RADIUS, ScratchHit);
+                    var hit = Collide.ResolveAshore(Stage, k.x, k.z, k.x + (float)Math.Cos(k.heading) * speed * dt, k.z + (float)Math.Sin(k.heading) * speed * dt, Sim.Kids.RADIUS, ScratchHit);
                     k.travel += Collide.Hypot(hit.x - k.x, hit.z - k.z);
                     k.x = hit.x; k.z = hit.z;
                     k.speed = speed;
@@ -420,7 +420,7 @@ namespace Telfer.Sim
                     c.heading = Collide.TurnToward(c.heading, (float)Math.Atan2(c.wz - c.z, c.wx - c.x), 2 * dt);
                     speed = spec.flee * 0.3f;
                 }
-                var hit = Collide.ResolveCircle(Stage, c.x + (float)Math.Cos(c.heading) * speed * dt, c.z + (float)Math.Sin(c.heading) * speed * dt, spec.radius, ScratchHit, Stage.Logs);
+                var hit = Collide.ResolveAshore(Stage, c.x, c.z, c.x + (float)Math.Cos(c.heading) * speed * dt, c.z + (float)Math.Sin(c.heading) * speed * dt, spec.radius, ScratchHit, Stage.Logs);
                 c.x = hit.x; c.z = hit.z;
                 c.speed = speed;
                 if (hit.hit) { c.heading = Collide.SlideAlong(c.heading, hit.nx, hit.nz); WanderCreature(c); }

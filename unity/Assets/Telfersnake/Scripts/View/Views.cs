@@ -49,7 +49,7 @@ namespace Telfer.View
             foreach (var a in w.Animals) animals.Add(MakeAnimal(a));
             foreach (var h in w.Hazards) hazards.Add(new HazardV());
 
-            cooper = w.Cooper.config.persona == "keeper" ? ModelsWild.Person(root, "keeper") : Models.Cooper(root);
+            cooper = w.Cooper.config.persona == "keeper" ? ModelsWild.Person(root, "keeper") : Models.Cooper(root, w.Cooper.config.persona == "bobby");
             aura = Flat("aura", auraMat, Cooper.AURA * 2.1f);
             cooperPrev = cooperCur = W.P(w.Cooper.x, w.Cooper.z);
         }

@@ -107,28 +107,34 @@ namespace Telfer.UI
             UiKit.Label(hd, "t", "HD", 40, Ink);
             hd.gameObject.AddComponent<Bob>().Amount = 5;
 
-            // Where to play: the school, or the Common (locked until 300 stars are paid).
-            var stages = UiKit.Rect(mid, "stages", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 70), new Vector2(520, 130));
-            for (int i = 0; i < 2; i++)
+            // Where to play: the school, the Common (300 stars) or London (600 stars, once the Common is open).
+            var stages = UiKit.Rect(mid, "stages", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 70), new Vector2(690, 130));
+            for (int i = 0; i < 3; i++)
             {
-                var id = i == 0 ? StageId.School : StageId.Common;
-                var rt = UiKit.Rect(stages, id.ToString(), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(i == 0 ? -135 : 135, 0), new Vector2(250, 120));
+                var id = (StageId)i;
+                var rt = UiKit.Rect(stages, id.ToString(), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2((i - 1) * 232, 0), new Vector2(222, 120));
                 UiKit.Shadow(rt, 14, 0.25f);
                 var b = UiKit.Button(rt, "btn", Cream, 30, () => OnStage?.Invoke(id));
                 stageTiles[i] = b.GetComponent<Image>();
-                var ic = UiKit.Rect(b.transform, "icon", new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(8, 4), new Vector2(104, 104));
+                var ic = UiKit.Rect(b.transform, "icon", new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(4, 4), new Vector2(96, 96));
                 stageIcons[i] = ic.gameObject.AddComponent<RawImage>();
                 stageIcons[i].raycastTarget = false;
-                var lbl = UiKit.Label(b.transform, "t", i == 0 ? "School" : "Common", 34, Ink, TextAnchor.MiddleLeft);
-                ((RectTransform)lbl.transform).offsetMin = new Vector2(112, 0);
+                var lbl = UiKit.Label(b.transform, "t", i == 0 ? "School" : i == 1 ? "Common" : "London", 32, Ink, TextAnchor.MiddleLeft);
+                ((RectTransform)lbl.transform).offsetMin = new Vector2(100, 0);
                 var lockRt = UiKit.Rect(b.transform, "lock", new Vector2(1, 1), new Vector2(1, 1), new Vector2(0.5f, 0.5f), new Vector2(-30, -6), new Vector2(110, 44));
                 lockRt.localRotation = Quaternion.Euler(0, 0, -6);
                 UiKit.Panel(lockRt, "bg", Ink, 22);
                 var ls = UiKit.Image(lockRt, "star", UiKit.Star, Yellow);
                 var lsr = (RectTransform)ls.transform; lsr.anchorMin = lsr.anchorMax = new Vector2(0, 0.5f); lsr.sizeDelta = new Vector2(30, 30); lsr.anchoredPosition = new Vector2(24, 0);
-                var lt = UiKit.Label(lockRt, "n", Meta.Profile.COMMON_COST.ToString(), 26, Color.white);
+                var lt = UiKit.Label(lockRt, "n", (i == 2 ? Meta.Profile.LONDON_COST : Meta.Profile.COMMON_COST).ToString(), 26, Color.white);
                 ((RectTransform)lt.transform).offsetMin = new Vector2(34, 0);
                 stageLocks[i] = lockRt.gameObject;
+                stagePrices[i] = (ls.gameObject, lt.gameObject);
+                // London needs the Common first: until then its lock shows the Common's stag instead of a price.
+                var needs = UiKit.Rect(lockRt, "needs", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(8, 0), new Vector2(46, 46));
+                stageNeeds[i] = needs.gameObject.AddComponent<RawImage>();
+                stageNeeds[i].raycastTarget = false;
+                needs.gameObject.SetActive(false);
             }
 
             // How hard: Easy, Normal, and God once it is earned.
@@ -210,9 +216,11 @@ namespace Telfer.UI
             return t;
         }
 
-        readonly Image[] stageTiles = new Image[2];
-        readonly RawImage[] stageIcons = new RawImage[2];
-        readonly GameObject[] stageLocks = new GameObject[2];
+        readonly Image[] stageTiles = new Image[3];
+        readonly RawImage[] stageIcons = new RawImage[3];
+        readonly GameObject[] stageLocks = new GameObject[3];
+        readonly (GameObject star, GameObject price)[] stagePrices = new (GameObject, GameObject)[3];
+        readonly RawImage[] stageNeeds = new RawImage[3];
         Text walletStars, walletGems;
         RawImage shopIcon;
         readonly Shop shop = new Shop();
@@ -262,20 +270,26 @@ namespace Telfer.UI
             bestText.text = p.bestScore.ToString("N0");
             stageIcons[0].texture = Icons.Animal(AnimalKind.Chicken);
             stageIcons[1].texture = Icons.Creature(CreatureKind.Stag);
-            for (int i = 0; i < 2; i++)
+            stageIcons[2].texture = Icons.Of("london-bigben", View.ModelsLondon.IconMesh(), View.Mats.VertexGlossy, -25, 12);
+            for (int i = 0; i < 3; i++)
             {
-                var id = i == 0 ? StageId.School : StageId.Common;
+                var id = (StageId)i;
                 bool on = p.Stage == id;
-                stageTiles[i].color = on ? (i == 0 ? new Color(0.45f, 0.65f, 1f) : Green) : Cream;
+                stageTiles[i].color = on ? (i == 0 ? new Color(0.45f, 0.65f, 1f) : i == 1 ? Green : new Color(0.86f, 0.25f, 0.3f)) : Cream;
                 stageTiles[i].GetComponentInChildren<Text>().color = on ? Color.white : Ink;
-                stageLocks[i].SetActive(i == 1 && !p.commonUnlocked);
+                stageLocks[i].SetActive(i == 1 ? !p.commonUnlocked : i == 2 && !p.londonUnlocked);
+                // A locked place that needs another unlocked first shows that place's picture, not a price.
+                bool needsCommon = i == 2 && !p.commonUnlocked;
+                stagePrices[i].star?.SetActive(!needsCommon);
+                stagePrices[i].price?.SetActive(!needsCommon);
+                if (stageNeeds[i]) { stageNeeds[i].gameObject.SetActive(needsCommon); if (needsCommon) stageNeeds[i].texture = stageIcons[1].texture; }
             }
             shopIcon.texture = Icons.Skin(p.skin, p.hat);
             chipName.text = p.name;
         }
 
         /// <summary>Not enough stars for the Common yet: the tile shakes its head.</summary>
-        public void ShakeStage(StageId id) => stageTiles[id == StageId.School ? 0 : 1].gameObject.AddComponent<Shake>();
+        public void ShakeStage(StageId id) => stageTiles[(int)id].gameObject.AddComponent<Shake>();
 
         public void ShowTitle(bool on)
         {

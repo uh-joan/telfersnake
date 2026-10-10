@@ -297,7 +297,7 @@ namespace Telfer.Sim
             if (a.speed == 0) return;
             a.heading = Collide.TurnToward(a.heading, a.want, TURN_RATE * dt);
             float step = a.speed * dt;
-            var hit = Collide.ResolveCircle(w.Stage, a.x + (float)Math.Cos(a.heading) * step, a.z + (float)Math.Sin(a.heading) * step, spec.radius, w.ScratchHit, w.HazardCircles);
+            var hit = Collide.ResolveAshore(w.Stage, a.x, a.z, a.x + (float)Math.Cos(a.heading) * step, a.z + (float)Math.Sin(a.heading) * step, spec.radius, w.ScratchHit, w.HazardCircles);
             a.travel += Collide.Hypot(hit.x - a.x, hit.z - a.z);
             a.x = hit.x; a.z = hit.z;
             if (hit.hit)
