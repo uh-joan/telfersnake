@@ -25,6 +25,8 @@ namespace Telfer.View
         readonly List<(Transform t, ProjectileKind kind)> shots = new List<(Transform, ProjectileKind)>();
         Models.Rig sami, mum;
         float samiTalk;
+        /// <summary>London's lions, ravens and traffic (null elsewhere); its beasts leave a null in `beasts`.</summary>
+        readonly LondonViews london;
 
         public WildViews(World w, Transform parent)
         {
@@ -33,6 +35,7 @@ namespace Telfer.View
             root.SetParent(parent, false);
             foreach (var p in w.Predators)
             {
+                if (p.kind == PredatorKind.Lion || p.kind == PredatorKind.Raven) { beasts.Add(null); continue; } // LondonViews draws them
                 var t = new GameObject(p.kind.ToString()).transform;
                 t.SetParent(root, false);
                 var body = new GameObject("body", typeof(MeshFilter), typeof(MeshRenderer));
@@ -74,6 +77,7 @@ namespace Telfer.View
                 var pos = W.P(c.x, c.z);
                 creatures.Add(new Magic { t = t, body = body.transform, ring = ring, ringMat = rm, prev = pos, cur = pos, yaw = W.Yaw(c.heading) });
             }
+            if (w.Stage.Id == StageId.London) london = new LondonViews(w, parent);
             if (w.Stage.Greeters != null)
             {
                 var g = w.Stage.Greeters;
@@ -110,7 +114,8 @@ namespace Telfer.View
 
         public void OnStep()
         {
-            for (int i = 0; i < beasts.Count; i++) Step(ref beasts[i].prev, ref beasts[i].cur, world.Predators[i].x, world.Predators[i].z);
+            for (int i = 0; i < beasts.Count; i++) if (beasts[i] != null) Step(ref beasts[i].prev, ref beasts[i].cur, world.Predators[i].x, world.Predators[i].z);
+            london?.OnStep();
             for (int i = 0; i < kids.Count; i++) Step(ref kids[i].prev, ref kids[i].cur, world.Kids[i].x, world.Kids[i].z);
             for (int i = 0; i < creatures.Count; i++) Step(ref creatures[i].prev, ref creatures[i].cur, world.Creatures[i].x, world.Creatures[i].z);
         }
@@ -127,7 +132,7 @@ namespace Telfer.View
         {
             Beast best = null;
             float bd = float.MaxValue;
-            foreach (var b in beasts) { float d = (b.t.position - at).sqrMagnitude; if (d < bd) { bd = d; best = b; } }
+            foreach (var b in beasts) { if (b == null) continue; float d = (b.t.position - at).sqrMagnitude; if (d < bd) { bd = d; best = b; } }
             if (best != null) best.punch = 1;
         }
 
@@ -145,11 +150,13 @@ namespace Telfer.View
 
         public void Sync(float alpha, float dt, float time)
         {
+            london?.Sync(alpha, dt, time);
             // ---- bears and wolves
             for (int i = 0; i < beasts.Count; i++)
             {
                 var p = world.Predators[i];
                 var b = beasts[i];
+                if (b == null) continue;
                 var pos = Vector3.Lerp(b.prev, b.cur, alpha);
                 b.yaw = Mathf.LerpAngle(b.yaw, W.Yaw(p.heading), 1 - Mathf.Exp(-dt * 8));
                 bool frozen = p.frozenFor > 0, scared = p.scaredFor > 0;

@@ -722,6 +722,14 @@ namespace Telfer.Game
                             synth.Eat();
                             if (e.golden) { synth.Play("golden"); rig.Shake(0.12f); }
                             hud.Pop(at + Vector3.up, "+" + (int)e.points, e.golden ? new Color(1f, 0.85f, 0.3f) : Color.white, e.golden ? 46 : 32);
+                            if (e.food == FoodKind.Tea)
+                            {
+                                // A cuppa: a little warm-up zoom.
+                                var head = sv != null ? sv.HeadPos : at;
+                                Fx.I.Munch(head, new Color(0.95f, 0.89f, 0.76f), false);
+                                hud.Pop(head + Vector3.up * 1.6f, "ZOOM!", new Color(0.7f, 0.9f, 1f), 40);
+                                synth.Play("zoom");
+                            }
                         }
                         break;
                     case EventType.Gulp:
@@ -847,8 +855,65 @@ namespace Telfer.Game
                             synth.Play("chomp");
                             rig.Shake(0.55f);
                             atmo.Hit(0.7f);
-                            hud.Pop(at + Vector3.up * 1.3f, e.predator == PredatorKind.Bear ? "Chomp!" : "Snap!", new Color(1f, 0.5f, 0.45f), 46);
+                            // A lion only licks you (and a bit of tail falls off); a raven pecks.
+                            string word = e.predator == PredatorKind.Bear ? "Chomp!" : e.predator == PredatorKind.Lion ? "Oops!" : e.predator == PredatorKind.Raven ? "Peck!" : "Snap!";
+                            hud.Pop(at + Vector3.up * 1.3f, word, new Color(1f, 0.5f, 0.45f), 46);
                         }
+                        break;
+                    // ---- London (main.ts): the zoo's calls and thefts, Tea Time, the lions' yawns, the ravens' caws, the traffic, puddles.
+                    case EventType.Cry:
+                        if (!live || !NearMe(e.x, e.z)) break;
+                        if (e.animal == AnimalKind.Pigeon) Fx.I.Confetti(at + Vector3.up * 0.3f, 18, 4);
+                        hud.Pop(at + Vector3.up * 1.4f, e.animal == AnimalKind.Swan ? "HONK!" : e.animal == AnimalKind.Corgi ? "YIP!" : "FLAP!", new Color(1f, 0.95f, 0.6f), 40);
+                        synth.Play("voice-" + e.animal, 0.8f);
+                        break;
+                    case EventType.Steal:
+                        Fx.I.Munch(at, Color.white, false);
+                        if (!live || !NearMe(e.x, e.z)) break;
+                        hud.Pop(at + Vector3.up * 1.3f, e.animal == AnimalKind.Gull ? "STOLEN!" : "GOBBLE!", new Color(1f, 0.5f, 0.45f), 42);
+                        synth.Play("voice-" + e.animal, 0.8f);
+                        synth.Play("snatch");
+                        break;
+                    case EventType.TeaTime:
+                        Fx.I.Confetti(at, 60, 7);
+                        Fx.I.Ring(at, new Color(1f, 0.85f, 0.3f), 5, 0.6f);
+                        if (!mine) break;
+                        synth.Play("teaTime");
+                        rig.Punch(0.5f);
+                        hud.Banner("TEA TIME!", Icons.Food(FoodKind.Sponge));
+                        break;
+                    case EventType.Roar:
+                        // A Trafalgar lion wakes: a big stretch and a yawn (its warning).
+                        Fx.I.Dust(at + Vector3.up * 1.4f, 0.8f);
+                        if (!live || !NearMe(e.x, e.z)) break;
+                        hud.Pop(at + Vector3.up * 3.2f, "YAWN!", new Color(1f, 0.85f, 0.45f), 44);
+                        synth.Play("yawn");
+                        break;
+                    case EventType.Caw:
+                        if (!live || !NearMe(e.x, e.z)) break;
+                        hud.Pop(at + Vector3.up * 4f, "CAW!", new Color(1f, 0.5f, 0.45f), 44);
+                        synth.Play("caw");
+                        break;
+                    case EventType.Ding:
+                        if (!live || !NearMe(e.x, e.z)) break;
+                        hud.Pop(at + Vector3.up * 4.2f, e.honk ? "HONK!" : "DING DING!", new Color(1f, 0.95f, 0.6f), 40);
+                        synth.Play(e.honk ? (e.vehicle == VehicleKind.Cab ? "honkCab" : "honkBus") : "dingDing");
+                        break;
+                    case EventType.VBonk:
+                        Fx.I.Dust(at, 1.2f);
+                        Fx.I.Stars(at, 10);
+                        if (!mine) break;
+                        synth.Play("ouch");
+                        synth.Play(e.vehicle == VehicleKind.Cab ? "honkCab" : "honkBus");
+                        rig.Shake(0.45f);
+                        atmo.Hit(0.6f);
+                        hud.Pop(at + Vector3.up * 1.4f, e.vehicle == VehicleKind.Bus ? "Mind the bus!" : "Mind the cab!", new Color(1f, 0.5f, 0.45f), 46, 1.3f);
+                        break;
+                    case EventType.Splash:
+                        Fx.I.Munch(at, new Color(0.62f, 0.83f, 0.95f), false);
+                        if (!mine) break;
+                        hud.Pop(at + Vector3.up * 1.2f, "WHEE!", new Color(0.6f, 0.85f, 1f), 40);
+                        synth.Play("splash");
                         break;
                     case EventType.Lob:
                         wild.Throw(at);
@@ -901,6 +966,13 @@ namespace Telfer.Game
         }
 
         bool Near(Vector3 p) => Vector3.Distance(p, rig.transform.position) < 45;
+
+        /// <summary>Close enough to the player's snake that a room-wide London event is worth a popup and a sound (main.ts nearMe).</summary>
+        bool NearMe(float x, float z, float reach = 14)
+        {
+            var s = world.Me;
+            return (s.x - x) * (s.x - x) + (s.z - z) * (s.z - z) < reach * reach;
+        }
 
         // ------------------------------------------------------------------ helpers
 

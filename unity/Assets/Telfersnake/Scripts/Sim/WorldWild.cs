@@ -128,6 +128,8 @@ namespace Telfer.Sim
         {
             foreach (var p in Predators)
             {
+                if (p.kind == PredatorKind.Lion) { UpdateLion(p, dt); continue; }
+                if (p.kind == PredatorKind.Raven) { UpdateRaven(p, dt); continue; }
                 var spec = p.Spec;
                 if (p.frozenFor > 0) { p.frozenFor -= dt; p.speed = 0; continue; }
                 p.biteIn -= dt;
@@ -243,9 +245,10 @@ namespace Telfer.Sim
             return best;
         }
 
+        /// <summary>Is any predator that is up and about within this circle? Always false on the school.</summary>
         bool PredatorsNear(float x, float z, float radius)
         {
-            foreach (var p in Predators) if (Collide.Hypot(p.x - x, p.z - z) <= radius + p.Spec.radius) return true;
+            foreach (var p in Predators) if (p.Awake && Collide.Hypot(p.x - x, p.z - z) <= radius + p.Spec.radius) return true;
             return false;
         }
 
@@ -253,10 +256,38 @@ namespace Telfer.Sim
         {
             foreach (var p in Predators)
             {
-                if (Collide.Hypot(p.x - x, p.z - z) > radius + p.Spec.radius) continue;
-                if (freeze) p.frozenFor = Math.Max(p.frozenFor, 1.4f);
-                else { p.scaredFor = Math.Max(p.scaredFor, 2.5f); p.chargeFor = 0; p.biteIn = Math.Max(p.biteIn, 1); }
+                if (!p.Awake || Collide.Hypot(p.x - x, p.z - z) > radius + p.Spec.radius) continue;
+                Spook(p, freeze);
             }
+        }
+
+        /// <summary>
+        /// One beast caught by a power. Freeze roots a bear, wolf or raven and turns a lion to stone; fire, zaps
+        /// and lasers send a bear or wolf fleeing, a lion hurrying home, a raven back to the Tower.
+        /// </summary>
+        void Spook(Predator p, bool freeze)
+        {
+            if (p.kind == PredatorKind.Lion)
+            {
+                if (p.state == Lion.Stone) return;
+                if (freeze) { p.state = Lion.Stone; p.stateFor = Lion.STONE_TIME; p.speed = 0; }
+                else
+                {
+                    if (p.state != Lion.Home) p.stateFor = Lion.HOME_GIVE_UP; // a second scare must not restart its way home
+                    p.state = Lion.Home;
+                    p.scaredFor = Math.Max(p.scaredFor, 2.5f);
+                    p.biteIn = Math.Max(p.biteIn, 1);
+                }
+                return;
+            }
+            if (p.kind == PredatorKind.Raven && !freeze)
+            {
+                p.state = Raven.Back;
+                p.biteIn = Math.Max(p.biteIn, 1);
+                return;
+            }
+            if (freeze) p.frozenFor = Math.Max(p.frozenFor, 1.4f);
+            else { p.scaredFor = Math.Max(p.scaredFor, 2.5f); p.chargeFor = 0; p.biteIn = Math.Max(p.biteIn, 1); }
         }
 
         // ---------------------------------------------------------------- the kids

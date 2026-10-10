@@ -5,7 +5,7 @@ namespace Telfer.Sim
 {
     // ------------------------------------------------------------------ predators (port of predators.ts)
 
-    public enum PredatorKind { Bear, Wolf }
+    public enum PredatorKind { Bear, Wolf, Lion, Raven }
 
     public struct PredatorSpec
     {
@@ -18,7 +18,34 @@ namespace Telfer.Sim
     {
         public PredatorKind kind;
         public float x, z, heading, speed, chargeFor, restFor, biteIn, frozenFor, scaredFor, wx, wz, wanderIn, travel;
+        /// <summary>London's lions and ravens: which Lion / Raven state it is in, and that state's clock.</summary>
+        public int state;
+        public float stateFor;
+        /// <summary>Its home: a lion's plinth centre (wx, wz is where it hops down to), a raven's perch.</summary>
+        public float hx, hz;
         public PredatorSpec Spec => Predators.SPECS[(int)kind];
+        /// <summary>Up and about (not bronze on its plinth, nor roosting on the Tower)? Bears and wolves always are.</summary>
+        public bool Awake =>
+            kind == PredatorKind.Lion ? state == Lion.Prowl || state == Lion.Home || state == Lion.Stone :
+            kind == PredatorKind.Raven ? state != Raven.Perched : true;
+    }
+
+    /// <summary>
+    /// London's lions: asleep in bronze on the plinths (Statue) until a snake comes close; a stretch and a
+    /// yawn (Waking) and a hop down; Prowl after the nearest snake; tired, plod Home, Climb back up. A Freeze
+    /// Puff turns a prowling lion to Stone where it stands for a while (predators.ts LION).
+    /// </summary>
+    public static class Lion
+    {
+        public const int Statue = 0, Waking = 1, Prowl = 2, Home = 3, Stone = 4, Climb = 5;
+        public const float FOOT = 2.3f, WAKE_TIME = 1.2f, HOP_TIME = 0.45f, CLIMB_TIME = 0.8f, WAKE = 9, LEASH = 20, STONE_TIME = 6, HOME_GIVE_UP = 15;
+    }
+
+    /// <summary>London's ravens: Perched on the Tower, a CAW!, a Swoop after a snake, then flying Back (predators.ts RAVEN).</summary>
+    public static class Raven
+    {
+        public const int Perched = 0, Caw = 1, Swoop = 2, Back = 3;
+        public const float CAW_TIME = 0.7f, LEASH = 34;
     }
 
     public static class Predators
@@ -27,13 +54,42 @@ namespace Telfer.Sim
         {
             new PredatorSpec { radius = 0.9f, roamSpeed = 0.9f, chaseSpeed = 2.1f, sight = 16, biteReach = 1.5f, biteShare = 0.18f, biteCap = 22, biteEvery = 2.6f, chaseTime = 0, restTime = 0, howls = false },
             new PredatorSpec { radius = 0.5f, roamSpeed = 1.7f, chaseSpeed = 5.6f, sight = 13, biteReach = 0.9f, biteShare = 0.1f, biteCap = 12, biteEvery = 1.4f, chaseTime = 4, restTime = 5, howls = true },
+            // London. A lion is the bear reborn: it prowls for chaseTime, then sleeps restTime on its plinth; roamSpeed is its plod home.
+            new PredatorSpec { radius = 0.9f, roamSpeed = 1.7f, chaseSpeed = 2.3f, sight = 14, biteReach = 1.5f, biteShare = 0.16f, biteCap = 18, biteEvery = 2.6f, chaseTime = 9, restTime = 8, howls = false },
+            // A raven is the wolf: a swoop of chaseTime, then restTime on the Tower.
+            new PredatorSpec { radius = 0.45f, roamSpeed = 4, chaseSpeed = 5.2f, sight = 18, biteReach = 0.9f, biteShare = 0.06f, biteCap = 6, biteEvery = 1.4f, chaseTime = 4, restTime = 6, howls = true },
         };
+
+        /// <summary>A lion asleep on plinth (hx, hz) facing out from `centre`, its hop-down spot FOOT further out; or a raven at its perch. No RNG.</summary>
+        static Predator Homed(PredatorKind kind, float hx, float hz, float cx, float cz)
+        {
+            float out_ = (float)Math.Atan2(hz - cz, hx - cx);
+            return new Predator
+            {
+                kind = kind, x = hx, z = hz, hx = hx, hz = hz, heading = out_,
+                wx = hx + (float)Math.Cos(out_) * Lion.FOOT, wz = hz + (float)Math.Sin(out_) * Lion.FOOT,
+            };
+        }
 
         public static List<Predator> Make(Stage stage, Rng rng)
         {
             var list = new List<Predator>();
             foreach (var (kind, count) in stage.Predators)
             {
+                // London's beasts have homes, not spawn spots: a plinth each, a perch each.
+                if (kind == PredatorKind.Lion || kind == PredatorKind.Raven)
+                {
+                    var homes = (kind == PredatorKind.Lion ? stage.Plinths : stage.Perches) ?? new float[0];
+                    int n = Math.Min(count, homes.Length / 2);
+                    float cx = 0, cz = 0;
+                    for (int i = 0; i < n; i++) { cx += homes[i * 2] / n; cz += homes[i * 2 + 1] / n; }
+                    for (int i = 0; i < n; i++)
+                    {
+                        float hx = homes[i * 2], hz = homes[i * 2 + 1];
+                        list.Add(kind == PredatorKind.Lion ? Homed(kind, hx, hz, cx, cz) : Homed(kind, hx, hz, hx, hz - 1));
+                    }
+                    continue;
+                }
                 var spec = SPECS[(int)kind];
                 for (int i = 0; i < count; i++)
                 {

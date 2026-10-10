@@ -166,8 +166,17 @@ namespace Telfer.Sim
                 float px = me.x + (float)Math.Cos(angle) * reach, pz = me.z + (float)Math.Sin(angle) * reach;
                 foreach (var h in w.Hazards)
                 {
+                    if (!h.Solid) continue; // London's puddles are for sliding through
                     float r = h.r + me.Radius + 0.4f;
                     if ((h.x - px) * (h.x - px) + (h.z - pz) * (h.z - pz) < r * r) return true;
+                }
+                // London's buses and cabs: a moving wall, with a margin for where it will have got to.
+                foreach (var v in w.Vehicles)
+                {
+                    var spec = v.Spec;
+                    Vehicles.Local(v.x, v.z, v.heading, px, pz, out float f, out float l);
+                    float lead = v.speed * 0.8f; // it is coming this way
+                    if (f > -spec.length / 2 - me.Radius - 0.8f && f < spec.length / 2 + me.Radius + 0.8f + lead && Math.Abs(l) < spec.width / 2 + me.Radius + 0.8f) return true;
                 }
                 foreach (var o in w.Snakes)
                 {

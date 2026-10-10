@@ -13,8 +13,8 @@ namespace Telfer.View
         readonly Material foodMat, goldMat, pelletMat, haloMat, auraMat;
         readonly MaterialPropertyBlock mpb = new MaterialPropertyBlock();
 
-        sealed class FoodV { public Transform t; public MeshFilter mf; public MeshRenderer mr; public int born = int.MinValue; public FoodKind kind; public bool golden; public Transform halo; public float sparkle; }
-        sealed class AnimalV { public Transform t, body, halo; public Vector3 prev, cur; public int born; public float yaw; public Material haloMat; }
+        sealed class FoodV { public Transform t; public MeshFilter mf; public MeshRenderer mr; public int born = int.MinValue; public FoodKind kind; public bool golden; public Transform halo, crown; public float sparkle; }
+        sealed class AnimalV { public Transform t, body, halo; public Vector3 prev, cur; public int born; public float yaw, lift; public Material haloMat; }
         sealed class HazardV { public Transform t; public int version = -1; public float wobble; }
         sealed class Ghost { public Transform t; public Vector3 from; public SnakeView to; public float age, life; public Vector3 scale; }
 
@@ -88,6 +88,16 @@ namespace Telfer.View
             var v = new FoodV { t = go.transform, mf = go.GetComponent<MeshFilter>(), mr = go.GetComponent<MeshRenderer>() };
             v.halo = Flat("halo", haloMat, 1.4f);
             v.halo.gameObject.SetActive(false);
+            if (world.Stage.Id == StageId.London)
+            {
+                // London's golden food is a crown jewel: a little crown bobs over it.
+                var c = new GameObject("crown", typeof(MeshFilter), typeof(MeshRenderer));
+                c.transform.SetParent(root, false);
+                c.GetComponent<MeshFilter>().sharedMesh = ModelsLondonZoo.Crown();
+                c.GetComponent<MeshRenderer>().sharedMaterial = foodMat;
+                c.SetActive(false);
+                v.crown = c.transform;
+            }
             return v;
         }
 
@@ -159,6 +169,15 @@ namespace Telfer.View
                     v.mf.sharedMesh = ModelsWild.ForestFood(f.kind);
                     v.mr.sharedMaterial = f.golden ? goldMat : foodMat;
                     v.halo.gameObject.SetActive(f.golden);
+                    if (v.crown != null) v.crown.gameObject.SetActive(f.golden);
+                    // Jelly babies come in every colour.
+                    if (f.kind == FoodKind.JellyBaby && !f.golden)
+                    {
+                        mpb.Clear();
+                        mpb.SetColor("_BaseColor", MeshKit.Hex(ModelsLondonZoo.JELLY[i % ModelsLondonZoo.JELLY.Length]));
+                        v.mr.SetPropertyBlock(mpb);
+                    }
+                    else v.mr.SetPropertyBlock(null);
                 }
                 float age = (tick - f.born) / 60f + alpha / 60f;
                 float pop = f.born < 0 ? 1 : Mathf.Clamp01(age / 0.45f);
@@ -168,6 +187,12 @@ namespace Telfer.View
                 v.t.rotation = Quaternion.Euler(0, time * 35 + i * 47, Mathf.Sin(time * 2 + i) * 6);
                 float gold = f.golden ? 1.75f : 1.35f;
                 v.t.localScale = Vector3.one * s * gold;
+                if (f.golden && v.crown != null)
+                {
+                    v.crown.position = v.t.position + Vector3.up * (0.5f * s * gold + Mathf.Sin(time * 4 + i) * 0.05f);
+                    v.crown.rotation = Quaternion.Euler(0, -time * 115 + i * 57, 0);
+                    v.crown.localScale = Vector3.one * s * gold * 1.1f;
+                }
                 if (f.golden)
                 {
                     v.halo.position = W.P(f.x, f.z, 0.04f);
@@ -200,9 +225,25 @@ namespace Telfer.View
                     case AnimalKind.Chicken: rollZ = Mathf.Sin(gait * 1.3f) * 12 * moving; lift = Mathf.Abs(Mathf.Sin(gait * 1.3f)) * 0.05f * moving; break;
                     case AnimalKind.Snail: break;
                     case AnimalKind.Ladybird: lift = Mathf.Abs(Mathf.Sin(gait * 3)) * 0.02f * moving; break;
+                    // London's zoo (animalView.ts GAIT): [hop, strides per metre, waddle].
+                    case AnimalKind.Corgi: lift = Mathf.Abs(Mathf.Sin(gait * 1.33f)) * 0.07f * moving; rollZ = Mathf.Sin(gait * 1.33f) * 14 * moving; break;
+                    case AnimalKind.Swan: rollZ = Mathf.Sin(gait * 0.67f) * 9 * moving; break;
+                    case AnimalKind.Pelican: lift = Mathf.Abs(Mathf.Sin(gait * 0.67f)) * 0.04f * moving; rollZ = Mathf.Sin(gait * 0.67f) * 12 * moving; break;
+                    case AnimalKind.Horse: lift = Mathf.Abs(Mathf.Sin(gait * 0.31f)) * 0.12f * moving; rollZ = Mathf.Sin(gait * 0.31f) * 2 * moving; break;
+                    case AnimalKind.Dino: lift = Mathf.Abs(Mathf.Sin(gait * 0.25f)) * 0.1f * moving; rollZ = Mathf.Sin(gait * 0.25f) * 6 * moving; break;
+                    case AnimalKind.Gull: break; // on the wing: flaps below
                     default: lift = Mathf.Abs(Mathf.Sin(gait)) * 0.08f * moving; rollZ = Mathf.Sin(gait) * 3 * moving; break;
                 }
                 if (a.mode == AnimalMode.Charge) pitch = 12;
+                // London: a pigeon burst out of the flock flaps up into the air; gulls are always on the wing.
+                float aloft = a.kind == AnimalKind.Pigeon && a.speed > 5 ? 1.6f : 0;
+                v.lift += (aloft - v.lift) * Mathf.Min(1, dt * (aloft > 0 ? 5 : 2));
+                if (a.kind == AnimalKind.Gull || v.lift > 0.05f)
+                {
+                    float flap = Mathf.Sin(time * 9 + i * 1.3f);
+                    lift += v.lift + flap * 0.06f;
+                    rollZ += flap * 7;
+                }
                 if (a.mode == AnimalMode.Rest && a.kind != AnimalKind.Snail) lift += Mathf.Max(0, Mathf.Sin(time * 2.2f + i)) * 0.02f; // breathing
                 float stretch = a.kind == AnimalKind.Snail ? 1 + Mathf.Sin(time * 3 + i) * 0.06f : 1;
                 v.t.position = pos;
@@ -244,7 +285,9 @@ namespace Telfer.View
                 }
                 float since = (tick - h.lastHitTick) / 60f;
                 float wob = since < 0.5f ? Mathf.Sin(since * 40) * (0.5f - since) * 16 : 0;
-                float sc = h.r / (h.kind == HazardKind.Rock ? 0.75f : h.kind == HazardKind.Stones ? 0.55f : 0.6f);
+                // London's are modelled at their own size (hazardView.ts).
+                float sc = h.kind >= HazardKind.Puddle ? 1 : h.r / (h.kind == HazardKind.Rock ? 0.75f : h.kind == HazardKind.Stones ? 0.55f : 0.6f);
+                if (h.kind == HazardKind.Puddle) wob = 0;
                 if (v.wobble < 0)
                 {
                     v.wobble = Mathf.Min(0, v.wobble + dt * 2.5f);

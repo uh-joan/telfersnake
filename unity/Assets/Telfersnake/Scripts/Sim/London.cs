@@ -123,8 +123,8 @@ namespace Telfer.Sim
     /// carries you downstream). The twelve landmarks stand on the map as solids (their footprints; the
     /// views build them tall). Metres, +x east, +z south.
     ///
-    /// Until London's own cast is ported (phase B3) it is populated with the Common's and the school's
-    /// animals and food, and has no predators, children or creatures.
+    /// London's menu and zoo, the Trafalgar lions, the Tower's ravens and the traffic are ported (B3);
+    /// its people and legends come next, so for now it has no children or creatures.
     /// </summary>
     public sealed class London : Stage
     {
@@ -302,8 +302,22 @@ namespace Telfer.Sim
             // You pop out of the Underground at Westminster, under Big Ben, facing the bridge.
             SpawnX = -46; SpawnZ = 8; SpawnHeading = -0.45f;
             FallbackX = 0; FallbackZ = -32; // open paper north of the river, between Trafalgar and St Paul's
-            // Stand-ins until London's own zoo (B3): pigeons and ducks as in classic, the parks' squirrels and rabbits, the City's crows and a fox.
-            AnimalKinds = new[] { AnimalKind.Pigeon, AnimalKind.Squirrel, AnimalKind.Duck, AnimalKind.Rabbit, AnimalKind.Crow, AnimalKind.Fox };
+            // London's zoo: a big flock in Trafalgar Square, ducks on both lakes.
+            AnimalKinds = new[] { AnimalKind.Pigeon, AnimalKind.Squirrel, AnimalKind.Duck, AnimalKind.Corgi, AnimalKind.Swan, AnimalKind.Gull, AnimalKind.Pelican, AnimalKind.Horse, AnimalKind.Dino };
+            AnimalCounts = new Dictionary<AnimalKind, int> { { AnimalKind.Pigeon, 10 }, { AnimalKind.Duck, 4 } };
+            AnimalHomes = new Dictionary<AnimalKind, Home> { { AnimalKind.Pigeon, Home.Trafalgar } };
+            // Dropped umbrellas, roadworks and the odd puddle, anywhere open (and never on a bus route).
+            HasHazards = true;
+            HazardRough = BOUNDS;
+            HazardShare = 0;
+            HazardKinds = new[] { HazardKind.Puddle, HazardKind.Umbrella, HazardKind.Roadworks };
+            // The four Trafalgar lions (one per plinth) and the Tower's raven pair.
+            Plinths = LION_PLINTHS;
+            Perches = RAVEN_PERCHES;
+            Predators = new[] { (PredatorKind.Lion, LION_PLINTHS.Length / 2), (PredatorKind.Raven, RAVEN_PERCHES.Length / 2) };
+            Routes = ROUTES;
+            Traffic = TRAFFIC;
+            Zebras = ZEBRAS;
             FoodScale = 2;
             ExtraRivals = 4;
             Warden = new WardenConfig
@@ -326,7 +340,7 @@ namespace Telfer.Sim
             };
         }
 
-        // ------------------------------------------------------------ the menu (stand-ins from the school's and the Common's foods)
+        // ------------------------------------------------------------ the menu (food.ts / londonLayout.ts MENU)
 
         static float[] W(params (FoodKind k, float w)[] e)
         {
@@ -335,15 +349,25 @@ namespace Telfer.Sim
             return a;
         }
 
-        static readonly float[] SWEETS = W((FoodKind.Cookie, 5), (FoodKind.Berry, 1));
-        static readonly float[] MARKET = W((FoodKind.Apple, 3), (FoodKind.Berry, 3), (FoodKind.Tomato, 1));
-        static readonly float[] BOROUGH_MENU = W((FoodKind.Broccoli, 3), (FoodKind.Carrot, 3), (FoodKind.Mushroom, 2));
-        static readonly float[] SOUTH_BANK_MENU = W((FoodKind.Burger, 3), (FoodKind.Sausage, 2), (FoodKind.Cookie, 1));
-        static readonly float[] CITY = W((FoodKind.Burger, 2), (FoodKind.Sausage, 2), (FoodKind.Cookie, 1));
-        static readonly float[] PALACE_MENU = W((FoodKind.Cookie, 3), (FoodKind.Berry, 3), (FoodKind.Apple, 2));
-        static readonly float[] PARK = W((FoodKind.Berry, 3), (FoodKind.Apple, 1), (FoodKind.Acorn, 2), (FoodKind.Mushroom, 1));
-        static readonly float[] RIVER = W((FoodKind.Burger, 3), (FoodKind.Sausage, 2));
-        static readonly float[] STREET = W((FoodKind.Sausage, 3), (FoodKind.Cookie, 2.5f), (FoodKind.Burger, 1), (FoodKind.Apple, 0.7f), (FoodKind.Carrot, 0.5f));
+        /// <summary>Trafalgar Square and Piccadilly Circus: jelly babies.</summary>
+        static readonly float[] SWEETS = W((FoodKind.JellyBaby, 5), (FoodKind.Biscuit, 1));
+        /// <summary>Covent Garden market: fruit (and a scone).</summary>
+        static readonly float[] MARKET = W((FoodKind.Apple, 3), (FoodKind.Strawberry, 3), (FoodKind.Scone, 1));
+        /// <summary>Borough Market: veg and a pie.</summary>
+        static readonly float[] BOROUGH_MENU = W((FoodKind.Broccoli, 3), (FoodKind.Carrot, 3), (FoodKind.Pie, 2));
+        /// <summary>The South Bank: crumpets, sausage rolls, chips.</summary>
+        static readonly float[] SOUTH_BANK_MENU = W((FoodKind.Crumpet, 3), (FoodKind.SausageRoll, 2), (FoodKind.FishChips, 2));
+        /// <summary>The City: bagels and pies.</summary>
+        static readonly float[] CITY = W((FoodKind.Bagel, 3), (FoodKind.Pie, 2), (FoodKind.Tea, 1));
+        /// <summary>The Palace and St James's Park: afternoon tea.</summary>
+        static readonly float[] PALACE_MENU = W((FoodKind.Sandwich, 3), (FoodKind.Scone, 3), (FoodKind.Sponge, 2), (FoodKind.Tea, 2));
+        /// <summary>Hyde Park: strawberries and a picnic.</summary>
+        static readonly float[] PARK = W((FoodKind.Strawberry, 3), (FoodKind.Sandwich, 1), (FoodKind.Biscuit, 1), (FoodKind.Apple, 1));
+        /// <summary>Along the Thames: fish and chips.</summary>
+        static readonly float[] RIVER = W((FoodKind.FishChips, 4), (FoodKind.SausageRoll, 1), (FoodKind.Tea, 1));
+        /// <summary>Everywhere else: a London street mix.</summary>
+        static readonly float[] STREET = W((FoodKind.SausageRoll, 3), (FoodKind.Biscuit, 2.5f), (FoodKind.Tea, 2), (FoodKind.Sandwich, 0.7f), (FoodKind.Scone, 0.5f),
+            (FoodKind.Pie, 0.5f), (FoodKind.FishChips, 0.4f), (FoodKind.JellyBaby, 0.4f));
 
         static bool Near(float x, float z, Circle p, float r) => (x - p.x) * (x - p.x) + (z - p.z) * (z - p.z) < r * r;
 
@@ -362,7 +386,41 @@ namespace Telfer.Sim
             return Foods.Pick(rng, menu);
         }
 
+        // ------------------------------------------------------------ traffic (A3)
+
+        /// <summary>
+        /// The bus and cab routes, as road centre lines with their stops as vertex indices; each becomes a lane
+        /// loop (Vehicles.LaneLoop). The 11 along the Embankment, the 12 over Westminster Bridge to Borough, and
+        /// the cabs from the Strand to the Tower and over Tower Bridge (narrower lanes).
+        /// </summary>
+        public static readonly Route[] ROUTES =
+        {
+            Vehicles.LaneLoop("bus-north", new float[] { -78, -8.5f, -72, -9.25f, -58, -11, -48, -13.2f, -36, -15, -18, -22, -12.6f, -22.6f, 0, -24, 22, -20, 28.6f, -16.7f, 44, -9 }, new[] { 1, 6, 9 }),
+            Vehicles.LaneLoop("bus-south", new float[] { -36, 0, -30, 2, -12, 2, -7, 6, 4, 7.5f, 5.8f, 10.65f, 10, 18, 24, 24, 28.8f, 25.2f, 40, 28 }, new[] { 1, 5, 8 }),
+            Vehicles.LaneLoop("cab", new float[] { 8, -37.67f, 16, -35, 34, -33, 48, -28, 62, -26, 73, -25, 78, -14, 78, 2, 80, 16, 77, 30, 52, 30 }, new int[0], 0.95f),
+        };
+
+        /// <summary>Five buses and three cabs.</summary>
+        static readonly Traffic[] TRAFFIC =
+        {
+            new Traffic(VehicleKind.Bus, "bus-north", 3), new Traffic(VehicleKind.Bus, "bus-south", 2), new Traffic(VehicleKind.Cab, "cab", 3),
+        };
+
+        /// <summary>The raven pair's homes: two of the six ravens on the Tower's south wall walk, at RAVEN_PERCH_Y metres up.</summary>
+        public static readonly float[] RAVEN_PERCHES = { TOWER.x - 1.2f, TOWER.z + TOWER.d / 2 - 0.27f, TOWER.x + 4.6f, TOWER.z + TOWER.d / 2 - 0.27f };
+        public const float RAVEN_PERCH_Y = 3.2f;
+
         static void Inside(Rng rng, Box b, out float x, out float z) { x = rng.Range(b.x - b.w / 2, b.x + b.w / 2); z = rng.Range(b.z - b.d / 2, b.z + b.d / 2); }
+
+        static void AlongRoad(Rng rng, float[] path, float spread, out float x, out float z)
+        {
+            int i = rng.Int(path.Length / 2 - 1);
+            float t = rng.Next();
+            x = path[i * 2] + (path[i * 2 + 2] - path[i * 2]) * t + rng.Range(-spread, spread);
+            z = path[i * 2 + 1] + (path[i * 2 + 3] - path[i * 2 + 1]) * t + rng.Range(-spread, spread);
+        }
+
+        static float[] RoadPath(string id) { foreach (var r in ROADS) if (r.id == id) return r.path; return null; }
 
         public override void HomePoint(Rng rng, Home home, out float x, out float z)
         {
@@ -370,11 +428,12 @@ namespace Telfer.Sim
             {
                 case Home.Woods:
                 case Home.Green:
-                    // Squirrels and rabbits in the parks.
+                    // Squirrels in the parks.
                     Inside(rng, rng.Next() < 0.75f ? HYDE_PARK : ST_JAMES, out x, out z); return;
                 case Home.Lagoon:
+                case Home.Lake:
                 {
-                    // On the bank of a painted lake, just off the water: ducks are walkers.
+                    // On the bank of a painted lake, just off the water: the swans', ducks' and pelicans' banks.
                     var e = rng.Next() < 0.5f ? SERPENTINE : ST_JAMES_LAKE;
                     float t = rng.Range(0, Collide.PI * 2);
                     float u = (e.rx + 1) * (float)Math.Cos(t), v = (e.rz + 1) * (float)Math.Sin(t);
@@ -382,6 +441,10 @@ namespace Telfer.Sim
                     z = e.z + u * (float)Math.Sin(e.rot) + v * (float)Math.Cos(e.rot);
                     return;
                 }
+                case Home.Palace: AlongRoad(rng, RoadPath("mall"), 3, out x, out z); return; // the corgis and the guard horse, on the Mall
+                case Home.Trafalgar: x = NELSON.x + rng.Range(-7, 7); z = NELSON.z + rng.Range(-6, 6); return;
+                case Home.River: AlongRoad(rng, rng.Next() < 0.6f ? RoadPath("embankment") : RoadPath("southbank"), 2, out x, out z); return; // gulls on the Embankment
+                case Home.Museum: x = MUSEUM.x + rng.Range(-8, 8); z = MUSEUM.z + MUSEUM.d / 2 + rng.Range(1.5f, 5); return;
                 default:
                     x = rng.Range(BOUNDS.minX, BOUNDS.maxX); z = rng.Range(BOUNDS.minZ, BOUNDS.maxZ); return;
             }

@@ -222,6 +222,9 @@ namespace Telfer.Sim
         public float laserIn, stinkIn, zapIn, freezeIn;
         /// <summary>Seconds frozen solid by a rival's Freeze Puff: it cannot steer or move.</summary>
         public float frozenFor;
+        /// <summary>London: a cuppa's zoom (s left), the Tea Time combo (next bite wanted, the tick it began) and its cooldown.</summary>
+        public float teaFor, teaCool;
+        public int teaStep, teaFrom;
 
         public bool HasMagic(MagicId id) => magic[(int)id] > 0;
         public void GiveMagic(MagicId id, float secs) => magic[(int)id] = Math.Max(magic[(int)id], secs);
@@ -248,6 +251,7 @@ namespace Telfer.Sim
             laserIn = stinkIn = zapIn = freezeIn = frozenFor = 0;
             Array.Clear(magic, 0, magic.Length);
             luckyCards = 0;
+            teaFor = teaCool = 0; teaStep = teaFrom = 0;
             Upgrades.Refresh(this);
         }
 
@@ -399,6 +403,13 @@ namespace Telfer.Sim
                 }
             }
             heading = Collide.TurnToward(heading, want, step);
+        }
+
+        /// <summary>Something outside Move (London's buses) is in the way: steer next tick as if against a wall.</summary>
+        public void LeanOn(float nx, float nz)
+        {
+            touchingWall = true;
+            wallNx = nx; wallNz = nz;
         }
 
         public void Deflect(float nx, float nz, float dt)

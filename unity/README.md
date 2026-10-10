@@ -95,6 +95,18 @@ Tools/shot.sh title
 
 `GameRoot.Autopilot` lets a bot drive your snake; `GameRoot.LookAt` / `LookAtFn` point the camera.
 
+**Parity with the classic sim** (London): `scripts/trace.ts` runs the TypeScript world and `Editor/LondonTrace.cs`
+the C# one through the same scripted tour, and `compare` lines them up (event counts, per-tick positions):
+
+```bash
+npx tsx scripts/trace.ts world 1-12 3600 /tmp/ts.json
+Tools/ev.sh 'return Telfer.EditorTools.LondonTrace.World(1, 12, 3600, "/tmp/cs.json");' 300
+npx tsx scripts/trace.ts compare /tmp/ts.json /tmp/cs.json      # also: traffic [ticks] [out] / LondonTrace.Traffic
+```
+
+The RNG streams are the same mulberry32, but the C# sim runs in floats, so runs agree tick for tick only
+until a timer lands a tick apart (about a second in); after that it is the event counts that must match.
+
 ## Playing online
 
 Play first looks for a seat on the same Node server as the web game (`npm run server`, port

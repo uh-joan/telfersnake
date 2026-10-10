@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Telfer.Sim
 {
@@ -52,6 +53,19 @@ namespace Telfer.Sim
         public Box[] Bridges;
         /// <summary>How close the chase camera sits here, as a share of the usual (stage.ts cameraZoom).</summary>
         public float CameraZoom = 1;
+        /// <summary>Which hazards this stage scatters, drawn from in this order (stage.ts hazardKinds). The school's three by default.</summary>
+        public HazardKind[] HazardKinds = { HazardKind.Rock, HazardKind.Stones, HazardKind.Sticks };
+        /// <summary>How many of a kind live here, and where, where it differs from the kind's own spec (London's big pigeon flock). Null: none.</summary>
+        public Dictionary<AnimalKind, int> AnimalCounts;
+        public Dictionary<AnimalKind, Home> AnimalHomes;
+        /// <summary>London's roads the buses and cabs drive (lane loops), who drives them, and the zebras they stop at. Null elsewhere.</summary>
+        public Route[] Routes;
+        public Traffic[] Traffic;
+        public Zebra[] Zebras;
+        /// <summary>Where the stone lions sleep, and where the raven pair roost (x, z pairs). Null elsewhere.</summary>
+        public float[] Plinths, Perches;
+
+        public int AnimalCount(AnimalKind k) => AnimalCounts != null && AnimalCounts.TryGetValue(k, out int n) ? n : Animals.SPECS[(int)k].count;
 
         public abstract FoodKind FoodKindAt(Rng rng, float x, float z);
         public abstract void HomePoint(Rng rng, Home home, out float x, out float z);

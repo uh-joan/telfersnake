@@ -11,7 +11,12 @@ namespace Telfer.View
 
         public static Mesh Food(FoodKind k) { if (food == null) BuildFood(); return food[(int)k]; }
         public static Mesh Animal(AnimalKind k) { if (animals == null) BuildAnimals(); return animals[(int)k]; }
-        public static Mesh Hazard(HazardKind k, int variant) { if (hazards == null) BuildHazards(); return hazards[(int)k * 3 + variant % 3]; }
+        public static Mesh Hazard(HazardKind k, int variant)
+        {
+            if (k >= HazardKind.Puddle) return ModelsLondonZoo.Hazard(k); // London's street hazards
+            if (hazards == null) BuildHazards();
+            return hazards[(int)k * 3 + variant % 3];
+        }
         public static Mesh Pellet => pellet ? pellet : (pellet = PelletMesh());
 
         /// <summary>The colour a food bursts into when eaten.</summary>
@@ -28,6 +33,7 @@ namespace Telfer.View
                 case FoodKind.Tomato: return MeshKit.Hex(0xe5383b);
                 case FoodKind.Berry: return MeshKit.Hex(0x5f3dc4);
                 case FoodKind.Acorn: return MeshKit.Hex(0x9c6b3c);
+                case FoodKind k2 when k2 >= FoodKind.FishChips: return ModelsLondonZoo.FoodColor(k2);
                 default: return MeshKit.Hex(0xe03131);
             }
         }
@@ -46,6 +52,7 @@ namespace Telfer.View
                 case AnimalKind.Hedgehog: return MeshKit.Hex(0x7a5a3a);
                 case AnimalKind.Fox: return MeshKit.Hex(0xe8590c);
                 case AnimalKind.Pigeon: return MeshKit.Hex(0x9aa3b0);
+                case AnimalKind k2 when k2 >= AnimalKind.Corgi: return ModelsLondonZoo.AnimalColor(k2);
                 default: return MeshKit.Hex(0xf5f1e6);
             }
         }

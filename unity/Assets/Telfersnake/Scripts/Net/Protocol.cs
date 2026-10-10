@@ -26,10 +26,12 @@ namespace Telfer.Net
             UpgradeId.Laser, UpgradeId.Stink, UpgradeId.Zap, UpgradeId.Freeze,
         };
 
-        public static readonly string[] FOOD_KINDS = { "burger", "sausage", "cookie", "broccoli", "carrot", "apple", "mushroom", "tomato", "berry", "acorn" };
-        public static readonly string[] ANIMAL_KINDS = { "snail", "ladybird", "chicken", "duck", "rabbit", "sheep", "pig", "goat", "squirrel", "crow", "deer", "hedgehog", "fox", "pigeon" };
-        public static readonly string[] HAZARD_KINDS = { "rock", "stones", "sticks" };
-        public static readonly string[] PREDATOR_KINDS = { "bear", "wolf" };
+        public static readonly string[] FOOD_KINDS = { "burger", "sausage", "cookie", "broccoli", "carrot", "apple", "mushroom", "tomato", "berry", "acorn",
+            "fishchips", "scone", "sponge", "sandwich", "pie", "sausageroll", "crumpet", "strawberry", "jellybaby", "bagel", "biscuit", "tea" };
+        public static readonly string[] ANIMAL_KINDS = { "snail", "ladybird", "chicken", "duck", "rabbit", "sheep", "pig", "goat", "squirrel", "crow", "deer", "hedgehog", "fox", "pigeon",
+            "corgi", "swan", "gull", "pelican", "horse", "dino" };
+        public static readonly string[] HAZARD_KINDS = { "rock", "stones", "sticks", "puddle", "umbrella", "roadworks" };
+        public static readonly string[] PREDATOR_KINDS = { "bear", "wolf", "lion", "raven" };
         public static readonly string[] KID_KINDS = { "naughty", "nice", "runner" };
         public static readonly string[] PROJECTILE_KINDS = { "pebble", "kiss" };
         public static readonly string[] CREATURE_KINDS = { "stag", "unicorn", "owl", "frog", "kitsune", "pixie", "squirrel", "wisp" };

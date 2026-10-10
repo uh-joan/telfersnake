@@ -40,8 +40,12 @@ namespace Telfer.View
         const float TOP = 0.05f, BASE = WATER_Y - 0.4f;
         const float PAINT_WORLD = 180;
 
+        /// <summary>The London built for this session (there is only ever one): the run's views hide its statues and perched ravens.</summary>
+        public static LondonEnv Active;
+
         public LondonEnv(Transform parent, bool hiRes)
         {
+            Active = this;
             root = new GameObject("London").transform;
             root.SetParent(parent, false);
             Paper(hiRes);

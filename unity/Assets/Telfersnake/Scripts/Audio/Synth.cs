@@ -188,6 +188,24 @@ namespace Telfer.Audio
             { var b = new Buf(0.4f); Tone(b, 0, 900, 0.08, Wave.Sine, 0.12f, 1400); Tone(b, 0.1, 1200, 0.18, Wave.Sine, 0.1f, 1600); Clip("kiss", b); }
             { var b = new Buf(1.4f); double[] fs = { 523, 659, 784, 1047, 1319, 1568, 2093 }; for (int i = 0; i < fs.Length; i++) Tone(b, i * 0.07, fs[i], 0.5, Wave.Sine, 0.1f, 0, 8, 6); Hiss(b, 0.2, 1.0, 5000, 10000, 0.05f, 0.5); Clip("magic", b); }
 
+            // London (sfx.ts): a snatched snack, a cuppa's zoom, TEA TIME!, a lion's yawn, a raven's CAW, the bus bell,
+            // a bus's parp and a cab's beep-beep, a puddle.
+            { var b = new Buf(0.3f); Hiss(b, 0, 0.12, 1500, 5000, 0.1f, 1.5); Tone(b, 0.04, 880, 0.12, Wave.Square, 0.07f, 1500); Clip("snatch", b); }
+            { var b = new Buf(0.4f); Tone(b, 0, 520, 0.25, Wave.Triangle, 0.12f, 1040); Hiss(b, 0.02, 0.3, 1200, 4000, 0.06f, 1); Clip("zoom", b); }
+            {
+                var b = new Buf(1.2f);
+                double[] fs = { 784, 988, 1175, 1568 };
+                for (int i = 0; i < 4; i++) Tone(b, i * 0.1, fs[i], 0.24, Wave.Triangle, 0.14f);
+                Tone(b, 0.45, 2093, 0.5, Wave.Sine, 0.07f, 0, 8, 12); Tone(b, 0.57, 2637, 0.5, Wave.Sine, 0.07f, 0, 8, 12);
+                Clip("teaTime", b);
+            }
+            { var b = new Buf(1.15f); Tone(b, 0, 95, 0.55, Wave.Saw, 0.09f, 140, 8, 18); Tone(b, 0.35, 330, 0.7, Wave.Triangle, 0.08f, 160); Hiss(b, 0.3, 0.6, 700, 250, 0.06f, 1.2); Clip("yawn", b); }
+            { var b = new Buf(0.5f); foreach (var d in new[] { 0, 0.22 }) { Tone(b, d, 720, 0.16, Wave.Saw, 0.08f, 480, 60, 70); Hiss(b, d, 0.14, 2200, 1200, 0.07f, 3); } Clip("caw", b); }
+            { var b = new Buf(0.8f); foreach (var d in new[] { 0, 0.2 }) { Tone(b, d, 1568, 0.5, Wave.Sine, 0.12f); Tone(b, d, 3136, 0.25, Wave.Sine, 0.04f); } Clip("dingDing", b); }
+            { var b = new Buf(0.55f); Tone(b, 0, 196, 0.45, Wave.Saw, 0.08f); Tone(b, 0, 247, 0.45, Wave.Square, 0.04f); Clip("honkBus", b); }
+            { var b = new Buf(0.35f); foreach (var d in new[] { 0, 0.16 }) Tone(b, d, 440, 0.11, Wave.Square, 0.07f); Clip("honkCab", b); }
+            { var b = new Buf(0.4f); Hiss(b, 0, 0.25, 2500, 700, 0.18f, 1.5); Tone(b, 0.05, 600, 0.25, Wave.Sine, 0.08f, 1200); Clip("splash", b); }
+
             BuildMusic();
         }
 
@@ -203,6 +221,14 @@ namespace Telfer.Audio
                 case AnimalKind.Rabbit: Tone(b, 0, 1500, 0.09, Wave.Sine, 0.1f, 2300); break;
                 case AnimalKind.Snail: Tone(b, 0, 260, 0.16, Wave.Sine, 0.14f, 520); break;
                 case AnimalKind.Ladybird: Tone(b, 0, 1900, 0.04, Wave.Square, 0.06f); Tone(b, 0.06, 2300, 0.04, Wave.Square, 0.06f); break;
+                // London's zoo (sfx.ts voice).
+                case AnimalKind.Corgi: Tone(b, 0, 900, 0.07, Wave.Square, 0.09f, 1350); Tone(b, 0.11, 950, 0.08, Wave.Square, 0.09f, 1450); break; // yip yip!
+                case AnimalKind.Swan: Tone(b, 0, 250, 0.32, Wave.Saw, 0.14f, 210, 18, 30); Tone(b, 0, 500, 0.28, Wave.Square, 0.05f, 420); break; // HONK
+                case AnimalKind.Gull: Tone(b, 0, 1250, 0.2, Wave.Saw, 0.07f, 800); Tone(b, 0.24, 1150, 0.24, Wave.Saw, 0.06f, 760); break;
+                case AnimalKind.Pelican: Hiss(b, 0, 0.04, 2500, 1800, 0.18f, 6); Hiss(b, 0.09, 0.04, 2300, 1600, 0.16f, 6); break; // a beak clack
+                case AnimalKind.Horse: Tone(b, 0, 700, 0.45, Wave.Saw, 0.08f, 420, 60, 16); break; // a whinny
+                case AnimalKind.Dino: for (int i = 0; i < 5; i++) Hiss(b, i * 0.06, 0.05, 3200 - i * 300, 1400, 0.14f, 8); Tone(b, 0, 110, 0.3, Wave.Square, 0.08f, 70); break;
+                case AnimalKind.Pigeon: for (int i = 0; i < 6; i++) Hiss(b, i * 0.05, 0.08, 900 + i * 120, 500, 0.08f, 2); break; // a flock taking off
             }
         }
 
