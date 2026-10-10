@@ -2,6 +2,7 @@ import { ANIMALS } from './animals';
 import { isFree } from './collide';
 import { FOOD_VALUE, GOLDEN_MULTIPLIER } from './food';
 import type { Input, Snake, SnakeLook } from './snake';
+import { crossesWater } from './water';
 import type { World } from './world';
 
 /**
@@ -52,6 +53,8 @@ const SIGHT = 18; // metres it looks for food
 const THREAT_RANGE = 9;
 const HUNT_RANGE = 12;
 const PROBE_ANGLE = 0.9;
+/** How much less a bot fancies a snack it would have to swim for (unless it is worth a chase). */
+const ACROSS_WATER = 0.3;
 
 export class Bot {
   private readonly input: Input = { x: 1, z: 0, active: true, dash: false };
@@ -164,8 +167,13 @@ export class Bot {
     const consider = (x: number, z: number, value: number, chase: boolean) => {
       const d = Math.hypot(x - me.x, z - me.z);
       if (d > SIGHT) return;
-      const appeal = value / (d + 2);
+      let appeal = value / (d + 2);
       if (appeal <= best) return;
+      // London: swimming is slow, so a bot keeps to its own bank unless the prize is worth a dash.
+      if (w.stage.water && !chase && crossesWater(w.stage, me.x, me.z, x, z)) {
+        appeal *= ACROSS_WATER;
+        if (appeal <= best) return;
+      }
       best = appeal;
       this.tx = x;
       this.tz = z;

@@ -4,20 +4,23 @@ import { KID_RADIUS, KIDS, type Kid, makeKids, type Projectile, type ProjectileK
 import { type Creature, type CreatureKind, CREATURES, creatureSpot, makeCreatures } from './creatures';
 import { Bot, MORE_RIVALS, type Personality } from './bot';
 import { botCardChoice, type Rules, rulesFor } from './modes';
-import { isFree, makeHit, resolveCircle, slideAlong, turnToward, wrapAngle } from './collide';
+import { isFree, makeHit, resolveAshore, resolveCircle, slideAlong, turnToward, wrapAngle } from './collide';
 import { Cooper, COOPER_AURA, COOPER_RADIUS } from './cooper';
 import { type Food, type FoodKind, FOOD_VALUE, GOLDEN_MULTIPLIER, placeFood } from './food';
 import { type Hazard, type HazardKind, makeHazards, type Pellet, PELLET_LIFE_TICKS, placeHazard } from './hazards';
 import { type Circle, inBox, SCHOOL } from './layout';
 import { Rng } from './rng';
-import type { Stage } from './stage';
+import type { Stage, Terrain } from './stage';
 import { type Input, Snake, type SnakeLook, TIERS } from './snake';
 import { type CardId, type PowerId, rollCards, type UpgradeId } from './upgrades';
+import { inWater } from './water';
 
 export const STEP = 1 / 60;
 export const PLAYER = 0;
 
 const SLOW_FACTOR = 0.6;
+/** Swimming (London's Thames): a slow paddle. Bridges are the fast way across. */
+const SWIM_FACTOR = 0.5;
 const BUMP_QUIET = 0.4;
 
 /** Animals are gulped from a bit closer than food: they are the ones worth chasing. */
@@ -116,6 +119,9 @@ export type GameEvent =
   | { type: 'magic'; kind: CreatureKind; who: number; x: number; z: number; gems: number }
   | { type: 'bump'; who: number; what: 'wall' | 'cooper' | 'kid' };
 
+/** Terrain with only bounds and solids: water counts as open. */
+const dryTerrain = (t: Terrain): Terrain => ({ bounds: t.bounds, solidBoxes: t.solidBoxes, solidCircles: t.solidCircles });
+
 /**
  * The whole game state. Advances in fixed steps from inputs alone: no rendering, no DOM,
  * no wall-clock time, no Math.random. That keeps it ready to run on a server for multiplayer.
@@ -160,6 +166,8 @@ export class World {
 
   private readonly bots = new Map<Snake, Bot>();
   private readonly p = { x: 0, z: 0 };
+  /** The stage with its rivers taken out (just the solids), for things that may cross water. */
+  private dryStage: Terrain | null = null;
   /** Miss Sami's little natter with the mum: when she next says something, if the stage has her. */
   private samiSayIn = 3;
   /** Which difficulty this world runs at: rival personalities, food count, whether bots get upgrades. */
@@ -348,7 +356,9 @@ export class World {
       const input = bot ? bot.think(s, this, dt) : this.inputs[s.id];
 
       s.slowed = Math.hypot(s.x - c.x, s.z - c.z) < COOPER_AURA;
-      s.speedFactor += ((s.slowed ? SLOW_FACTOR : 1) - s.speedFactor) * Math.min(1, dt * 4);
+      let pace = s.slowed ? SLOW_FACTOR : 1;
+      if (this.stage.water && inWater(this.stage, s.x, s.z)) pace *= SWIM_FACTOR;
+      s.speedFactor += (pace - s.speedFactor) * Math.min(1, dt * 4);
       s.update(input, dt, !s.slowed, this.stage, this.snakeSolids);
 
       const ouch = this.bonkRock(s);
@@ -591,7 +601,7 @@ export class World {
         const flee = this.nearestSnake(p.x, p.z);
         if (flee) p.heading = turnToward(p.heading, Math.atan2(p.z - flee.z, p.x - flee.x), 6 * dt);
         const dash = spec.chaseSpeed * 0.9;
-        resolveCircle(this.stage, p.x + Math.cos(p.heading) * dash * dt, p.z + Math.sin(p.heading) * dash * dt, spec.radius, this.hit, this.stage.logs);
+        resolveAshore(this.stage, p.x, p.z, p.x + Math.cos(p.heading) * dash * dt, p.z + Math.sin(p.heading) * dash * dt, spec.radius, this.hit, this.stage.logs);
         p.x = this.hit.x;
         p.z = this.hit.z;
         p.speed = dash;
@@ -624,7 +634,7 @@ export class World {
         speed = spec.roamSpeed;
       }
 
-      resolveCircle(this.stage, p.x + Math.cos(p.heading) * speed * dt, p.z + Math.sin(p.heading) * speed * dt, spec.radius, this.hit, this.stage.logs);
+      resolveAshore(this.stage, p.x, p.z, p.x + Math.cos(p.heading) * speed * dt, p.z + Math.sin(p.heading) * speed * dt, spec.radius, this.hit, this.stage.logs);
       p.x = this.hit.x;
       p.z = this.hit.z;
       p.speed = speed;
@@ -722,7 +732,7 @@ export class World {
         if (k.wanderIn <= 0 || Math.hypot(k.x - k.tx, k.z - k.tz) < 0.8) this.wanderKid(k);
         k.heading = turnToward(k.heading, Math.atan2(k.tz - k.z, k.tx - k.x), 6 * dt);
         const speed = spec.roam;
-        resolveCircle(this.stage, k.x + Math.cos(k.heading) * speed * dt, k.z + Math.sin(k.heading) * speed * dt, KID_RADIUS, this.hit);
+        resolveAshore(this.stage, k.x, k.z, k.x + Math.cos(k.heading) * speed * dt, k.z + Math.sin(k.heading) * speed * dt, KID_RADIUS, this.hit);
         k.x = this.hit.x;
         k.z = this.hit.z;
         k.speed = speed;
@@ -865,7 +875,7 @@ export class World {
         c.heading = turnToward(c.heading, Math.atan2(c.wz - c.z, c.wx - c.x), 2 * dt);
         speed = spec.flee * 0.3; // an ethereal drift while nothing is near
       }
-      resolveCircle(this.stage, c.x + Math.cos(c.heading) * speed * dt, c.z + Math.sin(c.heading) * speed * dt, spec.radius, this.hit, this.stage.logs);
+      resolveAshore(this.stage, c.x, c.z, c.x + Math.cos(c.heading) * speed * dt, c.z + Math.sin(c.heading) * speed * dt, spec.radius, this.hit, this.stage.logs);
       c.x = this.hit.x;
       c.z = this.hit.z;
       c.speed = speed;
@@ -1075,6 +1085,7 @@ export class World {
     const reach = Math.max(s.magnet, s.hasMagic('magnet') ? PIXIE_MAGNET : 0);
     if (reach <= 0) return;
     const r2 = reach * reach;
+    const solids = this.stage.water ? (this.dryStage ??= dryTerrain(this.stage)) : this.stage;
     const pull = (o: { x: number; z: number }) => {
       const dx = s.x - o.x;
       const dz = s.z - o.z;
@@ -1084,8 +1095,9 @@ export class World {
       const move = Math.min(d, MAGNET_PULL * dt);
       const nx = o.x + (dx / d) * move;
       const nz = o.z + (dz / d) * move;
-      // Fences and benches still count: food stops at them instead of sliding through.
-      if (!isFree(this.stage, nx, nz, 0.25, this.hazards)) return;
+      // Fences and benches still count: food stops at them instead of sliding through. Water
+      // does not: a swimmer's magnet pulls pellets across the river (and bank food out to it).
+      if (!isFree(solids, nx, nz, 0.25, this.hazards)) return;
       o.x = nx;
       o.z = nz;
     };

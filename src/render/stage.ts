@@ -10,14 +10,21 @@ interface Atmosphere {
   hemi: number;
   sun: number;
   sunI: number;
+  /** Soft sun shadows (London's pop-up landmarks). Off elsewhere, so the other stages render as before. */
+  shadows?: boolean;
 }
-/** Each stage's own light: the school's bright noon, the Common's warmer late-afternoon haze, London's crisp, cool morning. */
+/** Each stage's own light: the school's bright noon, the Common's warmer late-afternoon haze, London's storybook daylight. */
 const ATMOSPHERE: Record<StageId, Atmosphere> = {
   school: { sky: 0x9fd8f5, fog: [70, 170], hemiSky: 0xffffff, hemiGround: 0x8a8f7a, hemi: 1.9, sun: 0xfff2d6, sunI: 2.2 },
   common: { sky: 0xcfe6c0, fog: [55, 150], hemiSky: 0xf6e9c8, hemiGround: 0x6f7a52, hemi: 1.75, sun: 0xffe6b0, sunI: 2.35 },
-  london: { sky: 0xc4dcef, fog: [75, 190], hemiSky: 0xf2f6ff, hemiGround: 0x8e8f92, hemi: 1.85, sun: 0xfff7ea, sunI: 2.2 },
+  // Bright storybook daylight: a pale warm-blue sky, a light haze far off, warm sun, soft shadows.
+  london: { sky: 0xcfe3f2, fog: [85, 210], hemiSky: 0xfdfbf5, hemiGround: 0x9a9384, hemi: 1.75, sun: 0xfff6e6, sunI: 2.4, shadows: true },
 };
 const TILT = (58 * Math.PI) / 180;
+/** Where the sun shines from, relative to what it lights. */
+const SUN_FROM = new THREE.Vector3(-30, 60, 25);
+/** Half the shadow box's width, metres: covers the view round the snake. */
+const SHADOW_BOX = 42;
 const FOV_LANDSCAPE = 42;
 const FOV_PORTRAIT = 54; // a tall screen needs a wider lens, but not so wide the school looks tiny
 
@@ -43,6 +50,8 @@ export class Stage {
   private readonly greyTmp = new THREE.Color(0x8a8f96);
   private readonly focus = new THREE.Vector3();
   private distance = 17;
+  /** The stage's camera distance multiplier (Stage.cameraZoom): 1 everywhere but London. */
+  zoom = 1;
   private primed = false;
   private readonly v = new THREE.Vector3();
   width = 1;
@@ -56,8 +65,24 @@ export class Stage {
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x8a8f7a, 1.9);
     this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(0xfff2d6, 2.2);
-    this.sun.position.set(-30, 60, 25);
-    this.scene.add(this.sun);
+    this.sun.position.copy(SUN_FROM);
+    this.scene.add(this.sun, this.sun.target);
+    // Shadows only where a stage asks (setAtmosphere): a box round the camera's focus that follows it.
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    const cam = this.sun.shadow.camera;
+    cam.left = cam.bottom = -SHADOW_BOX;
+    cam.right = cam.top = SHADOW_BOX;
+    cam.near = 1;
+    cam.far = 200;
+    // A phone (touch, a low pixel ratio, or a small texture limit) gets a quarter of the texels:
+    // the soft PCF edge hides the difference, and the shadow pass costs far less fill.
+    const small = navigator.maxTouchPoints > 0 || window.devicePixelRatio < 1.5 || this.renderer.capabilities.maxTextureSize < 8192;
+    const size = small ? 1024 : 2048;
+    this.sun.shadow.mapSize.set(size, size);
+    this.sun.shadow.radius = 3;
+    this.sun.shadow.bias = -0.0006;
+    this.sun.shadow.normalBias = 0.03;
 
     this.resize();
   }
@@ -76,6 +101,11 @@ export class Stage {
     this.hemi.intensity = a.hemi;
     this.sun.color.setHex(a.sun);
     this.sun.intensity = a.sunI;
+    this.sun.castShadow = a.shadows === true;
+    if (!this.sun.castShadow) {
+      this.sun.position.copy(SUN_FROM);
+      this.sun.target.position.set(0, 0, 0);
+    }
   }
 
   /**
@@ -113,12 +143,16 @@ export class Stage {
     return this.renderer.capabilities.getMaxAnisotropy();
   }
 
+  get maxTextureSize(): number {
+    return this.renderer.capabilities.maxTextureSize;
+  }
+
   /** Ease the camera after the snake; pull back as it grows, and further in portrait. */
   follow(x: number, z: number, heading: number, radius: number, dt: number): void {
     // Zoomed to show roughly 10 m across at the start (portrait), so the snake and the school
     // read at a friendly size; it eases back as the snake grows and needs to see further.
     const pullBack = this.camera.aspect < 1 ? 1.4 : 1.15;
-    const wantDistance = (15 + 30 * (radius - 0.3)) * pullBack;
+    const wantDistance = (15 + 30 * (radius - 0.3)) * pullBack * this.zoom;
     const lead = 1.5 + radius * 2;
     const wantX = x + Math.cos(heading) * lead;
     const wantZ = z + Math.sin(heading) * lead;
@@ -140,6 +174,15 @@ export class Stage {
       this.focus.z + Math.cos(TILT) * this.distance,
     );
     this.camera.lookAt(this.focus);
+    if (this.sun.castShadow) {
+      // Keep the shadow box centred on what the camera sees (a little north of the focus), snapped
+      // to whole shadow texels so the edges do not shimmer as it slides.
+      const step = (SHADOW_BOX * 2) / this.sun.shadow.mapSize.x;
+      const fx = Math.round(this.focus.x / step) * step;
+      const fz = Math.round((this.focus.z - 8) / step) * step;
+      this.sun.target.position.set(fx, 0, fz);
+      this.sun.position.set(fx + SUN_FROM.x, SUN_FROM.y, fz + SUN_FROM.z);
+    }
   }
 
   /** World position to CSS pixels. */

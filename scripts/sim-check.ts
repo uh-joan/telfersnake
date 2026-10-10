@@ -11,7 +11,10 @@
  * baselines are taken from `main`: a new stage must never change how the old ones play.
  *
  * Invariants count ticks inside a solid or out of bounds, snakes stuck for over 3 s and runaway
- * entity counts, and check every kind the stage can spawn turned up. `--baseline` records what
+ * entity counts, and check every kind the stage can spawn turned up. On a stage with a river they
+ * also count food or walkers (animals, the warden…) in the water, flood-fill the map twice (no
+ * sealed pocket with swimming allowed; both banks still joined when only the bridges cross), check
+ * the arrival spot is free, and time a scripted swim (×0.5 of land speed, ± 0.05). `--baseline` records what
  * `main` already does (the school's bots do sometimes nose a wall for a few seconds), so a later
  * run fails only when a count gets worse; a stage with no record must be spotless.
  *
@@ -27,10 +30,11 @@ import { isFree } from '../src/sim/collide';
 import { CREATURE_KINDS, type CreatureKind } from '../src/sim/creatures';
 import { MODES, type Mode, rulesFor } from '../src/sim/modes';
 import { Rng } from '../src/sim/rng';
-import { STAGE_IDS, type Stage, type StageId } from '../src/sim/stage';
+import { STAGE_IDS, type Stage, type StageId, type Terrain } from '../src/sim/stage';
 import { stageFor } from '../src/sim/stages';
 import type { Input } from '../src/sim/snake';
-import { World } from '../src/sim/world';
+import { flowAt, inWater } from '../src/sim/water';
+import { STEP, World } from '../src/sim/world';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASELINES = join(HERE, 'baselines.json');
@@ -202,6 +206,7 @@ interface Tally {
   outOfBounds: number;
   stuck: number;
   tooMany: number;
+  wet: number;
   seen: Set<string>;
 }
 
@@ -239,12 +244,113 @@ interface Faults {
   outOfBounds: number;
   stuck: number;
   tooMany: number;
+  /** Ticks food, an animal or a walker spent in the water (only a snake may swim). */
+  wet: number;
+}
+
+// ---------------------------------------------------------------- London: the river checks
+
+/** The stage with its rivers dried up: what "inside a solid" means for a snake that may swim. */
+const dry = (stage: Stage): Terrain => ({ bounds: stage.bounds, solidBoxes: stage.solidBoxes, solidCircles: stage.solidCircles });
+
+/**
+ * Flood-fill a 1 m grid from the arrival spot. A cell is open if a small snake fits there (and,
+ * with `swim` false, it is dry or on a bridge). Returns how many open cells were never reached.
+ */
+function floodFill(stage: Stage, swim: boolean): { open: number; unreached: number; sample: string } {
+  const B = stage.bounds;
+  const W = Math.round(B.maxX - B.minX);
+  const H = Math.round(B.maxZ - B.minZ);
+  const terrain = dry(stage);
+  const open = new Uint8Array(W * H);
+  let total = 0;
+  for (let j = 0; j < H; j++) {
+    for (let i = 0; i < W; i++) {
+      const x = B.minX + i + 0.5;
+      const z = B.minZ + j + 0.5;
+      if (!isFree(terrain, x, z, 0.4)) continue;
+      if (!swim && inWater(stage, x, z)) continue;
+      open[j * W + i] = 1;
+      total++;
+    }
+  }
+  const seen = new Uint8Array(W * H);
+  const si = Math.floor(stage.snakeSpawn.x - B.minX);
+  const sj = Math.floor(stage.snakeSpawn.z - B.minZ);
+  const queue = [sj * W + si];
+  seen[queue[0]] = 1;
+  let reached = 0;
+  while (queue.length) {
+    const c = queue.pop() as number;
+    if (!open[c]) continue;
+    reached++;
+    const i = c % W;
+    const j = (c - i) / W;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const ni = i + di;
+      const nj = j + dj;
+      if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue;
+      const n = nj * W + ni;
+      if (seen[n]) continue;
+      seen[n] = 1;
+      queue.push(n);
+    }
+  }
+  let sample = '';
+  for (let c = 0; c < W * H && !sample; c++) {
+    if (open[c] && !seen[c]) sample = `(${(B.minX + (c % W) + 0.5).toFixed(1)}, ${(B.minZ + Math.floor(c / W) + 0.5).toFixed(1)})`;
+  }
+  return { open: total, unreached: total - reached, sample };
+}
+
+/**
+ * Swim a scripted snake down the Thames (seed 1, normal) and compare its own pace, the current's
+ * drift taken out, with its speed on dry land: it should paddle at half speed.
+ */
+function swimRatio(stage: Stage): number {
+  const river = stage.water?.[0];
+  if (!river) return 1;
+  const w = new World(1, undefined, rulesFor('normal'), stage);
+  const s = w.snake;
+  // The longest straight-ish reach: from just past the Westminster bend, east toward the Millennium Bridge.
+  const path = river.path;
+  const from = path[4];
+  const to = path[5];
+  s.placeAt(from.x + (to.x - from.x) * 0.1, from.z + (to.z - from.z) * 0.1, Math.atan2(to.z - from.z, to.x - from.x));
+  let sum = 0;
+  let n = 0;
+  let wetTicks = 0;
+  for (let tick = 0; tick < 60 * 20; tick++) {
+    s.immune = 10;
+    const next = path.find((p) => p.x > s.x + 2) ?? path[path.length - 1];
+    const dx = next.x - s.x;
+    const dz = next.z - s.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const x0 = s.x;
+    const z0 = s.z;
+    const pace = s.baseSpeed;
+    w.step({ x: dx / d, z: dz / d, active: true, dash: false });
+    w.events.length = 0;
+    if (!s.alive || w.cards) break;
+    const wet = inWater(stage, x0, z0) && inWater(stage, s.x, s.z);
+    wetTicks = wet ? wetTicks + 1 : 0;
+    if (wetTicks < 60 || s.touchingWall) continue; // let the paddle ease in first
+    const flow = flowAt(river, x0, z0, { x: 0, z: 0 });
+    const mx = s.x - x0 - flow.x * STEP;
+    const mz = s.z - z0 - flow.z * STEP;
+    sum += Math.hypot(mx, mz) / (pace * STEP);
+    n++;
+  }
+  return n ? sum / n : NaN;
 }
 
 function invariants(id: StageId, seeds: number, baseline: boolean): number {
   const stage = stageFor(id);
   const ticks = 200 * 60;
-  const t: Tally = { runs: 0, ticks: 0, inSolid: 0, outOfBounds: 0, stuck: 0, tooMany: 0, seen: new Set() };
+  const t: Tally = { runs: 0, ticks: 0, inSolid: 0, outOfBounds: 0, stuck: 0, tooMany: 0, wet: 0, seen: new Set() };
+  // Snakes may swim, so only real solids count as "inside" for them; everyone else must stay dry.
+  const solids = dry(stage);
+  const river = stage.water !== undefined;
   let longest = 0;
   const notes: string[] = [];
   const note = (msg: string) => {
@@ -266,16 +372,19 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
         w.events.length = 0;
         t.ticks++;
         const where = `${id}/${mode}/seed ${seed}/t ${tick}`;
-        const check = (what: string, x: number, z: number, extra = stage.logs) => {
+        const check = (what: string, x: number, z: number, extra = stage.logs, swims = false) => {
           if (outside(x, z)) {
             t.outOfBounds++;
             note(`${where}: ${what} out of bounds at (${x.toFixed(2)}, ${z.toFixed(2)})`);
-          } else if (!isFree(stage, x, z, -SLOP, extra)) {
+          } else if (!isFree(solids, x, z, -SLOP, extra)) {
             t.inSolid++;
             note(`${where}: ${what} inside a solid at (${x.toFixed(2)}, ${z.toFixed(2)})`);
+          } else if (river && !swims && inWater(stage, x, z)) {
+            t.wet++;
+            note(`${where}: ${what} in the water at (${x.toFixed(2)}, ${z.toFixed(2)})`);
           }
         };
-        for (const s of w.snakes) if (s.alive) check(`snake ${s.id}`, s.x, s.z);
+        for (const s of w.snakes) if (s.alive) check(`snake ${s.id}`, s.x, s.z, stage.logs, true);
         for (const a of w.animals) {
           check(a.kind, a.x, a.z, []);
           t.seen.add('animal:' + a.kind);
@@ -293,7 +402,13 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
           check(c.kind, c.x, c.z);
           t.seen.add('creature:' + c.kind);
         }
-        for (const f of w.foods) t.seen.add('food:' + f.kind);
+        for (const f of w.foods) {
+          t.seen.add('food:' + f.kind);
+          if (river && inWater(stage, f.x, f.z)) {
+            t.wet++;
+            note(`${where}: ${f.kind} spawned in the water at (${f.x.toFixed(2)}, ${f.z.toFixed(2)})`);
+          }
+        }
         for (const h of w.hazards) t.seen.add('hazard:' + h.kind);
         if (w.cooper.active) check('warden', w.cooper.x, w.cooper.z, []);
         if (w.animals.length !== animals || w.foods.length !== foods || w.pellets.length > 150 || w.projectiles.length > 24) {
@@ -326,8 +441,8 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
   // A stage may carry known faults from main (recorded with --baseline): only getting worse fails.
   const k = `invariants/${id}/${seeds}`;
   const stored = readBaselines();
-  const faults: Faults = { inSolid: t.inSolid, outOfBounds: t.outOfBounds, stuck: t.stuck, tooMany: t.tooMany };
-  const known = (stored[k] as Faults | undefined) ?? { inSolid: 0, outOfBounds: 0, stuck: 0, tooMany: 0 };
+  const faults: Faults = { inSolid: t.inSolid, outOfBounds: t.outOfBounds, stuck: t.stuck, tooMany: t.tooMany, wet: t.wet };
+  const known: Faults = { inSolid: 0, outOfBounds: 0, stuck: 0, tooMany: 0, wet: 0, ...(stored[k] as Partial<Faults> | undefined) };
   if (baseline) {
     stored[k] = faults;
     writeBaselines(stored);
@@ -346,6 +461,19 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
   fault('ticks out of bounds', 'outOfBounds');
   fault('snakes stuck > 3 s', 'stuck');
   fault('entity counts off', 'tooMany');
+  if (river) {
+    fault('ticks in the water', 'wet');
+    const swim = floodFill(stage, true);
+    row('sealed pockets (swim)', `${swim.unreached}/${swim.open}`, swim.unreached === 0);
+    if (swim.unreached) console.log(`    e.g. ${swim.sample}`);
+    const walk = floodFill(stage, false);
+    row('cut off (bridges only)', `${walk.unreached}/${walk.open}`, walk.unreached === 0);
+    if (walk.unreached) console.log(`    e.g. ${walk.sample}`);
+    const sp = stage.snakeSpawn;
+    row('arrival spot free', isFree(stage, sp.x, sp.z, 2.5) ? 'yes' : 'NO', isFree(stage, sp.x, sp.z, 2.5));
+    const ratio = swimRatio(stage);
+    row('swim speed (× land)', ratio.toFixed(3), Math.abs(ratio - 0.5) <= 0.05);
+  }
   console.log(`  ${'longest stall'.padEnd(22)} ${(longest / 60).toFixed(1).padStart(7)}s`);
   row('kinds seen', `${want.size - missing.length}/${want.size}`, missing.length === 0);
   if (missing.length) console.log(`  never seen: ${missing.join(', ')}`);

@@ -1,4 +1,4 @@
-import { isFree, resolveCircle, slideAlong, turnToward } from './collide';
+import { isFree, resolveAshore, slideAlong, turnToward } from './collide';
 import type { Bounds, Spot } from './stage';
 import type { World } from './world';
 
@@ -159,8 +159,10 @@ export class Cooper {
     }
     this.heading = turnToward(this.heading, Math.atan2(dz, dx), TURN_RATE * dt);
     this.speed = RUN_SPEED;
-    const hit = resolveCircle(
+    const hit = resolveAshore(
       w.stage,
+      this.x,
+      this.z,
       this.x + Math.cos(this.heading) * this.speed * dt,
       this.z + Math.sin(this.heading) * this.speed * dt,
       COOPER_RADIUS,

@@ -10,9 +10,10 @@ import { makeSchool, type School } from './school';
  * that occlude the snake. The school keeps its ground and scenery as two pieces; the Common and
  * London bundle their own. Same `School` shape either way, so the renderer treats them alike.
  */
-export function makeStageScene(id: StageId, maxAnisotropy: number): School {
+/** `camera` lets London clear a landmark the follow camera has ended up inside. */
+export function makeStageScene(id: StageId, maxAnisotropy: number, maxTextureSize = 4096, camera?: THREE.Camera): School {
   if (id === 'common') return makeCommon(maxAnisotropy);
-  if (id === 'london') return makeLondon(maxAnisotropy);
+  if (id === 'london') return makeLondon(maxAnisotropy, maxTextureSize, camera);
   const s = makeSchool();
   const group = new THREE.Group();
   group.add(makeGround(maxAnisotropy), s.group);

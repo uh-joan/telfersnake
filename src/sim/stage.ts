@@ -32,7 +32,7 @@ export interface Spot {
   z: number;
 }
 
-/** A river: a ribbon `width` metres wide along `path` (west to east), its current pushing by `drift` m/s. */
+/** A river: a ribbon `width` metres wide along `path` (west to east); its current runs downstream along the path at |`drift`| m/s. */
 export interface WaterZone {
   path: readonly Spot[];
   width: number;
@@ -72,6 +72,10 @@ export interface Terrain {
   bounds: Bounds;
   solidBoxes: readonly Box[];
   solidCircles: readonly Circle[];
+  /** Rivers to swim (slowly). Unset: none, and no water branch ever runs. */
+  water?: readonly WaterZone[];
+  /** Walkable decks across the water. */
+  bridges?: readonly Box[];
 }
 
 export interface Stage extends Terrain {
@@ -118,10 +122,6 @@ export interface Stage extends Terrain {
   cooper: WardenConfig | null;
   // London's extras (Level 3). All optional: a stage without them simply has none, and the
   // school and the Common play exactly as before.
-  /** Rivers to swim (slowly). */
-  water?: readonly WaterZone[];
-  /** Walkable decks across the water. */
-  bridges?: readonly Box[];
   /** Roads the buses and cabs drive. */
   routes?: readonly Route[];
   /** Tube stations. */
@@ -134,6 +134,8 @@ export interface Stage extends Terrain {
   plinths?: readonly Spot[];
   /** Where the Royal Guard stands (and never moves). */
   guard?: Spot;
+  /** The classic follow camera's distance multiplier (London sits a little closer). Unset: 1. */
+  cameraZoom?: number;
   /** Paint the fixed features onto the minimap. X/Z map metres to canvas pixels. */
   paintMinimap(c: CanvasRenderingContext2D, X: (x: number) => number, Z: (z: number) => number, scale: number): void;
 }

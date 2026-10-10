@@ -1,5 +1,6 @@
 import type { Circle } from './layout';
-import type { Terrain } from './stage';
+import type { Spot, Terrain } from './stage';
+import { shoreNormal, waterAt } from './water';
 
 export interface Hit {
   x: number;
@@ -110,7 +111,34 @@ export function resolveCircle(t: Terrain, px: number, pz: number, r: number, out
   return out;
 }
 
-/** True when a circle of radius `margin` at (x, z) touches nothing solid and is inside the fence of `t`. */
+const shore: Spot = { x: 0, z: 0 };
+
+/**
+ * resolveCircle for things that walk but never swim (animals, the warden, predators, kids,
+ * creatures): a step from dry land into a river is refused, and reported as a bump against the
+ * bank, so the walker's own wall handling turns it round. (fromX, fromZ) is where it stood.
+ * On a stage without water this is exactly resolveCircle.
+ */
+export function resolveAshore(
+  t: Terrain, fromX: number, fromZ: number, px: number, pz: number, r: number, out: Hit, extra: readonly Circle[] = NO_CIRCLES,
+): Hit {
+  resolveCircle(t, px, pz, r, out, extra);
+  if (!t.water) return out;
+  const w = waterAt(t, out.x, out.z);
+  if (!w || waterAt(t, fromX, fromZ)) return out; // already wet: let it climb out
+  shoreNormal(w, fromX, fromZ, shore);
+  out.x = fromX;
+  out.z = fromZ;
+  out.hit = true;
+  out.nx = shore.x;
+  out.nz = shore.z;
+  return out;
+}
+
+/**
+ * True when a circle of radius `margin` at (x, z) touches nothing solid, is inside the fence of
+ * `t`, and (on a stage with rivers) is on dry land: it is where something could stand or spawn.
+ */
 export function isFree(t: Terrain, x: number, z: number, margin: number, extra: readonly Circle[] = NO_CIRCLES): boolean {
   const B = t.bounds;
   if (x < B.minX + margin || x > B.maxX - margin) return false;
@@ -124,6 +152,7 @@ export function isFree(t: Terrain, x: number, z: number, margin: number, extra: 
       if ((x - c.x) ** 2 + (z - c.z) ** 2 < rr * rr) return false;
     }
   }
+  if (t.water && waterAt(t, x, z, Math.max(0, margin))) return false;
   return true;
 }
 

@@ -1,6 +1,7 @@
 import { makeHit, resolveCircle, turnToward, wrapAngle } from './collide';
 import type { Circle } from './layout';
 import type { Terrain } from './stage';
+import { flowAt, waterAt } from './water';
 import { type CardId, refreshStats, SNACK_MASS, type UpgradeId, xpForLevel } from './upgrades';
 
 export interface Input {
@@ -40,6 +41,8 @@ export const MEGA_TIER = 4;
 const TRAIL_STEP = 0.1; // metres between stored trail points
 const TRAIL_CAP = 4096;
 const DASH_BOOST = 1.6;
+/** Scratch for the river's current at the head. */
+const FLOW = { x: 0, z: 0 };
 const DASH_COST = 0.8; // mass per second
 const DASH_MIN_MASS = 2;
 const MAX_RADIUS = 1.1;
@@ -72,6 +75,8 @@ export class Snake {
   wasTouchingWall = false;
   /** Inside Mr Cooper's aura right now. */
   slowed = false;
+  /** In a river (London's Thames) as of the last move: paddling slowly, carried by the current. */
+  swimming = false;
   /** Where it is being steered, remembered so a shove slides the way the player is leaning. (0, 0) = hands off. */
   steerX = 0;
   steerZ = 0;
@@ -366,8 +371,20 @@ export class Snake {
     if (this.dashing) this.mass = Math.max(DASH_MIN_MASS, this.mass - DASH_COST * dt);
 
     const speed = this.baseSpeed * this.speedFactor * (this.dashing ? DASH_BOOST : 1);
-    const nx = this.x + Math.cos(this.heading) * speed * dt;
-    const nz = this.z + Math.sin(this.heading) * speed * dt;
+    let nx = this.x + Math.cos(this.heading) * speed * dt;
+    let nz = this.z + Math.sin(this.heading) * speed * dt;
+    // The current carries a swimmer along. Here, keyed off position alone, so a client replaying
+    // its own inputs (replica.ts) drifts exactly as the server does. (The ×0.5 paddle is the
+    // world's speedFactor, which the client is sent.) No rivers: no branch.
+    if (terrain.water) {
+      const river = waterAt(terrain, this.x, this.z);
+      this.swimming = river !== null;
+      if (river) {
+        flowAt(river, this.x, this.z, FLOW);
+        nx += FLOW.x * dt;
+        nz += FLOW.z * dt;
+      }
+    }
 
     const hit = resolveCircle(terrain, nx, nz, this.radius, this.hit, rocks);
     this.x = hit.x;

@@ -1,4 +1,4 @@
-import { isFree, resolveCircle, slideAlong, turnToward } from './collide';
+import { isFree, resolveAshore, slideAlong, turnToward } from './collide';
 import type { World } from './world';
 
 /**
@@ -221,7 +221,7 @@ export function updateAnimal(a: Animal, w: World, dt: number): void {
   if (a.speed === 0) return;
   a.heading = turnToward(a.heading, a.want, TURN_RATE * dt);
   const step = a.speed * dt;
-  const hit = resolveCircle(w.stage, a.x + Math.cos(a.heading) * step, a.z + Math.sin(a.heading) * step, spec.radius, w.hit, w.hazards);
+  const hit = resolveAshore(w.stage, a.x, a.z, a.x + Math.cos(a.heading) * step, a.z + Math.sin(a.heading) * step, spec.radius, w.hit, w.hazards);
   a.travel += Math.hypot(hit.x - a.x, hit.z - a.z);
   a.x = hit.x;
   a.z = hit.z;
