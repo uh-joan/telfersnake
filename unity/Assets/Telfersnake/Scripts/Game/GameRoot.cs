@@ -296,8 +296,6 @@ namespace Telfer.Game
             if (joining != null || state != State.Title) return;
             synth.Play("pick");
             hud.ShowTitle(true);
-            // London's rooms carry its buses, lions and legends, which this client cannot draw yet (B5): solo.
-            if (P.Stage == StageId.London) { StartRun(); return; }
             hud.Connecting(true);
             StartOnline(P.name);
         }
