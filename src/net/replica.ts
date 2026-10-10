@@ -6,7 +6,8 @@ import { HAZARD_KINDS, type Hazard, type Pellet } from '../sim/hazards';
 import { blankKid, type Kid, KID_KINDS, type Projectile, PROJECTILE_KINDS } from '../sim/kids';
 import { blankPredator, PREDATOR_KINDS, type Predator } from '../sim/predators';
 import { isSolidHazard } from '../sim/hazards';
-import { blankVehicle, type Vehicle, VEHICLE_KINDS } from '../sim/vehicles';
+import type { Circle } from '../sim/layout';
+import { blankVehicle, type Vehicle, VEHICLE_KINDS, VEHICLES } from '../sim/vehicles';
 import { type Input, Snake } from '../sim/snake';
 import type { Stage } from '../sim/stage';
 import type { CardId } from '../sim/upgrades';
@@ -79,8 +80,10 @@ export class Replica implements WorldView {
   private renderTick = 0;
   // Predicting my own snake: a body-less stand-in the inputs are replayed on.
   private readonly ghost: Snake;
-  /** What my snake bumps into while I predict it: the hazards, less London's (flat) puddles. */
+  /** What my snake bumps into while I predict it: the hazards, less London's (flat) puddles... */
   private readonly solids: Hazard[];
+  /** ...plus London's buses and cabs as a row of circles each, refreshed every frame. */
+  private readonly blockers: Circle[] = [];
   private readonly pending: Pending[] = [];
   private q = 0;
   private owed = 0;
@@ -234,7 +237,8 @@ export class Replica implements WorldView {
     g.speedMul = this.snake.speedMul;
     // Its wall memory belongs to the previous replay, not to this starting point; steer() must not act on it.
     g.touchingWall = false;
-    for (const p of this.pending) g.move(p.input, STEP, !this.snake.slowed, this.stage, this.solids);
+    this.updateBlockers();
+    for (const p of this.pending) g.move(p.input, STEP, !this.snake.slowed, this.stage, this.blockers);
     if (Math.hypot(g.x - this.shownX, g.z - this.shownZ) > SNAP_IF_OFF_BY) this.resetPrediction(g.x, g.z, g.heading);
   }
 
@@ -245,6 +249,7 @@ export class Replica implements WorldView {
     // Not heard from the server for a while: do not let my snake slide on alone through a frozen world.
     const free = mine.alive && !this.cards && !this.away && !this.paused && !this.frozen && this.silentFor < 2;
 
+    this.updateBlockers();
     this.owed = Math.min(this.owed + dt, 0.25);
     while (this.owed >= STEP) {
       this.owed -= STEP;
@@ -254,7 +259,7 @@ export class Replica implements WorldView {
       if (free) {
         this.pending.push({ q: this.q, input: copy });
         if (this.pending.length > 120) this.pending.shift();
-        this.ghost.move(copy, STEP, !mine.slowed, this.stage, this.solids);
+        this.ghost.move(copy, STEP, !mine.slowed, this.stage, this.blockers);
       }
     }
 
@@ -268,6 +273,27 @@ export class Replica implements WorldView {
     }
 
     this.blend(dt, free);
+  }
+
+  /**
+   * The solids my predicted snake slides off: the hazards, and each bus or cab as circles along its
+   * length (as drawn), so my own snake stops at a bus here as it does on the server, not inside it.
+   */
+  private updateBlockers(): void {
+    const b = this.blockers;
+    b.length = 0;
+    for (const h of this.solids) b.push(h);
+    for (const v of this.vehicles) {
+      if (v.route < 0) continue; // not placed yet
+      const spec = VEHICLES[v.kind];
+      const r = spec.width / 2;
+      const n = Math.max(2, Math.ceil(spec.length / spec.width));
+      const reach = spec.length / 2 - r;
+      for (let i = 0; i < n; i++) {
+        const f = -reach + (2 * reach * i) / (n - 1);
+        b.push({ x: v.x + Math.cos(v.heading) * f, z: v.z + Math.sin(v.heading) * f, r });
+      }
+    }
   }
 
   private blend(dt: number, predictingMe: boolean): void {
@@ -346,6 +372,7 @@ export class Replica implements WorldView {
       v.z = lerp(ra[1], rb[1], t);
       v.heading = lerpAngle(ra[2], rb[2], t);
       v.speed = rb[3];
+      v.route = 0; // two rows in: placed, so it may be drawn
     });
 
     this.kids.forEach((k, i) => {

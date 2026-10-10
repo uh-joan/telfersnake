@@ -729,6 +729,7 @@ function handleEvents(): void {
       case 'splash':
         // A puddle: whee!
         sparkles.burst(e.x, e.z, BUBBLES, 12, 0.9);
+        if (!mine) break;
         hud.popup('💦 WHEE!', e.x, e.z, 'fun');
         sfx?.splash();
         break;

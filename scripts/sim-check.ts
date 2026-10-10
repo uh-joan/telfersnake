@@ -716,6 +716,8 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
   const solids = dry(stage);
   const river = stage.water !== undefined;
   let longest = 0;
+  /** Ticks a lion spent padding home the straight way (its give-up after LION_HOME_GIVE_UP). */
+  let lostLions = 0;
   // London's zoo and menu: swans never gulped, raids land on the map, the combos fire.
   const zoo: Zoo | null = stage.animals.includes('swan') ? { swanGulps: 0, steals: 0, stealsOut: 0, cries: 0, teatimes: 0, teas: 0 } : null;
   // London's dangers: lions, ravens and the traffic.
@@ -772,6 +774,10 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
             continue;
           }
           if (p.kind === 'lion' && !awake(p)) continue;
+          if (p.kind === 'lion' && p.state === LION.home && p.stateFor <= 0) {
+            lostLions++; // padding straight home past things (its give-up): counted, not a solid fault
+            continue;
+          }
           check(p.kind, p.x, p.z);
         }
         for (const v of w.vehicles) t.seen.add('vehicle:' + v.kind);
@@ -881,6 +887,7 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
     row('lions away > 30 s', danger.lionsLost, danger.lionsLost === 0);
     info('longest lion outing', `${(danger.lionLongest / 60).toFixed(1)}s`);
     row('lion jumps', danger.lionJumps, danger.lionJumps === 0);
+    row('lions lost their way', lostLions, lostLions === 0);
     row('raven CAW!s', danger.caws, danger.caws > 0);
     info('raven pecks', danger.ravenPecks);
     row('DING DINGs', danger.dings, danger.dings > 0);

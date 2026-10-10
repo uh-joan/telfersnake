@@ -102,6 +102,7 @@ export class VehicleView {
   update(world: WorldView, dt: number, time: number): void {
     for (const mesh of this.meshes.values()) mesh.count = 0;
     world.vehicles.forEach((v, i) => {
+      if (v.route < 0) return; // a client's stub, not yet placed by two snapshots
       const mesh = this.meshes.get(v.kind)!;
       // Braking dips the nose, pulling away lifts it: a cartoon rock on the springs.
       const decel = dt > 0 ? ((this.lastSpeed[i] ?? v.speed) - v.speed) / dt : 0;

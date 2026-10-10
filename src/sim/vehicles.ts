@@ -54,7 +54,7 @@ export const CREEP = 0.25;
 
 export interface Vehicle {
   kind: VehicleKind;
-  /** Index into the stage's routes. */
+  /** Index into the stage's routes. A client's stub has −1 until two snapshots have placed it. */
   route: number;
   /** Distance along the route's lane loop. */
   s: number;
@@ -231,9 +231,9 @@ function nextStopIndex(lane: Lane, s: number): number {
   return i < 0 ? 0 : i;
 }
 
-/** A vehicle stub for the client to fill from snapshots. */
+/** A vehicle stub for the client to fill from snapshots. `route` is −1 (not drawn) until it has been placed. */
 export function blankVehicle(kind: VehicleKind): Vehicle {
-  return { kind, route: 0, s: 0, x: 0, z: 0, heading: 0, speed: 0, dwellFor: 0, nextStop: 0, dingIn: 0, waitedFor: 0 };
+  return { kind, route: -1, s: 0, x: 0, z: 0, heading: 0, speed: 0, dwellFor: 0, nextStop: 0, dingIn: 0, waitedFor: 0 };
 }
 
 /** Distance along the lane from `from` forward to `to` (0..length). */

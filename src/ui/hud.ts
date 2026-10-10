@@ -305,6 +305,7 @@ export class Hud {
 
     // London's traffic: buses as small red rectangles, cabs as small black ones, turned along the road.
     for (const v of world.vehicles) {
+      if (v.route < 0) continue; // not placed yet
       c.save();
       c.translate(X(v.x), Z(v.z));
       c.rotate(v.heading);

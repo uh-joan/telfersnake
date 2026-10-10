@@ -939,7 +939,7 @@ export class World {
       }
     }
     // Home: plod back to the foot of the plinth, then climb up.
-    if (fromHome < 0.35 || p.stateFor <= 0) {
+    if (fromHome < 0.35) {
       p.x = p.wx;
       p.z = p.wz;
       p.state = LION.climb;
@@ -947,8 +947,17 @@ export class World {
       p.speed = 0;
       return;
     }
+    const pace = Math.min(p.scaredFor > 0 ? spec.chaseSpeed * 1.2 : spec.roamSpeed, fromHome / dt);
+    if (p.stateFor <= 0) {
+      // Lost its way (never seen in checks): it pads straight home, ghosting past whatever is in the way.
+      p.heading = Math.atan2(p.wz - p.z, p.wx - p.x);
+      p.x += Math.cos(p.heading) * pace * dt;
+      p.z += Math.sin(p.heading) * pace * dt;
+      p.speed = pace;
+      return;
+    }
     p.heading = turnToward(p.heading, Math.atan2(p.wz - p.z, p.wx - p.x), (fromHome < 2 ? 10 : 4) * dt);
-    this.walk(p, Math.min(p.scaredFor > 0 ? spec.chaseSpeed * 1.2 : spec.roamSpeed, fromHome / dt), dt);
+    this.walk(p, pace, dt);
   }
 
   /** A Tower raven: perched → CAW! → swoop → back (the wolf, with wings: it flies over water and walls). */
@@ -1089,6 +1098,10 @@ export class World {
       // Steer next tick as if against a wall, so asking to go the other way turns away from the bus.
       s.leanOn(nx, nz);
       if (v.speed < VEHICLE_BONK_SPEED || s.immune > 0) continue;
+      // Only a real collision bonks: the two closing on each other (not a corner brushing past).
+      const sp = s.baseSpeed * s.speedFactor;
+      const closing = (Math.cos(s.heading) * sp - Math.cos(v.heading) * v.speed) * nx + (Math.sin(s.heading) * sp - Math.sin(v.heading) * v.speed) * nz;
+      if (closing >= 0) continue;
       s.immune = OUCH_GRACE;
       const full = s.mass < 1 ? 0 : Math.min(spec.bonkCap, Math.max(1, s.mass * spec.bonkShare));
       const lost = full * (1 - s.rockGuard);
