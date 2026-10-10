@@ -1962,3 +1962,20 @@ small {
     animation: none;
   }
 }
+
+/* London's tourists: a camera flash round the edges of the screen. */
+.camera-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, 0.95) 100%);
+}
+.camera-flash.show {
+  animation: camera-flash 0.6s ease-out;
+}
+@keyframes camera-flash {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}

@@ -58,7 +58,10 @@ export type AnimalRow = [number, number, number, number, number, number, number]
 export type PredatorRow = [number, number, number, number] | [number, number, number, number, number];
 /** London's buses and cabs: x, z, heading, speed (kind fixed per index, sent once in welcome). */
 export type VehicleRow = [number, number, number, number];
-/** x, z, heading, speed (kind is fixed per index, sent once in welcome) */
+/**
+ * x, z, heading, speed (kind is fixed per index, sent once in welcome). London's people ride it too:
+ * tourists, the school trip (the first is its teacher; the line is blended like the animals) and buskers.
+ */
 export type KidRow = [number, number, number, number];
 /** x, z, kind, t (flight progress 0..1, for the client's arc) */
 export type ProjectileRow = [number, number, number, number];
@@ -176,6 +179,8 @@ export const animalKindIndex = (a: Animal) => ANIMAL_KINDS.indexOf(a.kind);
  */
 const PER_SEAT: ReadonlySet<Extract<GameEvent, { who: number }>['type']> = new Set([
   'cards', 'bump', 'boop', 'ouch', 'pellet', 'tier', 'helmet', 'pelt', 'kiss', 'magic', 'teatime', 'splash',
+  // London's people: the guard's smile and gem, and a tourist's photo (the flash is on that screen only).
+  'guard', 'photo',
 ] as const);
 
 export function eventIsFor(e: GameEvent, seat: number): boolean {

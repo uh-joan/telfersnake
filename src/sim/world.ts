@@ -3,7 +3,7 @@ import {
   awake, LION, LION_CLIMB_TIME, LION_HOME_GIVE_UP, LION_HOP_TIME, LION_LEASH, LION_STONE_TIME, LION_WAKE, LION_WAKE_TIME,
   makePredators, type Predator, type PredatorKind, PREDATORS, RAVEN, RAVEN_CAW_TIME, RAVEN_LEASH,
 } from './predators';
-import { KID_RADIUS, KIDS, type Kid, makeKids, type Projectile, type ProjectileKind } from './kids';
+import { alongLoop, KID_RADIUS, KIDS, type Kid, loopLength, makeKids, type Projectile, type ProjectileKind, TRIP_GAP, TRIP_THROWS } from './kids';
 import { type Creature, type CreatureKind, CREATURES, creatureSpot, makeCreatures } from './creatures';
 import { Bot, MORE_RIVALS, type Personality } from './bot';
 import { botCardChoice, type Rules, rulesFor } from './modes';
@@ -67,6 +67,24 @@ const OUCH_GRACE = 1.5; // seconds before the next rock can hurt
 const PUDDLE_ZOOM = 1.35;
 /** A vehicle has to be rolling at least this fast for a touch to be a bonk rather than a nudge. */
 const VEHICLE_BONK_SPEED = 0.3;
+// London's people (A4).
+/** The Royal Guard: three full laps round him inside this ring earns a smile and a gem, then he rests. */
+const GUARD_REACH = 8;
+const GUARD_LAPS = 3;
+export const GUARD_COOL = 60;
+/** Turning back more than this (radians) round the guard starts the count again. */
+const GUARD_REVERSE = Math.PI / 2;
+/** A busker's tune: a snake this close dances along, this much faster. */
+export const BUSK_REACH = 5;
+export const BUSK_ZOOM = 1.2;
+/** The living statue moves (BOO!) when a snake comes this close, then holds still a while. */
+const STATUE_REACH = 3;
+const STATUE_REST = 6;
+/** Tourists stay this close to their sight, and this far from the traffic. */
+const TOURIST_ROAM = 5;
+const TOURIST_KERB = 3.5;
+/** Held against the school trip's line this long, a snake is let through (the children duck under the rope). */
+const TRIP_LET_THROUGH = 1.2;
 const PELLET_RETURN = 0.7; // share of the lost mass that lands on the ground as pellets
 const PELLET_MAX = 5;
 const PELLET_CAP = 150;
@@ -141,12 +159,20 @@ export type GameEvent =
   /** A child let fly: a pebble or a blown kiss leaves their hand — a whoosh at (x, z). */
   | { type: 'lob'; kind: ProjectileKind; x: number; z: number }
   /** A pebble caught a snake: a small shrink, "oops, a pebble!". */
-  | { type: 'pelt'; who: number; x: number; z: number; lost: number }
+  | { type: 'pelt'; who: number; x: number; z: number; lost: number; chip?: true }
   /** A blown kiss reached a snake: a little gift — growth, and sometimes a gem. */
   | { type: 'kiss'; who: number; x: number; z: number; gem: boolean }
   /** A fantastic creature was gulped: its magic bursts, `gems` are earned by `who`. */
   | { type: 'magic'; kind: CreatureKind; who: number; x: number; z: number; gems: number }
-  | { type: 'bump'; who: number; what: 'wall' | 'cooper' | 'kid' }
+  | { type: 'bump'; who: number; what: 'wall' | 'cooper' | 'kid' | 'guard' }
+  /** London: the Bobby blows his whistle at a dashing snake. PHWEEE! */
+  | { type: 'whistle'; who: number; x: number; z: number }
+  /** London: three laps round the Royal Guard. The tiniest smile, and a gem from his bearskin for `who`. */
+  | { type: 'guard'; who: number; x: number; z: number }
+  /** London: a tourist took `who`'s photo. CLICK! (a flash on that player's screen) */
+  | { type: 'photo'; who: number; x: number; z: number }
+  /** London: the living statue moved. BOO! */
+  | { type: 'boo'; x: number; z: number }
   /** London: an animal's call (a swan's HONK, a corgi's yip, a flock of pigeons taking off). */
   | { type: 'cry'; kind: AnimalKind; x: number; z: number }
   /** London: a gull or a pelican made off with a snack (it reappears elsewhere). */
@@ -215,6 +241,20 @@ export class World {
   private dryStage: Terrain | null = null;
   /** Miss Sami's little natter with the mum: when she next says something, if the stage has her. */
   private samiSayIn = 3;
+  /** London: when each chatter (tour guide, Beefeater) next speaks; the statue's rest; the trip's loop. */
+  private readonly chatterIn: number[] = [];
+  private statueRest = 0;
+  private readonly tripTotal: number;
+  private readonly tripAt = { x: 0, z: 0, heading: 0 };
+  /** The buskers (fixed spots), for the dance zone. Empty except in London. */
+  private readonly buskers: Kid[] = [];
+  /** Per snake, round the Royal Guard: angle swept, its peak, the last angle, and the cooldown. */
+  private readonly guardSwept: number[] = [];
+  private readonly guardPeak: number[] = [];
+  private readonly guardLast: number[] = [];
+  readonly guardCool: number[] = [];
+  /** Per snake: how long it has been pressed against the school trip's line. */
+  private readonly tripHeld: number[] = [];
   /** Which difficulty this world runs at: rival personalities, food count, whether bots get upgrades. */
   readonly rules: Rules;
 
@@ -271,6 +311,9 @@ export class World {
     }
     for (const p of makePredators(stage, this.rng)) this.predators.push(p);
     for (const k of makeKids(stage, this.rng)) this.kids.push(k);
+    for (const k of this.kids) if (k.kind === 'busker') this.buskers.push(k);
+    this.tripTotal = stage.tripPath ? loopLength(stage.tripPath) : 0;
+    (stage.chatters ?? []).forEach((_, i) => this.chatterIn.push(3 + i * 2.5));
     for (const c of makeCreatures(stage, this.rng)) this.creatures.push(c);
     // London's traffic: fixed routes, evenly spread, no RNG.
     if (stage.routes && stage.traffic) {
@@ -380,6 +423,8 @@ export class World {
     this.updateProjectiles(dt);
     this.updateCreatures(dt);
     this.chatterSami(dt);
+    if (this.stage.chatters) this.chatterLondon(dt);
+    if (this.stage.statue) this.statue(dt);
 
     for (const s of this.snakes) {
       if (!s.alive) {
@@ -416,14 +461,18 @@ export class World {
       if (this.stage.water && inWater(this.stage, s.x, s.z)) pace *= SWIM_FACTOR;
       if (this.puddles.length > 0 && this.puddle(s)) pace *= PUDDLE_ZOOM;
       if (s.teaFor > 0) pace *= TEA_ZOOM;
+      if (this.buskers.length > 0 && this.dancing(s)) pace *= BUSK_ZOOM;
       s.speedFactor += (pace - s.speedFactor) * Math.min(1, dt * 4);
       s.update(input, dt, !s.slowed, this.stage, this.snakeSolids);
 
       const ouch = this.bonkRock(s);
       if (s.touchingWall && !s.wasTouchingWall && !ouch && s.bumpQuiet <= 0 && s.immune <= 0) {
         s.bumpQuiet = BUMP_QUIET;
-        this.events.push({ type: 'bump', who: s.id, what: 'wall' });
+        const g = this.stage.guard;
+        const guard = g !== undefined && Math.hypot(s.x - g.x, s.z - g.z) < s.radius + 1.2;
+        this.events.push({ type: 'bump', who: s.id, what: guard ? 'guard' : 'wall' });
       }
+      if (this.stage.guard) this.lapGuard(s, dt);
 
       this.bumpCooper(s, dt);
       this.meetAnimals(s, dt);
@@ -1128,8 +1177,20 @@ export class World {
 
   /** Children scampering the meadow: runners for whimsy, the odd pebble-thrower and kiss-blower. */
   private updateKids(dt: number): void {
+    let trip = 0;
+    let leader: Kid | null = null;
     for (const k of this.kids) {
       const spec = KIDS[k.kind];
+      if (k.kind === 'tourist' || k.kind === 'trip' || k.kind === 'busker') {
+        k.throwIn -= dt;
+        if (k.kind === 'tourist') this.updateTourist(k, dt);
+        else if (k.kind === 'busker') k.speed = 0; // stands and plays
+        else {
+          leader ??= k;
+          this.walkTrip(k, leader, trip++, dt);
+        }
+        continue;
+      }
       k.wanderIn -= dt;
       k.throwIn -= dt;
 
@@ -1163,6 +1224,152 @@ export class World {
     }
   }
 
+  /**
+   * London's tourist: ambles round its sight, and now and then stops, turns and photographs a
+   * snake nearby. CLICK! (the flash is on that player's screen: a per-seat `photo` event.)
+   */
+  private updateTourist(k: Kid, dt: number): void {
+    const spec = KIDS.tourist;
+    if (k.pauseFor > 0) {
+      k.pauseFor -= dt;
+      k.speed = 0;
+    } else {
+      k.wanderIn -= dt;
+      if (k.wanderIn <= 0 || Math.hypot(k.x - k.tx, k.z - k.tz) < 0.6) this.wanderTourist(k);
+      k.heading = turnToward(k.heading, Math.atan2(k.tz - k.z, k.tx - k.x), 4 * dt);
+      resolveAshore(this.stage, k.x, k.z, k.x + Math.cos(k.heading) * spec.roam * dt, k.z + Math.sin(k.heading) * spec.roam * dt, KID_RADIUS, this.hit);
+      k.x = this.hit.x;
+      k.z = this.hit.z;
+      k.speed = spec.roam;
+      if (this.hit.hit) this.wanderTourist(k);
+    }
+    if (k.throwIn > 0) return;
+    const target = this.nearestSnake(k.x, k.z);
+    if (target && !target.hasMagic('hidden') && Math.hypot(target.x - k.x, target.z - k.z) <= spec.reach) {
+      k.throwIn = spec.throwEvery;
+      k.heading = Math.atan2(target.z - k.z, target.x - k.x);
+      k.pauseFor = 1.2; // hold still for the shot
+      k.speed = 0;
+      this.events.push({ type: 'photo', who: target.id, x: k.x, z: k.z });
+    } else {
+      k.throwIn = 0.6;
+    }
+  }
+
+  /** A fresh spot near the tourist's sight: on dry land, clear of things, and off the bus routes. */
+  private wanderTourist(k: Kid): void {
+    k.wanderIn = this.rng.range(3, 7);
+    if (this.rng.next() < 0.35) k.pauseFor = this.rng.range(1, 3); // stop and gawp
+    for (let tries = 0; tries < 20; tries++) {
+      const x = k.hx + this.rng.range(-TOURIST_ROAM, TOURIST_ROAM);
+      const z = k.hz + this.rng.range(-TOURIST_ROAM, TOURIST_ROAM);
+      if (!isFree(this.stage, x, z, KID_RADIUS + 0.5) || inWater(this.stage, x, z, 0.5)) continue;
+      if (this.stage.routes?.some((r) => distanceToLoop(r.path, x, z) < TOURIST_KERB)) continue;
+      k.tx = x;
+      k.tz = z;
+      return;
+    }
+    k.tx = k.hx;
+    k.tz = k.hz;
+  }
+
+  /**
+   * The school-trip crocodile: the teacher walks the path at a steady pace and every child keeps
+   * exactly TRIP_GAP further back along it, so the line can never split (and never strays off it).
+   * Untouchable: a snake in the way is nudged aside (meetKids). The naughty ones toss soggy chips.
+   */
+  private walkTrip(k: Kid, leader: Kid, place: number, dt: number): void {
+    const path = this.stage.tripPath;
+    if (!path || this.tripTotal <= 0) return;
+    if (place === 0) k.along = (k.along + KIDS.trip.roam * dt) % this.tripTotal;
+    else k.along = (leader.along - place * TRIP_GAP + this.tripTotal) % this.tripTotal;
+    alongLoop(path, this.tripTotal, k.along, this.tripAt);
+    k.x = this.tripAt.x;
+    k.z = this.tripAt.z;
+    k.heading = this.tripAt.heading;
+    k.speed = KIDS.trip.roam;
+    const throws = TRIP_THROWS[place] ?? null;
+    if (!throws || k.throwIn > 0) return;
+    const target = this.nearestSnake(k.x, k.z);
+    if (target && Math.hypot(target.x - k.x, target.z - k.z) <= KIDS.trip.reach && this.projectiles.length < 24) {
+      k.throwIn = KIDS.trip.throwEvery;
+      this.lob(k, target, throws);
+    } else {
+      k.throwIn = 0.6;
+    }
+  }
+
+  /** Is this snake close enough to a busker to dance? */
+  private dancing(s: Snake): boolean {
+    for (const b of this.buskers) if ((s.x - b.x) ** 2 + (s.z - b.z) ** 2 < BUSK_REACH * BUSK_REACH) return true;
+    return false;
+  }
+
+  /**
+   * Round and round the Royal Guard: the angle a snake's head sweeps round him while inside
+   * GUARD_REACH. Leaving the ring, a jump (respawn) or doubling back too far starts again. Three
+   * full laps: the `guard` event (his smile, a gem for the snake), then GUARD_COOL seconds' rest.
+   */
+  private lapGuard(s: Snake, dt: number): void {
+    const g = this.stage.guard!;
+    const id = s.id;
+    if (this.guardCool[id] === undefined) {
+      this.guardCool[id] = 0;
+      this.guardSwept[id] = this.guardPeak[id] = 0;
+      this.guardLast[id] = NaN;
+    }
+    if (this.guardCool[id] > 0) this.guardCool[id] -= dt;
+    const reset = () => {
+      this.guardSwept[id] = this.guardPeak[id] = 0;
+      this.guardLast[id] = NaN;
+    };
+    if (this.guardCool[id] > 0 || Math.hypot(s.x - g.x, s.z - g.z) > GUARD_REACH) return reset();
+    const a = Math.atan2(s.z - g.z, s.x - g.x);
+    const last = this.guardLast[id];
+    this.guardLast[id] = a;
+    if (Number.isNaN(last)) return;
+    const da = wrapAngle(a - last);
+    if (Math.abs(da) > Math.PI / 2) return reset(); // a jump, not a slither
+    const swept = (this.guardSwept[id] += da);
+    this.guardPeak[id] = Math.max(this.guardPeak[id], Math.abs(swept));
+    if (this.guardPeak[id] - Math.abs(swept) > GUARD_REVERSE) return reset(); // doubled back
+    if (Math.abs(swept) < GUARD_LAPS * Math.PI * 2) return;
+    reset();
+    this.guardCool[id] = GUARD_COOL;
+    s.score += 100;
+    this.events.push({ type: 'guard', who: id, x: g.x, z: g.z });
+  }
+
+  /** London's chatters (the tour guide, the Beefeater): a line now and then, when someone is near to hear it. */
+  private chatterLondon(dt: number): void {
+    const chatters = this.stage.chatters!;
+    for (let i = 0; i < chatters.length; i++) {
+      this.chatterIn[i] -= dt;
+      if (this.chatterIn[i] > 0) continue;
+      const c = chatters[i];
+      const near = this.nearestSnake(c.at.x, c.at.z);
+      if (!near || Math.hypot(near.x - c.at.x, near.z - c.at.z) > 16) {
+        this.chatterIn[i] = 1; // nobody about: look again in a moment
+        continue;
+      }
+      this.chatterIn[i] = this.rng.range(7, 12);
+      this.events.push({ type: 'say', text: this.rng.pick(c.lines), x: c.at.x, z: c.at.z });
+    }
+  }
+
+  /** The living statue: frozen, until a snake comes close. Then BOO! (and a rest before the next). */
+  private statue(dt: number): void {
+    const at = this.stage.statue!;
+    if (this.statueRest > 0) {
+      this.statueRest -= dt;
+      return;
+    }
+    const s = this.nearestSnake(at.x, at.z);
+    if (!s || Math.hypot(s.x - at.x, s.z - at.z) > STATUE_REACH + s.radius) return;
+    this.statueRest = STATUE_REST;
+    this.events.push({ type: 'boo', x: at.x, z: at.z });
+  }
+
   /** Pick a fresh spot for a child to scamper to; runners roam wild and sometimes freeze to stare. */
   private wanderKid(k: Kid): void {
     const spread = k.kind === 'runner' ? 30 : 14;
@@ -1180,7 +1387,7 @@ export class World {
 
   /** A child throws: aimed a little ahead of the snake, so it stands a chance but is still dodgeable. */
   private lob(k: Kid, target: Snake, kind: ProjectileKind): void {
-    const speed = kind === 'pebble' ? 11 : 7;
+    const speed = kind === 'pebble' ? 11 : kind === 'chip' ? 9 : 7;
     const flight = Math.hypot(target.x - k.x, target.z - k.z) / speed;
     const vel = target.baseSpeed * target.speedFactor;
     const aimX = target.x + Math.cos(target.heading) * vel * flight * 0.7;
@@ -1202,7 +1409,7 @@ export class World {
       pj.x += pj.dx * step;
       pj.z += pj.dz * step;
       pj.left -= step;
-      const hitR = pj.kind === 'pebble' ? 1.2 : 1.5;
+      const hitR = pj.kind === 'kiss' ? 1.5 : 1.2;
       const best = this.nearestSnake(pj.x, pj.z);
       if (best && Math.hypot(best.x - pj.x, best.z - pj.z) <= hitR) {
         this.strikeProjectile(pj, best);
@@ -1215,12 +1422,13 @@ export class World {
   }
 
   private strikeProjectile(pj: Projectile, best: Snake): void {
-    if (pj.kind === 'pebble') {
+    if (pj.kind === 'pebble' || pj.kind === 'chip') {
       if (best.immune > 0) return; // a graze while already blinking: no double dip
       best.immune = OUCH_GRACE * 0.5;
       const lost = best.mass < 1 ? 0 : Math.min(6, Math.max(1, best.mass * 0.05)) * (1 - best.rockGuard);
       if (lost > 0) this.shed(best, lost, PELLET_RETURN, 2);
-      this.events.push({ type: 'pelt', who: best.id, x: best.x, z: best.z, lost });
+      // A soggy chip says so (London's school trip); the pebble's event is unchanged.
+      this.events.push(pj.kind === 'chip' ? { type: 'pelt', who: best.id, x: best.x, z: best.z, lost, chip: true } : { type: 'pelt', who: best.id, x: best.x, z: best.z, lost });
     } else {
       const gem = this.rng.next() < 0.25;
       best.gain(4);
@@ -1230,19 +1438,29 @@ export class World {
 
   /** A snake ran into a child: the child is never hurt — the snake is nudged, the child scatters. */
   private meetKids(s: Snake, dt: number): void {
+    let trip = false;
     for (const k of this.kids) {
       const reach = s.radius + KID_RADIUS;
       if ((s.x - k.x) ** 2 + (s.z - k.z) ** 2 >= reach * reach) continue;
+      if (k.kind === 'trip') {
+        // The crocodile is a moving wall, but never a trap: held against it a while, you are let through.
+        trip = true;
+        if ((this.tripHeld[s.id] ?? 0) > TRIP_LET_THROUGH) continue;
+      }
       this.shove(s, k.x, k.z, reach, dt);
-      // Send the child scampering out of the way.
-      k.tx = k.x + (k.x - s.x);
-      k.tz = k.z + (k.z - s.z);
-      k.pauseFor = 0;
+      // Send the child scampering out of the way (London's trip, buskers and tourists hold their ground).
+      if (k.kind === 'naughty' || k.kind === 'nice' || k.kind === 'runner') {
+        k.tx = k.x + (k.x - s.x);
+        k.tz = k.z + (k.z - s.z);
+        k.pauseFor = 0;
+      }
       if (s.bumpQuiet <= 0) {
         s.bumpQuiet = BUMP_QUIET;
         this.events.push({ type: 'bump', who: s.id, what: 'kid' });
       }
     }
+    if (trip) this.tripHeld[s.id] = (this.tripHeld[s.id] ?? 0) + dt;
+    else if (this.tripHeld[s.id]) this.tripHeld[s.id] = 0;
   }
 
   /** Miss Sami natters with the mum by the road mouth: an occasional warm line, if the stage has her. */

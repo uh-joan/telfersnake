@@ -303,6 +303,29 @@ export class Sfx {
     this.tone(247, 0.45, { type: 'square', gain: 0.04 });
   }
 
+  /** The Bobby's whistle: PHWEEE! (a shrill pea-whistle trill). */
+  whistle(): void {
+    this.tone(2700, 0.5, { type: 'sine', gain: 0.07, vibrato: [140, 32], slideTo: 3000 });
+    this.hiss(0.4, 3500, 3000, 0.03, 0, 4);
+  }
+
+  /** A tourist's camera: a click and a little flash whine. */
+  click(): void {
+    this.hiss(0.05, 4000, 2500, 0.2, 0, 2);
+    this.tone(1800, 0.25, { type: 'sine', gain: 0.04, slideTo: 3600, delay: 0.04 });
+  }
+
+  /** The living statue moves: BOO! A low wobble up. */
+  boo(): void {
+    this.tone(160, 0.35, { type: 'sawtooth', gain: 0.07, slideTo: 320, vibrato: [12, 9] });
+  }
+
+  /** A busker's little tune: a bright four-note skip on a plucked string. */
+  busk(): void {
+    const notes = [392, 494, 587, 494, 659, 587];
+    notes.forEach((f, i) => this.tone(f, 0.22, { type: 'triangle', gain: 0.06, delay: i * 0.16 }));
+  }
+
   /** Into a puddle: a splash and a slide. */
   splash(): void {
     this.hiss(0.25, 2500, 700, 0.18, 0, 1.5);

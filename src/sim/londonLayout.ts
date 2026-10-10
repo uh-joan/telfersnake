@@ -14,6 +14,7 @@
 import { LONDON_ANIMALS } from './animals';
 import type { WardenConfig } from './cooper';
 import { foodWeights, pickFoodKind } from './food';
+import { TRIP_THROWS } from './kids';
 import type { Box, Circle } from './layout';
 import { inBox } from './layout';
 import type { Rng } from './rng';
@@ -88,12 +89,43 @@ export const PICCADILLY_SCREENS: Box = { x: -30, z: -62.5, w: 16, d: 5 };
 /** The Natural History Museum: a long terracotta front. */
 export const MUSEUM: Box = { x: -66, z: 0, w: 16, d: 7 };
 
+// ---------------------------------------------------------------- the people (A4)
+
+/**
+ * The Royal Guard, in his sentry box at the head of the Mall by the Palace (out of the traffic, so a
+ * snake can circle him in peace). He never moves: a fixed solid, the sentry box behind him included.
+ */
+export const GUARD: Spot = { x: -40, z: -28.5 };
+export const GUARD_R = 0.75;
+/** Miss Sami the tour guide, by the Tube exit at Westminster where you arrive. */
+export const SAMI: Spot = { x: -49.5, z: 5.5 };
+/** The Beefeater at the Tower's river gate, his back to the wall. */
+export const BEEFEATER: Spot = { x: 62, z: -9.5 };
+/** The living statue in Covent Garden, and the two buskers playing near him. */
+export const STATUE: Spot = { x: 15, z: -47 };
+export const BUSKERS: Spot[] = [{ x: 3, z: -51 }, { x: 10, z: -53 }];
+/** Each tourist's sight (Westminster twice: Miss Sami's group), all well clear of the traffic. */
+export const TOURIST_SPOTS: Spot[] = [
+  { x: -44, z: 4 }, { x: -42, z: 7 }, { x: -12, z: -35 }, { x: -45, z: -31 }, { x: 28, z: -50 }, { x: -36, z: -54 },
+];
+/**
+ * The school trip's walk: round and round the lake in St James's Park, clear of the buses. A circle,
+ * not a lap with corners: a crocodile turning a hairpin would fold round a snake and trap it.
+ */
+export const TRIP_PATH: Spot[] = Array.from({ length: 24 }, (_, i) => {
+  const a = (-i / 24) * Math.PI * 2; // anticlockwise on the map
+  return { x: -26 + Math.cos(a) * 4.6, z: -28.6 + Math.sin(a) * 4.6 };
+});
+/** Grown-ups standing still are solids, a little narrower than they look. */
+const PERSON_R = 0.45;
+
 const SOLID_BOXES: Box[] = [
   BIG_BEN, PARLIAMENT, PALACE, ST_PAULS_NAVE, TOWER, ...TOWER_LEGS, SHARD, PICCADILLY_SCREENS, MUSEUM,
 ];
 const SOLID_CIRCLES: Circle[] = [
   LONDON_EYE, VICTORIA_MEMORIAL, NELSON, ...LION_PLINTHS.map((p) => ({ ...p, r: PLINTH_R })),
   ST_PAULS_DOME, GHERKIN, GLOBE, PICCADILLY_FOUNTAIN,
+  { ...GUARD, r: GUARD_R }, { ...SAMI, r: PERSON_R }, { ...BEEFEATER, r: 0.5 }, { ...STATUE, r: PERSON_R },
 ];
 
 /** The sights, by stable id (stamps, the minimap, the renderer's builders). `radius` is how close counts as a visit. */
@@ -339,6 +371,31 @@ function alongRoad(rng: Rng, path: readonly Spot[], spread: number): Spot {
 
 const roadPath = (id: string): readonly Spot[] => ROADS.find((r) => r.id === id)!.path;
 
+/** Miss Sami as a tour guide, umbrella up. Warm, a little breathless, bubbles only. */
+const SAMI_TOUR = [
+  'Keep together, everyone!',
+  "Big Ben's this way!",
+  'Mind the gap!',
+  'Look — the London Eye!',
+  'Who wants a scone?',
+  'Follow the umbrella, please!',
+  "Wave to the guard. He won't wave back!",
+  'Lovely! Tea at four o’clock.',
+  'Ooh, a red bus! Wave, everyone!',
+  'Mind the river, poppets.',
+];
+
+/** Mr Bramble, on duty at the Tower as a Beefeater. Dry as ever. */
+const BEEFEATER_LINES = [
+  'Mind the ravens. They bite. Politely.',
+  'Six ravens, always six!',
+  'The jewels are not for snacking.',
+  'Welcome to the Tower!',
+  'Nine hundred years old. Still no lift.',
+  'No slithering on the battlements, please.',
+  'Ravens first, then snakes. Queue nicely.',
+];
+
 /** Mr Cooper on duty as a London Bobby: polite, dry, a bit grand. Bubbles only. */
 const BOBBY: WardenConfig = {
   spawn: { x: -4, z: -38 }, // just east of Nelson's Column
@@ -419,7 +476,17 @@ export const LONDON: Stage = {
   logs: [],
   // The four Trafalgar lions (one per plinth, in LION_PLINTHS order) and the Tower's raven pair.
   predators: [{ kind: 'lion', count: LION_PLINTHS.length }, { kind: 'raven', count: RAVEN_PERCHES.length }],
-  kids: [],
+  // Six tourists, the school trip (the teacher and eight children on the rope), two buskers.
+  kids: [...TOURIST_SPOTS.map(() => 'tourist' as const), ...TRIP_THROWS.map(() => 'trip' as const), ...BUSKERS.map(() => 'busker' as const)],
+  touristSpots: TOURIST_SPOTS,
+  buskerSpots: BUSKERS,
+  tripPath: TRIP_PATH,
+  statue: STATUE,
+  guard: GUARD,
+  chatters: [
+    { id: 'sami', at: SAMI, lines: SAMI_TOUR },
+    { id: 'beefeater', at: BEEFEATER, lines: BEEFEATER_LINES },
+  ],
   creatureCount: 0,
   // Big and open, so four more rivals keep it lively (as on the Common).
   extraRivals: 4,
