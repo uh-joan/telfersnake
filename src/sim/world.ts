@@ -638,12 +638,19 @@ export class World {
       }
       if (this.stage.guard) this.lapGuard(s, dt);
 
+      // Order matters to the sim (each can nudge the snake): Cooper, animals, kids, as on main.
+      // Order matters to the sim: each of these can nudge the snake. The school and the Common keep
+      // main's order (Cooper, animals, kids), so they play byte-for-byte as before London. London
+      // was built and checked (A5–A7, every Tube exit and parade) with the kids and set pieces
+      // first, and with the animals first some snakes wedge in a corner: it keeps its own order.
+      const kidsFirst = this.stage.id === 'london';
+      if (!flying) this.bumpCooper(s, dt);
+      if (!kidsFirst) this.meetAnimals(s, dt, flying);
       if (!flying) {
-        this.bumpCooper(s, dt);
         this.meetKids(s, dt);
         if (this.sp) this.meetSetPieces(s, this.sp, dt);
       }
-      this.meetAnimals(s, dt, flying);
+      if (kidsFirst) this.meetAnimals(s, dt, flying);
       this.meetCreatures(s);
       if (this.treasures.length > 0) this.meetJewels(s);
       if (this.buttons.length > 0) this.eatButtons(s);
@@ -2076,12 +2083,14 @@ export class World {
 
   private meetAnimals(s: Snake, dt: number, flying = false): void {
     // Gog & Magog: a giant gulps like the next size up.
-    const tier = s.hasMagic('giant') ? s.tier + 1 : s.tier;
+    // Read the size afresh for every animal: a gulp can grow the snake a size mid-loop, and the next
+    // animal must already see the new size (as on main; caching it once changed the Common's play).
+    const boost = s.hasMagic('giant') ? 1 : 0;
     for (const a of this.animals) {
       const spec = ANIMALS[a.kind];
       const d2 = (a.x - s.x) ** 2 + (a.z - s.z) ** 2;
 
-      if (tier >= spec.tier) {
+      if (s.tier + boost >= spec.tier) {
         const reach = s.biteReach * GULP_REACH + spec.radius;
         if (d2 > reach * reach) continue;
         const points = s.gain(spec.value);
