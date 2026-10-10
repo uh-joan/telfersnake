@@ -21,6 +21,7 @@ namespace Telfer.View
         public readonly Transform root;
         /// <summary>London fades its own landmarks (see <see cref="Sync"/>): none for the generic occlusion pass.</summary>
         public readonly List<Occluder> Occluders = new List<Occluder>();
+        readonly List<LandmarkView> landmarks = new List<LandmarkView>();
         readonly List<Fader> faders = new List<Fader>();
         readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
         /// <summary>Tower Bridge's two bascules (west, east), hinged at their towers, for the lifts to come.</summary>
@@ -49,6 +50,21 @@ namespace Telfer.View
             Bridges();
             Furniture();
             ElfinOak();
+            foreach (var l in London.LANDMARKS)
+            {
+                var v = ModelsLondon.Build(l.id, root);
+                landmarks.Add(v);
+                foreach (var g in v.Groups)
+                {
+                    if (g.Count == 0) continue;
+                    var b = g[0].bounds;
+                    foreach (var r in g) b.Encapsulate(r.bounds);
+                    var f = new Fader { renderers = g, bounds = b, casts = new bool[g.Count] };
+                    for (int i = 0; i < g.Count; i++) f.casts[i] = g[i].shadowCastingMode != ShadowCastingMode.Off;
+                    faders.Add(f);
+                }
+            }
+            Labels();
             var life = new GameObject("Wildlife").AddComponent<Wildlife>();
             life.transform.SetParent(root, false);
             life.Build(London.Stage);
@@ -1003,6 +1019,108 @@ namespace Telfer.View
             Emit(t, "stump", parts, 0.05f);
         }
 
+        // ================================================================== ribbon labels
+
+        sealed class Label { public LandmarkView v; public RectTransform rt; public CanvasGroup g; public Vector3 at; public float alpha; }
+        readonly List<Label> labels = new List<Label>();
+        Canvas labelCanvas;
+
+        static readonly Dictionary<string, string> LABEL_TEXT = new Dictionary<string, string>
+        {
+            ["bigben"] = "BIG BEN", ["eye"] = "LONDON EYE", ["palace"] = "PALACE", ["trafalgar"] = "TRAFALGAR", ["stpauls"] = "ST PAUL'S", ["tower"] = "TOWER",
+            ["towerbridge"] = "TOWER BRIDGE", ["shard"] = "SHARD", ["gherkin"] = "GHERKIN", ["globe"] = "GLOBE", ["piccadilly"] = "PICCADILLY", ["museum"] = "MUSEUM",
+        };
+
+        static Sprite ribbon, tail;
+
+        /// <summary>The ribbon's red band (a soft-edged rounded strip) and a notched folded end.</summary>
+        static void RibbonSprites()
+        {
+            if (ribbon) return;
+            ribbon = UiKit.Rounded(14);
+            const int Wt = 64, Ht = 64;
+            var t = new Texture2D(Wt, Ht, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var px = new Color32[Wt * Ht];
+            for (int y = 0; y < Ht; y++)
+                for (int x = 0; x < Wt; x++)
+                {
+                    // A notch cut into the outer (left) end: a "<" shape.
+                    float u = x / (float)(Wt - 1), v = Mathf.Abs(y / (float)(Ht - 1) - 0.5f) * 2;
+                    float edge = 0.38f * (1 - v);
+                    float a = Mathf.Clamp01((u - edge) * Wt * 0.5f);
+                    px[y * Wt + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                }
+            t.SetPixels32(px);
+            t.Apply();
+            tail = Sprite.Create(t, new Rect(0, 0, Wt, Ht), new Vector2(0.5f, 0.5f));
+        }
+
+        void Labels()
+        {
+            RibbonSprites();
+            labelCanvas = UiKit.Canvas("LondonLabels", 5);
+            labelCanvas.GetComponent<GraphicRaycaster>().enabled = false;
+            labelCanvas.transform.SetParent(root, false);
+            var ink = MeshKit.Hex(INK);
+            foreach (var v in landmarks)
+            {
+                string text = LABEL_TEXT[v.id];
+                float w = 34 + text.Length * 19;
+                var rt = UiKit.Rect(labelCanvas.transform, v.id, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(w, 46));
+                var g = rt.gameObject.AddComponent<CanvasGroup>();
+                g.blocksRaycasts = false;
+                foreach (int s in new[] { -1, 1 })
+                {
+                    // The folded ends: a darker red tail, notched, peeking out behind and a little below each end.
+                    var te = UiKit.Image(rt, "tail", tail, MeshKit.Hex(0xa3221d));
+                    var tr = (RectTransform)te.transform;
+                    tr.anchorMin = tr.anchorMax = new Vector2(s < 0 ? 0 : 1, 0.5f);
+                    tr.sizeDelta = new Vector2(30, 40);
+                    tr.anchoredPosition = new Vector2(s * 10, -8);
+                    tr.localScale = new Vector3(s < 0 ? 1 : -1, 1, 1);
+                    var ol = te.gameObject.AddComponent<Outline>();
+                    ol.effectColor = ink; ol.effectDistance = new Vector2(2, -2);
+                }
+                var band = UiKit.Image(rt, "band", ribbon, MeshKit.Hex(0xd8342c));
+                band.type = Image.Type.Sliced;
+                var bo = band.gameObject.AddComponent<Outline>();
+                bo.effectColor = ink; bo.effectDistance = new Vector2(2.5f, -2.5f);
+                UiKit.Label(rt, "t", text, 28, MeshKit.Hex(0xfffaf0), TextAnchor.MiddleCenter, 2, ink);
+                labels.Add(new Label { v = v, rt = rt, g = g, at = v.root.position + Vector3.up * v.labelY });
+            }
+        }
+
+        /// <summary>Labels start to fade this far from the snake, and are gone by FAR; never above TOP_NDC (the HUD lives up there).</summary>
+        const float NEAR = 42, FAR = 58, TOP_NDC = 0.66f, TOP_NDC_PORTRAIT = 0.32f, MIN_Y = 2;
+
+        void SyncLabels(Camera cam, Vector3 focus, float dt, bool show)
+        {
+            var cv = (RectTransform)labelCanvas.transform;
+            var size = cv.rect.size;
+            bool portrait = size.y > size.x;
+            float topNdc = portrait ? TOP_NDC_PORTRAIT : TOP_NDC;
+            foreach (var l in labels)
+            {
+                var at = l.at;
+                float d = Vector2.Distance(new Vector2(at.x, at.z), new Vector2(focus.x, focus.z));
+                float want = show ? Mathf.Clamp01((FAR - d) / (FAR - NEAR)) : 0;
+                var sp = cam.WorldToViewportPoint(at);
+                // Pull a ribbon down its building so it never rides into the HUD, but keep it over the roof.
+                if (sp.z > 0 && sp.y * 2 - 1 > topNdc)
+                {
+                    var baseVp = cam.WorldToViewportPoint(l.v.root.position + Vector3.up * MIN_Y);
+                    float targetY = (topNdc + 1) / 2;
+                    if (baseVp.y < targetY) sp.y = targetY;
+                    else sp.y = baseVp.y;
+                }
+                if (sp.z <= 0 || sp.x < -0.2f || sp.x > 1.2f || sp.y < -0.1f) want = 0;
+                l.alpha = Mathf.MoveTowards(l.alpha, want, dt * 3);
+                l.g.alpha = l.alpha;
+                l.rt.gameObject.SetActive(l.alpha > 0.01f);
+                l.rt.anchoredPosition = new Vector2(sp.x * size.x, sp.y * size.y);
+            }
+        }
+
         // ================================================================== every frame
 
         /// <summary>
@@ -1011,6 +1129,7 @@ namespace Telfer.View
         /// </summary>
         public void Sync(Camera cam, Vector3 head, bool watching, bool labelsOn, float time, float dt)
         {
+            foreach (var v in landmarks) v.Animate?.Invoke(time);
             DrawProps();
             var camPos = cam.transform.position;
             var ray = new Ray(head + Vector3.up * 0.6f, (camPos - head - Vector3.up * 0.6f).normalized);
@@ -1039,7 +1158,9 @@ namespace Telfer.View
                     if (faded != was) r.shadowCastingMode = faded || !f.casts[i] ? ShadowCastingMode.Off : ShadowCastingMode.On;
                 }
             }
+            SyncLabels(cam, head, dt, labelsOn);
         }
 
+        public void SetLabelsActive(bool on) { if (labelCanvas) labelCanvas.gameObject.SetActive(on); }
     }
 }

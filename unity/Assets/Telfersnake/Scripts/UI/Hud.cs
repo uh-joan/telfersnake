@@ -270,7 +270,7 @@ namespace Telfer.UI
             bestText.text = p.bestScore.ToString("N0");
             stageIcons[0].texture = Icons.Animal(AnimalKind.Chicken);
             stageIcons[1].texture = Icons.Creature(CreatureKind.Stag);
-            stageIcons[2].texture = Icons.Animal(AnimalKind.Pigeon);
+            stageIcons[2].texture = Icons.Of("london-bigben", View.ModelsLondon.IconMesh(), View.Mats.VertexGlossy, -25, 12);
             for (int i = 0; i < 3; i++)
             {
                 var id = (StageId)i;
