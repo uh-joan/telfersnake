@@ -467,10 +467,10 @@ function openAlbum(): void {
 
 const POSTCARD_NAME = Object.fromEntries(LANDMARK_CARDS.map((c) => [c.id, c.name])) as Record<string, string>;
 
-/** Keep a postcard for ever (London only), with a little fanfare the first time. */
-function keepPostcard(id: PostcardId): void {
+/** Keep a postcard for ever (London only), with a little fanfare the first time. `write: false` leaves the save to the caller. */
+function keepPostcard(id: PostcardId, write = true): void {
   if (world.stage.id !== 'london' || !awardPostcard(save, id)) return;
-  writeSave(save);
+  if (write) writeSave(save);
   window.setTimeout(() => {
     hud.toast('📮', 'Postcard!');
     sfx?.postcard();
@@ -486,8 +486,8 @@ function stampSight(id: string): void {
   hud.stamp(id, POSTCARD_NAME[id] ?? id.toUpperCase());
   sfx?.stamp();
   if (!save.stamps.includes(id)) save.stamps.push(id);
-  keepPostcard(id as PostcardId);
-  writeSave(save);
+  keepPostcard(id as PostcardId, false);
+  writeSave(save); // the stamp and its postcard, in one write
   const all = world.stage.landmarks?.length ?? 0;
   if (all > 0 && hud.stamped.size === all) {
     window.setTimeout(() => {

@@ -135,7 +135,13 @@ function sight(id: LandmarkId): HTMLCanvasElement | null {
       out.width = W;
       out.height = H;
       out.getContext('2d')?.drawImage(r.domElement, 0, 0);
-      scene.traverse((o) => (o as THREE.Mesh).geometry?.dispose?.());
+      // Everything built for this one picture goes (shared materials, flagged, stay for the game).
+      scene.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        mesh.geometry?.dispose();
+        const mats = mesh.material ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : [];
+        for (const m of mats) if (!m.userData.shared) m.dispose();
+      });
     } catch {
       out = null;
     }

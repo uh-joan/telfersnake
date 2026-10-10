@@ -1,7 +1,7 @@
 import { track } from '../meta/analytics';
 import { SKINS } from '../meta/catalogue';
 import { ALL_CARDS, LANDMARK_CARDS, type Postcard, RARE_CARDS } from '../meta/postcards';
-import type { Save } from '../meta/save';
+import { refreshSave, type Save } from '../meta/save';
 import { CARD_H, CARD_W, paintPostcard, type Photobomber, releasePostcardRenderer } from '../render/postcardArt';
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
@@ -48,6 +48,7 @@ export class Album {
   }
 
   open(): void {
+    refreshSave(this.save); // cards another tab (or the HD build) kept since this one loaded
     const have = new Set(this.save.postcards);
     const found = ALL_CARDS.filter((c) => have.has(c.id)).length;
     this.count.textContent = `${found}/${ALL_CARDS.length}`;
@@ -109,6 +110,8 @@ export class Album {
     this.painting++;
     releasePostcardRenderer();
     this.unzoom();
+    this.board.replaceChildren(); // let the painted canvases go
+    this.zoomCard.replaceChildren();
     this.root.classList.remove('show');
     this.root.setAttribute('aria-hidden', 'true');
     this.sounds()?.pick();
