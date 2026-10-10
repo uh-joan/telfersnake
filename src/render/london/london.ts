@@ -5,7 +5,7 @@ import type { School } from '../school';
 import { makeBridges } from './bridges';
 import { makeFurniture } from './furniture';
 import { makePaperMap, SHEET } from './ground';
-import { makeLabels } from './labels';
+import { LABEL_PIN, makeLabels } from './labels';
 import { makeSouthWest } from './southwest';
 import { LANDMARK_BUILDERS, type LandmarkBuild, type LandmarkId } from './landmarks';
 import { makeThames } from './water';
@@ -176,9 +176,10 @@ export function makeLondon(maxAnisotropy: number, maxTextureSize = 4096, camera?
     b.group.position.set(l.at.x, 0, l.at.z);
     group.add(b.group);
     builds.push(b);
-    labelSpots.push({ id, x: l.at.x, y: b.labelY, z: l.at.z });
     b.group.updateMatrixWorld(true);
     box.setFromObject(b.group);
+    const pin = LABEL_PIN[id]; // a sign on its south face
+    labelSpots.push({ id, x: l.at.x + pin.dx, y: pin.y, z: box.max.z + pin.dz });
     const materials: THREE.Material[] = [];
     const outlines: THREE.Object3D[] = [];
     const meshes: THREE.Mesh[] = [];
@@ -213,14 +214,14 @@ export function makeLondon(maxAnisotropy: number, maxTextureSize = 4096, camera?
   const labels = makeLabels(labelSpots, camera);
   group.add(labels.group);
 
+  const shown = occluders.map(() => 1); // how solid each landmark is drawn, for its sign
   let t = 0;
   const reveal = (x: number, z: number, dt: number) => {
     t += dt;
     thames.update(t);
     southWest.animate(t);
     for (const b of builds) b.animate?.(t, dt);
-    labels.update(x, z, t, dt);
-    for (const o of occluders) {
+    occluders.forEach((o, i) => {
       const c = camera?.position;
       const hidden = blocks(o, x, z, c);
       // A small snake's camera rides low: tucked right behind a tower it can end up inside the
@@ -240,6 +241,7 @@ export function makeLondon(maxAnisotropy: number, maxTextureSize = 4096, camera?
       const inked = o.materials[0].opacity > 0.9;
       for (const h of o.outlines) h.visible = inked;
       o.group.visible = o.materials[0].opacity > 0.04;
+      shown[i] = o.materials[0].opacity;
       const faded = o.materials[0].transparent;
       if (faded !== o.faded) {
         o.faded = faded;
@@ -250,7 +252,8 @@ export function makeLondon(maxAnisotropy: number, maxTextureSize = 4096, camera?
           m.castShadow = o.casts[i] && !faded;
         });
       }
-    }
+    });
+    labels.update(x, z, t, dt, shown);
   };
   return { group, reveal };
 }

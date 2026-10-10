@@ -3,9 +3,10 @@ import { INK_CSS } from './ground';
 import type { LandmarkId } from './landmarks/kit';
 
 /**
- * The ribbon banners over the sights (docs/LEVEL3-LONDON.md §2.1 rule 5): a paper ribbon with folded
- * ends and one or two short words. Camera-facing sprites drawn at a fixed screen size, so they read on
- * a phone however far the camera pulls back; the far ones fade away so the sky never fills with words.
+ * The ribbon banners on the sights (docs/LEVEL3-LONDON.md §2.1 rule 5): a paper ribbon with folded
+ * ends and one or two short words. Each is a sign pinned to its landmark: a fixed spot in the world,
+ * low on the south face where the chase camera (south of the snake, looking north and down) sees it,
+ * turned to the camera and always the same size in the world. It never slides about the screen.
  */
 
 export const LABEL_TEXT: Record<LandmarkId, string> = {
@@ -27,20 +28,32 @@ const FONT = "900 64px ui-rounded, 'SF Pro Rounded', 'Arial Rounded MT Bold', 'N
 const H = 128; // canvas height
 const BAND = 84; // the ribbon's height on it
 const TAIL = 44; // each folded end's width
-/** The ribbon's height as a share of the view (sizeAttenuation off: scale is in tan(fov/2) units). */
-const SCREEN_H = 0.05;
+/** The paper band's height in the world, metres: about a snake's head, readable on a phone. */
+const BAND_M = 0.85;
 /** Labels start to fade this far from the snake, and are gone by FAR. */
 const NEAR = 42;
 const FAR = 58;
-/** A ribbon never rides higher on screen than this (NDC, 1 = the top edge): the HUD lives up there. */
-const TOP_NDC = 0.66;
-/** On a phone held upright the HUD (minimap, pause, leaderboard) reaches further down. */
-const TOP_NDC_PORTRAIT = 0.32;
-/** ...and never lower than this over its roof, so it still reads as that sight's name. */
-const MIN_Y = 2;
-/** The ribbon's half-size on screen (NDC) for the "is it over the snake?" test, roughly. */
-const HALF_W = 0.28;
-const HALF_H = 0.07;
+
+/**
+ * Where each sign is pinned, from the landmark's own spot: `dx` east, `y` up, and `dz` south of its
+ * SOUTH face (the southern edge of its bounding box). Picked by eye from the game camera with the
+ * snake just south of each, on a phone held upright and on a desktop: over the door or at the foot
+ * of the tower, above a snake (and above a bus where a street runs by), clear of the neighbours.
+ */
+export const LABEL_PIN: Record<LandmarkId, { dx: number; y: number; dz: number }> = {
+  bigben: { dx: 0, y: 3.5, dz: 0.5 },
+  eye: { dx: 0, y: 3.5, dz: 0.5 },
+  palace: { dx: 0, y: 3.5, dz: 0.5 },
+  trafalgar: { dx: 0, y: 3.5, dz: 0.5 },
+  stpauls: { dx: 0, y: 3.5, dz: -2.6 }, // back off the Strand, onto the steps
+  tower: { dx: 0, y: 3.5, dz: -1 }, // on the wall, off the Embankment
+  towerbridge: { dx: 0, y: 4, dz: -2.6 }, // on the span between the towers, not out over the river
+  shard: { dx: 0, y: 3.5, dz: 0.5 },
+  gherkin: { dx: 0, y: 3.5, dz: 0.5 },
+  globe: { dx: 0, y: 3.5, dz: 0.5 },
+  piccadilly: { dx: 0, y: 3.5, dz: 0.5 },
+  museum: { dx: 0, y: 3.5, dz: 0.5 },
+};
 
 function ribbonTexture(text: string): { texture: THREE.CanvasTexture; aspect: number } {
   const probe = document.createElement('canvas').getContext('2d')!;
@@ -117,67 +130,54 @@ function ribbonTexture(text: string): { texture: THREE.CanvasTexture; aspect: nu
 
 export interface Labels {
   group: THREE.Group;
-  /** Bob gently, and fade out the ones far from the snake at (x, z). */
-  update(x: number, z: number, t: number, dt: number): void;
+  /**
+   * Fade out the ones far from the snake at (x, z) and the one that would cover it, and bob a
+   * touch in place. `shown[i]` is how solid landmark i is drawn (1, or less while it is see-through).
+   */
+  update(x: number, z: number, t: number, dt: number, shown: readonly number[]): void;
 }
 
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
+const _e = new THREE.Vector3();
 
-/**
- * One ribbon per landmark, floating at `y` over (x, z). With the `camera`, a ribbon that would sit
- * off the top of the screen (a small snake's camera rides low, under the tall sights' roofs) comes
- * down until it is in view, drawn over its building like a sign; and one that would cover the snake
- * fades back so the snake always shows.
- */
+/** One ribbon per landmark, pinned at its spot (x, y, z); `camera` is for keeping the snake in sight. */
 export function makeLabels(spots: readonly { id: LandmarkId; x: number; y: number; z: number }[], camera?: THREE.Camera): Labels {
   const group = new THREE.Group();
   const sprites = spots.map((s) => {
     const { texture, aspect } = ribbonTexture(LABEL_TEXT[s.id]);
-    const mat = new THREE.SpriteMaterial({
-      map: texture, sizeAttenuation: false, depthWrite: false, depthTest: camera === undefined, transparent: true, fog: false,
-    });
+    // Drawn over the scene: turned to a camera that looks down, its top leans back into the wall.
+    const mat = new THREE.SpriteMaterial({ map: texture, depthWrite: false, depthTest: false, transparent: true, fog: false });
     const sprite = new THREE.Sprite(mat);
-    sprite.center.set(0.5, 0); // hang from its bottom edge, so it floats just above the roof
-    sprite.scale.set(SCREEN_H * (H / BAND) * aspect, SCREEN_H * (H / BAND), 1);
+    const h = BAND_M * (H / BAND);
+    sprite.center.set(0.5, 0); // stands on its pin
+    sprite.scale.set(h * aspect, h, 1);
     sprite.position.set(s.x, s.y, s.z);
     sprite.renderOrder = 10;
     group.add(sprite);
-    return { sprite, mat, y: s.y };
+    return { sprite, mat, y: s.y, w: h * aspect, h, near: 1 };
   });
   return {
     group,
-    update(x, z, t, dt) {
+    update(x, z, t, dt, shown) {
       const ease = 1 - Math.exp(-dt * 9);
       if (camera) _s.set(x, 1, z).project(camera);
       sprites.forEach((l, i) => {
         const p = l.sprite.position;
         const d = Math.hypot(p.x - x, p.z - z);
         let o = 1 - THREE.MathUtils.smoothstep(d, NEAR, FAR);
-        let y = l.y;
         if (camera && o > 0.01) {
-          const top = (camera as THREE.PerspectiveCamera).aspect < 1 ? TOP_NDC_PORTRAIT : TOP_NDC;
-          // Highest height still under `top` on screen: projection is monotonic in y, so bisect.
-          if (_p.set(p.x, y, p.z).project(camera).y > top || _p.z > 1) {
-            let lo = MIN_Y;
-            let hi = l.y;
-            for (let k = 0; k < 8; k++) {
-              const mid = (lo + hi) / 2;
-              _p.set(p.x, mid, p.z).project(camera);
-              if (_p.y > top || _p.z > 1) hi = mid;
-              else lo = mid;
-            }
-            y = lo;
-            // Even sitting on its roofline it would be up under the HUD: wait until it comes down.
-            if (_p.set(p.x, y, p.z).project(camera).y > top || _p.z > 1) o = 0;
-          }
-          // Over the snake? Step back to a whisper. (The ribbon hangs up from its point.)
-          _p.set(p.x, y, p.z).project(camera);
-          if (Math.abs(_p.x - _s.x) < HALF_W && _s.y - _p.y > -0.02 && _s.y - _p.y < HALF_H * 2 + 0.04) o *= 0.25;
+          // Its box on screen, from the pin and its top corner; over the snake it steps back to a whisper.
+          const m = camera.matrixWorld.elements;
+          _p.set(p.x, l.y, p.z).project(camera);
+          _e.set(p.x + m[0] * l.w / 2 + m[4] * l.h, l.y + m[1] * l.w / 2 + m[5] * l.h, p.z + m[2] * l.w / 2 + m[6] * l.h).project(camera);
+          const halfW = Math.abs(_e.x - _p.x) + 0.06;
+          if (Math.abs(_s.x - _p.x) < halfW && _s.y > _p.y - 0.08 && _s.y < _e.y + 0.08) o *= 0.25;
         }
-        l.mat.opacity += (o - l.mat.opacity) * ease;
+        l.near += (o - l.near) * ease;
+        l.mat.opacity = l.near * (shown[i] ?? 1);
         l.sprite.visible = l.mat.opacity > 0.01;
-        p.y = y + Math.sin(t * 1.3 + i * 1.7) * 0.25;
+        p.y = l.y + Math.sin(t * 1.3 + i * 1.7) * 0.04;
       });
     },
   };
