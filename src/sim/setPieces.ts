@@ -239,6 +239,8 @@ export const PARADE_GUARDS = 10;
 export const PARADE_SIZE = PARADE_BAND + PARADE_GUARDS;
 /** A marcher, as a solid circle. */
 export const MARCHER_R = 0.45;
+/** Held against the parade this long (s), a snake is let through (the guards step round it). */
+export const PARADE_LET_THROUGH = 1.5;
 
 export interface Marcher {
   x: number;
@@ -495,6 +497,15 @@ export const WOBBLE_SPEED = 0.45;
 const WOBBLE_PERIOD = 1.7 * TPS;
 /** The sideways push at this tick, −1..1 (the renderer sways the deck by the same clock). */
 export const wobbleAt = (tick: number): number => Math.sin((tick / WOBBLE_PERIOD) * Math.PI * 2);
+
+/**
+ * Where a snake of radius `r` at `x` on the wobbly deck is pushed to over `dt` at this tick (never off
+ * the deck). The World applies it, and a phone's prediction of its own snake applies it the same way.
+ */
+export function wobbled(deck: Box, x: number, r: number, tick: number, dt: number): number {
+  const nx = x + WOBBLE_SPEED * (0.6 + r) * wobbleAt(tick) * dt;
+  return Math.abs(nx - deck.x) <= deck.w / 2 - 0.4 ? nx : x;
+}
 
 /** A per-room flavour number from the room's seed, without drawing from its RNG. */
 export const setPieceSeedFor = (seed: number): number => (Math.imul(seed | 0, 2654435761) >>> 16) & 0xff;

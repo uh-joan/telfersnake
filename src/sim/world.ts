@@ -17,11 +17,12 @@ import type { Stage, Terrain } from './stage';
 import { type CarrierKind, type Input, Snake, type SnakeLook, TIERS } from './snake';
 import {
   type Arrows, arrowsAt, ARROWS_REACH, type Boat, boatAt, bongAt, bridgesAt, type Burst, burstAt, confettiAt, liftRises, MARCHER_R,
-  type Marcher, paradeAt, projectOnPath, alongPath, type SetPieceSpots, setPieceSeedFor, spanClosed, WOBBLE_SPEED, wobbleAt,
+  FIREWORKS_EVERY, type Marcher, PARADE_LET_THROUGH, paradeAt, projectOnPath, alongPath, type SetPieceSpots, setPieceSeedFor, spanClosed,
+  wobbled,
 } from './setPieces';
 import { type CardId, type PowerId, rollCards, type UpgradeId } from './upgrades';
 import {
-  distanceToLoop, driveVehicle, type Lane, local, makeLane, makeVehicles, placeVehicle, pointAt, type Vehicle, type VehicleKind, VEHICLES, type Walker,
+  ahead, distanceToLoop, driveVehicle, type Lane, local, makeLane, makeVehicles, placeVehicle, pointAt, type Vehicle, type VehicleKind, VEHICLES, type Walker,
 } from './vehicles';
 import { inWater } from './water';
 import {
@@ -132,8 +133,6 @@ const BOAT_SCORE = 60;
 export const TUBE_REACH = 1.3;
 const TUBE_COOL = 8;
 const TUBE_GRACE = 2;
-/** Held against the parade this long, a snake is let through (the guards step round it). */
-const PARADE_LET_THROUGH = 1.5;
 /** Food borrowed for a set piece comes from at least this far from every snake (nobody sees it vanish). */
 const BORROW_CLEAR = 15;
 /** The fireworks finale: a snake this close to a finale burst catches a sparkle (a gem). */
@@ -390,11 +389,13 @@ export class World {
   /** Per snake: Tube, Eye and boat cooldowns (s), on the wobbly bridge last tick, and held against the parade (s). */
   private readonly tubeCool: number[] = [];
   /** Per snake: the station its head was in last tick (−1: none). The Tube takes you as you step in, not while you stand. */
-  private readonly tubeAt: number[] = [];
+  private readonly tubeAt: (number | undefined)[] = [];
   private readonly eyeCool: number[] = [];
   private readonly boatCool: number[] = [];
   private readonly wobbling: boolean[] = [];
   private readonly paradeHeld: number[] = [];
+  /** Per snake: which fireworks show last paid it a finale gem (one a show). */
+  private readonly treatShow: number[] = [];
   /** Where the next borrowed food is looked for (round and round the list). */
   private borrowAt = 0;
 
@@ -2319,6 +2320,8 @@ export class World {
    * without growing the food list (so a room's food deltas stay as they are). False if none was free.
    */
   private borrowFood(x: number, z: number, golden: boolean, kind?: FoodKind): boolean {
+    // A treat already lies there (an earlier ring, a cache): leave the spot be.
+    if (this.foods.some((o) => (o.x - x) ** 2 + (o.z - z) ** 2 < 1)) return false;
     const n = this.foods.length;
     for (let tries = 0; tries < n; tries++) {
       const f = this.foods[this.borrowAt];
@@ -2362,6 +2365,21 @@ export class World {
         placeVehicle(v, this.lanes[v.route], v.s + 0.25);
       }
     }
+    // Never into the back of the one in front: anything now too close ahead is nudged on too (a short chain).
+    for (let pass = 0; pass < this.vehicles.length; pass++) {
+      let moved = false;
+      for (const v of this.vehicles) {
+        const lane = this.lanes[v.route];
+        for (const o of this.vehicles) {
+          if (o === v || o.route !== v.route) continue;
+          const gap = ahead(lane, v.s, o.s) - (VEHICLES[v.kind].length + VEHICLES[o.kind].length) / 2 - 1;
+          if (gap >= 0 || ahead(lane, v.s, o.s) > lane.length / 2) continue;
+          placeVehicle(o, lane, o.s - gap);
+          moved = true;
+        }
+      }
+      if (!moved) break;
+    }
     for (const s of this.snakes) {
       if (!s.alive || s.carried || s.hasMagic('wings') || !inBox(span, s.x, s.z)) continue;
       const heading = s.x < span.x ? Math.PI : 0;
@@ -2393,8 +2411,13 @@ export class World {
       if (isFree(this.stage, x, z, 0.6, this.hazards) && this.borrowFood(x, z, true)) break;
     }
     if (!b.finale) return;
+    // One finale gem per snake per show, and only for someone actually watching (not riding, not in a menu).
+    const show = Math.floor(this.tick / FIREWORKS_EVERY);
     for (const s of this.snakes) {
-      if (s.alive && Math.hypot(s.x - b.x, s.z - b.z) < FINALE_REACH) this.events.push({ type: 'treat', who: s.id, x: s.x, z: s.z });
+      if (!s.alive || s.carried || s.awayFor > 0 || this.treatShow[s.id] === show) continue;
+      if (Math.hypot(s.x - b.x, s.z - b.z) >= FINALE_REACH) continue;
+      this.treatShow[s.id] = show;
+      this.events.push({ type: 'treat', who: s.id, x: s.x, z: s.z });
     }
   }
 
@@ -2421,8 +2444,7 @@ export class World {
     const on = !s.swimming && inBox(deck, s.x, s.z);
     if (on) {
       if (!this.wobbling[id]) this.events.push({ type: 'wobble', who: id, x: s.x, z: s.z });
-      const nx = s.x + WOBBLE_SPEED * (0.6 + s.radius) * wobbleAt(this.tick) * dt;
-      if (Math.abs(nx - deck.x) <= deck.w / 2 - 0.4) s.x = nx;
+      s.x = wobbled(deck, s.x, s.radius, this.tick, dt);
     }
     this.wobbling[id] = on;
 
@@ -2613,6 +2635,11 @@ export class World {
     s.teaStep = s.teaCool = 0;
     s.speedFactor = 1;
     s.touchingWall = s.wasTouchingWall = false;
+    // London: a fresh start at the Tube, the Eye and the boat (a respawn by a station is not stepping in).
+    if (this.sp) {
+      this.tubeAt[s.id] = undefined; // unknown: where it lands is noted, not taken as stepping in
+      this.tubeCool[s.id] = this.eyeCool[s.id] = this.boatCool[s.id] = 0;
+    }
     this.events.push({ type: 'respawn', who: s.id, x: s.x, z: s.z });
   }
 

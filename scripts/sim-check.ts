@@ -61,7 +61,7 @@ import { flowAt, inWater, onBridge } from '../src/sim/water';
 import { BUSK_REACH, EYE_RIDE, GUARD_COOL, STEP, World } from '../src/sim/world';
 import { inBox } from '../src/sim/layout';
 import {
-  applyTerrain, bongAt, LIFT_BELLS, LIFT_FIRST, LIFT_RISE, liftRises, type Marcher, PARADE_FIRST, paradeAt, spanClosed, spanOpen,
+  applyTerrain, bongAt, burstAt, FIREWORKS_EVERY, FIREWORKS_FOR, LIFT_BELLS, LIFT_FIRST, LIFT_RISE, liftRises, type Marcher, PARADE_FIRST, paradeAt, spanClosed, spanOpen,
 } from '../src/sim/setPieces';
 import { TRIP_GAP } from '../src/sim/kids';
 
@@ -1436,6 +1436,7 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
     row('the Eye', scripted.eye, scripted.eye.startsWith('back in') && parseFloat(scripted.eye.slice(8)) <= 15 && scripted.eye.endsWith('free ground'));
     row('the river bus', scripted.boat, scripted.boat.startsWith('to Bankside') && !scripted.boat.includes('BAD'));
     row('into the parade', scripted.parade, scripted.parade.endsWith('never stuck'));
+    row('finale gems a show', scripted.finale, scripted.finale === 'one gem a show');
     row('the wobbly bridge', scripted.wobble, scripted.wobble === 'WOBBLE, swayed, stayed on');
   }
   console.log(`  ${'longest stall'.padEnd(22)} ${(longest / 60).toFixed(1).padStart(7)}s`);
@@ -1708,6 +1709,21 @@ function londonShowsScripted(stage: Stage): Record<string, string> {
       else if (tick - anchor.tick > 180) stuck++;
     }
     out.parade = stuck === 0 && s.mass >= m0 && bumps > 0 ? `Ahem ×${bumps}, never stuck` : `bumps ${bumps}, stuck ${stuck} ticks, mass ${m0}→${s.mass.toFixed(1)}`;
+  }
+
+  // The fireworks finale: a snake parked by the river through a whole show gets one gem, no more.
+  {
+    const w = new World(81, undefined, rulesFor('normal'), stage);
+    const s = w.snake;
+    w.tick = FIREWORKS_EVERY - FIREWORKS_FOR - 10;
+    let treats = 0;
+    for (let tick = 0; tick < FIREWORKS_FOR + 20; tick++) {
+      const b = burstAt(w.tick, sp, w.setPieceSeed, { tick: 0, k: 0, x: 0, z: 0, finale: false, colour: 0 });
+      if (b?.finale) s.placeAt(b.x, b.z + 1, 0); // right under every finale burst
+      s.awayFor = 0;
+      treats += step(w).filter((e) => e.type === 'treat' && e.who === s.id).length;
+    }
+    out.finale = treats === 1 ? 'one gem a show' : `${treats} gems`;
   }
 
   // The wobbly bridge: walk onto the Millennium Bridge and be pushed side to side.

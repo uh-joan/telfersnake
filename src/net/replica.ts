@@ -11,7 +11,8 @@ import { blankVehicle, type Vehicle, VEHICLE_KINDS, VEHICLES } from '../sim/vehi
 import { blankTreasure, type Button, type Treasure } from '../sim/treasures';
 import { CARRIERS, type Input, Snake } from '../sim/snake';
 import type { Stage } from '../sim/stage';
-import { applyTerrain, MARCHER_R, type Marcher, paradeAt } from '../sim/setPieces';
+import { applyTerrain, MARCHER_R, type Marcher, PARADE_LET_THROUGH, paradeAt, wobbled } from '../sim/setPieces';
+import { inBox } from '../sim/layout';
 import type { Box } from '../sim/layout';
 import type { CardId } from '../sim/upgrades';
 import type { CooperState, WorldView } from '../sim/view';
@@ -94,6 +95,12 @@ export class Replica implements WorldView {
   private readonly solids: Hazard[];
   /** ...plus London's buses and cabs as a row of circles each, refreshed every frame. */
   private readonly blockers: Circle[] = [];
+  /** The same without the parade's marchers: once held against them a while, the server lets you through. */
+  private readonly plainBlockers: Circle[] = [];
+  /** How long my predicted snake has been pressed against the parade (s), as the server counts it. */
+  private paradeHeld = 0;
+  /** The tick my prediction runs at (about DELAY_TICKS ahead of the picture). */
+  private predTick = 0;
   private readonly pending: Pending[] = [];
   private q = 0;
   private owed = 0;
@@ -272,7 +279,7 @@ export class Replica implements WorldView {
     // Its wall memory belongs to the previous replay, not to this starting point; steer() must not act on it.
     g.touchingWall = false;
     this.updateBlockers();
-    for (const p of this.pending) g.move(p.input, STEP, !this.snake.slowed, this.stage, this.blockers);
+    for (const p of this.pending) this.predict(p.input, false);
     if (Math.hypot(g.x - this.shownX, g.z - this.shownZ) > SNAP_IF_OFF_BY) this.resetPrediction(g.x, g.z, g.heading);
   }
 
@@ -293,7 +300,7 @@ export class Replica implements WorldView {
       if (free) {
         this.pending.push({ q: this.q, input: copy });
         if (this.pending.length > 120) this.pending.shift();
-        this.ghost.move(copy, STEP, !mine.slowed, this.stage, this.blockers);
+        this.predict(copy, true);
       }
     }
 
@@ -310,21 +317,44 @@ export class Replica implements WorldView {
   }
 
   /**
+   * One tick of my predicted snake, as the server moves it: the solids (the parade's marchers dropped
+   * once I have been held against them long enough), then the wobbly bridge's push. `live` steps (not
+   * a replay) advance the parade-held clock.
+   */
+  private predict(input: Input, live: boolean): void {
+    const g = this.ghost;
+    g.move(input, STEP, !this.snake.slowed, this.stage, this.paradeHeld > PARADE_LET_THROUGH ? this.plainBlockers : this.blockers);
+    const sp = this.stage.setPieces;
+    if (!sp || g.hasMagic('wings')) return;
+    if (live) {
+      const reach = g.radius + MARCHER_R + 0.05;
+      let pressed = false;
+      for (const m of this.marchersNow) if ((g.x - m.x) ** 2 + (g.z - m.z) ** 2 < reach * reach) pressed = true;
+      this.paradeHeld = pressed ? this.paradeHeld + STEP : 0;
+    }
+    if (!g.swimming && inBox(sp.millennium, g.x, g.z)) g.x = wobbled(sp.millennium, g.x, g.radius, this.predTick, STEP);
+  }
+
+  /** The marchers out this frame (the start of `marchers`). */
+  private marchersNow: Marcher[] = [];
+
+  /**
    * The solids my predicted snake slides off: the hazards, and each bus or cab as circles along its
    * length (as drawn), so my own snake stops at a bus here as it does on the server, not inside it.
    */
   private updateBlockers(): void {
     const b = this.blockers;
     b.length = 0;
+    this.marchersNow = [];
     for (const h of this.solids) b.push(h);
     // London's set pieces, worked out from the tick as the server does: Tower Bridge's span (river while
     // it is up) and the parade's marchers. My snake runs about DELAY_TICKS ahead of the picture.
     const sp = this.stage.setPieces;
     if (sp) {
-      const now = this.tick + DELAY_TICKS;
+      const now = (this.predTick = this.tick + DELAY_TICKS);
       applyTerrain(this.stage, sp, this.bridgesDown, now);
       const n = paradeAt(now, sp.parade, this.marchers);
-      for (let i = 0; i < n; i++) b.push({ x: this.marchers[i].x, z: this.marchers[i].z, r: MARCHER_R });
+      this.marchersNow = this.marchers.slice(0, n);
     }
     for (const v of this.vehicles) {
       if (v.route < 0) continue; // not placed yet
@@ -337,6 +367,10 @@ export class Replica implements WorldView {
         b.push({ x: v.x + Math.cos(v.heading) * f, z: v.z + Math.sin(v.heading) * f, r });
       }
     }
+    // Without the parade (for when it lets me through), then with it.
+    this.plainBlockers.length = 0;
+    for (const c of b) this.plainBlockers.push(c);
+    for (const m of this.marchersNow) b.push({ x: m.x, z: m.z, r: MARCHER_R });
   }
 
   private blend(dt: number, predictingMe: boolean): void {
