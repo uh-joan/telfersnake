@@ -29,7 +29,12 @@
  * they check all nine creatures are gulped and their magics seen, every flight lands on free dry ground,
  * no giant is bonked by a bus, and every run's five Crown Jewels lie on free, reachable ground; and script
  * wings running out over the river and two landmarks, the phoenix taking one hit, the roar, River Rider,
- * a giant's gulp, the pearly trail and a ROYAL crown. `--baseline` records what
+ * a giant's gulp, the pearly trail and a ROYAL crown. With London's set pieces (A6) they check the BONGs
+ * ring, nobody stands on a raised bascule, no vehicle is on Tower Bridge's span while it is up (and some
+ * wait for it), every Eye ride is back within 15 s, every get-off and Tube exit is free, dry ground, and
+ * every station is clear of the traffic; and script the set-piece clock (World against a phone's copy,
+ * ten minutes), every Tube line, a launch off a rising bascule, a swim out of the gap, an Eye ride, a
+ * boat trip, a snake walking into the parade (never stuck) and the wobbly bridge. `--baseline` records what
  * `main` already does (the school's bots do sometimes nose a wall for a few seconds), so a later
  * run fails only when a count gets worse; a stage with no record must be spotless.
  *
@@ -53,7 +58,11 @@ import {
   ahead, blankVehicle, distanceToLoop, local, makeLane, placeVehicle, VEHICLES, type VehicleKind, type Walker, ZEBRA_HALF, zebraGap,
 } from '../src/sim/vehicles';
 import { flowAt, inWater, onBridge } from '../src/sim/water';
-import { BUSK_REACH, GUARD_COOL, STEP, World } from '../src/sim/world';
+import { BUSK_REACH, EYE_RIDE, GUARD_COOL, STEP, World } from '../src/sim/world';
+import { inBox } from '../src/sim/layout';
+import {
+  applyTerrain, bongAt, LIFT_BELLS, LIFT_FIRST, LIFT_RISE, liftRises, type Marcher, PARADE_FIRST, paradeAt, spanClosed, spanOpen,
+} from '../src/sim/setPieces';
 import { TRIP_GAP } from '../src/sim/kids';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1151,6 +1160,8 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
   const people: People | null = stage.guard ? newPeople() : null;
   // London's legends and Crown Jewels.
   const legends: Legends | null = stage.creatureHome ? newLegends() : null;
+  // London's set pieces: Big Ben, Tower Bridge, the Eye, the Tube, the boat, the parade…
+  const shows: Shows | null = stage.setPieces ? newShows() : null;
   const reach = legends ? floodFill(stage, true).reach : null;
   const notes: string[] = [];
   const note = (msg: string) => {
@@ -1170,6 +1181,7 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
       const dangerRun = danger ? newDangerRun(w) : null;
       const kids = w.kids.length;
       const paid = new Map<number, number>();
+      const boarded = new Map<number, number>();
       if (legends && reach && !jewelsReachable(w, reach)) {
         legends.jewelSeedsBad++;
         note(`${id}/${mode}/seed ${seed}: a Crown Jewel is not on free, reachable ground`);
@@ -1181,6 +1193,7 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
         if (danger && dangerRun) dangerAfter(w, danger, dangerRun, tick, note, `${id}/${mode}/seed ${seed}/t ${tick}`);
         if (people) peopleAfter(w, people, paid, tick, note, `${id}/${mode}/seed ${seed}/t ${tick}`);
         if (legends) legendsAfter(w, legends, note, `${id}/${mode}/seed ${seed}/t ${tick}`);
+        if (shows) showsAfter(w, shows, boarded, note, `${id}/${mode}/seed ${seed}/t ${tick}`);
         w.events.length = 0;
         t.ticks++;
         const where = `${id}/${mode}/seed ${seed}/t ${tick}`;
@@ -1191,7 +1204,7 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
           } else if (!isFree(solids, x, z, -SLOP, extra)) {
             t.inSolid++;
             note(`${where}: ${what} inside a solid at (${x.toFixed(2)}, ${z.toFixed(2)})`);
-          } else if (river && !swims && inWater(stage, x, z)) {
+          } else if (river && !swims && inWater(w.stage, x, z)) {
             t.wet++;
             note(`${where}: ${what} in the water at (${x.toFixed(2)}, ${z.toFixed(2)})`);
           }
@@ -1237,7 +1250,7 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
           }
           // Only where it is put down counts: a swimmer's magnet may drag bank food out to it, by design.
           const placed = tick === 0 || f.born >= w.tick - 1;
-          if (river && placed && inWater(stage, f.x, f.z)) {
+          if (river && placed && inWater(w.stage, f.x, f.z)) {
             t.wet++;
             note(`${where}: ${f.kind} spawned in the water at (${f.x.toFixed(2)}, ${f.z.toFixed(2)})`);
           }
@@ -1251,7 +1264,8 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
         // Stuck: alive and free to move, yet still within a metre of where it was over 3 s ago.
         for (const s of w.snakes) {
           const a = anchor[s.id];
-          const held = !s.alive || s.frozenFor > 0 || s.awayFor > 0 || s.cards !== null;
+          // On a ride (the Eye, the river bus), the ride moves you: that is not being stuck.
+          const held = !s.alive || s.frozenFor > 0 || s.awayFor > 0 || s.cards !== null || s.carried !== null;
           if (held || Math.hypot(s.x - a.x, s.z - a.z) > STUCK_MOVE) {
             a.x = s.x;
             a.z = s.z;
@@ -1393,11 +1407,325 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
     row('pearly lights', scripted.pearly, scripted.pearly.endsWith('buttons to a jewel'));
     row('crown jewels', scripted.jewels, scripted.jewels === 'five, ROYAL once');
   }
+  if (shows) {
+    const info = (label: string, n: number | string) => console.log(`  ${label.padEnd(22)} ${String(n).padStart(8)}`);
+    row('BONGs', shows.bongs, shows.bongs > 0);
+    info('ramp launches', shows.launches);
+    row('bad launches', shows.badLaunches, shows.badLaunches === 0);
+    row('on a raised bascule', shows.onRaised, shows.onRaised === 0);
+    row('vehicles on the span', shows.spanRuns, shows.spanRuns === 0);
+    row('waits for the bridge', shows.spanWaits, shows.spanWaits > 0);
+    row('Eye rides', shows.eyeRides, shows.eyeRides > 0);
+    row('Eye rides over 15 s', shows.eyeLate, shows.eyeLate === 0);
+    info('longest Eye ride', `${shows.eyeLongest.toFixed(1)}s`);
+    info('boat rides', shows.boatRides);
+    row('bad get-offs', shows.badAlights, shows.badAlights === 0);
+    row('Tube trips', shows.warps, shows.warps > 0);
+    row('bad Tube exits', shows.badExits, shows.badExits === 0);
+    const ports = stage.portals ?? [];
+    const exits = ports.filter((p) => isFree(stage, p.at.x, p.at.z, 2) && !inWater(stage, p.at.x, p.at.z, 2) && !(stage.routes ?? []).some((r) => distanceToLoop(r.path, p.at.x, p.at.z) < 3.5));
+    row('stations free & dry', `${exits.length}/${ports.length}`, exits.length === ports.length);
+    info('wobbles', shows.wobbles);
+    info('Red Arrows trails', shows.arrows);
+    info('finale gems', shows.treats);
+    const scripted = londonShowsScripted(stage);
+    row('set-piece clock 10 min', scripted.clock, scripted.clock.startsWith('agree'));
+    row('Tube, every line', scripted.tube, scripted.tube === `${ports.length}/${ports.length} stations`);
+    row('on a rising bascule', scripted.launch, scripted.launch === 'launched to free ground');
+    row('in the gap', scripted.gap, scripted.gap.startsWith('swam out'));
+    row('the Eye', scripted.eye, scripted.eye.startsWith('back in') && parseFloat(scripted.eye.slice(8)) <= 15 && scripted.eye.endsWith('free ground'));
+    row('the river bus', scripted.boat, scripted.boat.startsWith('to Bankside') && !scripted.boat.includes('BAD'));
+    row('into the parade', scripted.parade, scripted.parade.endsWith('never stuck'));
+    row('the wobbly bridge', scripted.wobble, scripted.wobble === 'WOBBLE, swayed, stayed on');
+  }
   console.log(`  ${'longest stall'.padEnd(22)} ${(longest / 60).toFixed(1).padStart(7)}s`);
   row('kinds seen', `${want.size - missing.length}/${want.size}`, missing.length === 0);
   if (missing.length) console.log(`  never seen: ${missing.join(', ')}`);
   for (const n of notes) console.log(`  · ${n}`);
   return bad;
+}
+
+// ---------------------------------------------------------------- London: the set pieces (A6)
+
+interface Shows {
+  bongs: number;
+  launches: number;
+  badLaunches: number;
+  eyeRides: number;
+  eyeLongest: number;
+  eyeLate: number;
+  boatRides: number;
+  badAlights: number;
+  warps: number;
+  badExits: number;
+  wobbles: number;
+  arrows: number;
+  treats: number;
+  /** Ticks a vehicle stood on Tower Bridge's span while it was up, and ticks one waited for it. */
+  spanRuns: number;
+  spanWaits: number;
+  /** Ticks a snake stood on dry ground in the span while it was up: on a raised bascule. */
+  onRaised: number;
+}
+
+const newShows = (): Shows => ({
+  bongs: 0, launches: 0, badLaunches: 0, eyeRides: 0, eyeLongest: 0, eyeLate: 0, boatRides: 0, badAlights: 0, warps: 0, badExits: 0,
+  wobbles: 0, arrows: 0, treats: 0, spanRuns: 0, spanWaits: 0, onRaised: 0,
+});
+
+/** Free, dry ground for a snake of radius `r` at (x, z), as the world is right now (Tower Bridge up or down). */
+const landsFree = (w: World, x: number, z: number, r: number) => isFree(w.stage, x, z, r) && !inWater(w.stage, x, z);
+
+/** Read a tick's events and the bridge for the set pieces' tally. `boarded` remembers when each rider got on. */
+function showsAfter(w: World, g: Shows, boarded: Map<number, number>, note: (m: string) => void, where: string): void {
+  const sp = w.stage.setPieces!;
+  const t = w.tick - 1; // the tick just stepped
+  for (const e of w.events) {
+    if (e.type === 'bong') g.bongs++;
+    else if (e.type === 'launch') {
+      g.launches++;
+      if (!landsFree(w, e.x, e.z, 0) || inBox(sp.span, e.x, e.z)) {
+        g.badLaunches++;
+        note(`${where}: snake ${e.who} launched onto (${e.x.toFixed(2)}, ${e.z.toFixed(2)})`);
+      }
+    } else if (e.type === 'ride' && e.on) {
+      boarded.set(e.who, w.tick);
+      if (e.by === 'eye') g.eyeRides++;
+      else g.boatRides++;
+    } else if (e.type === 'ride') {
+      const secs = (w.tick - (boarded.get(e.who) ?? w.tick)) / 60;
+      if (e.by === 'eye') {
+        g.eyeLongest = Math.max(g.eyeLongest, secs);
+        if (secs > 15) {
+          g.eyeLate++;
+          note(`${where}: snake ${e.who} rode the Eye for ${secs.toFixed(1)} s`);
+        }
+      }
+      if (!landsFree(w, e.x, e.z, 0)) {
+        g.badAlights++;
+        note(`${where}: snake ${e.who} got off the ${e.by} into (${e.x.toFixed(2)}, ${e.z.toFixed(2)})`);
+      }
+    } else if (e.type === 'warp') {
+      g.warps++;
+      if (!landsFree(w, e.x, e.z, 1)) {
+        g.badExits++;
+        note(`${where}: snake ${e.who} came up the Tube into (${e.x.toFixed(2)}, ${e.z.toFixed(2)})`);
+      }
+    } else if (e.type === 'wobble') g.wobbles++;
+    else if (e.type === 'arrows') g.arrows++;
+    else if (e.type === 'treat') g.treats++;
+  }
+  // Shut for a lift: a vehicle pulled up by the span is waiting for it.
+  if (spanClosed(t)) for (const v of w.vehicles) if (v.speed === 0 && Math.hypot(v.x - sp.span.x, v.z - sp.span.z) < 14) g.spanWaits++;
+  if (!spanOpen(t)) return;
+  for (const v of w.vehicles) {
+    if (Math.abs(v.x - sp.span.x) < sp.span.w / 2 && Math.abs(v.z - sp.span.z) < sp.span.d / 2) {
+      g.spanRuns++;
+      note(`${where}: a ${v.kind} on Tower Bridge's span while it was up`);
+    }
+  }
+  for (const s of w.snakes) {
+    const held = s.frozenFor > 0 || s.awayFor > 0 || s.cards !== null;
+    if (!s.alive || held || s.carried || s.hasMagic('wings') || !inBox(sp.span, s.x, s.z) || inWater(w.stage, s.x, s.z)) continue;
+    g.onRaised++;
+    note(`${where}: snake ${s.id} standing on a raised bascule at (${s.x.toFixed(2)}, ${s.z.toFixed(2)})`);
+  }
+}
+
+/**
+ * Scripted set pieces: the phone's set-piece clock against the server's for ten minutes; a ride on
+ * every Tube line; the bascules launching a snake and a swimmer leaving the gap; the Eye bringing its
+ * rider back; a boat trip; the parade pushing (never trapping) a snake that walks into it; the wobble.
+ */
+function londonShowsScripted(stage: Stage): Record<string, string> {
+  const out: Record<string, string> = {};
+  const sp = stage.setPieces!;
+  const drain = (w: World) => {
+    const ev = [...w.events];
+    w.events.length = 0;
+    return ev;
+  };
+  const toward = (s: { x: number; z: number }, x: number, z: number) => {
+    const d = Math.hypot(x - s.x, z - s.z) || 1;
+    return { x: (x - s.x) / d, z: (z - s.z) / d, active: true, dash: false };
+  };
+  const step = (w: World, input = { x: 0, z: 0, active: false, dash: false }) => {
+    if (w.cards) w.choose(0);
+    w.step(input);
+    return drain(w);
+  };
+
+  // The clock: a room for ten minutes, against a phone's copy worked out from the tick alone (as replica.ts does).
+  {
+    const w = World.room(3, rulesFor('normal'), stage);
+    const phone: Terrain = { ...stage };
+    const marchers: Marcher[] = [];
+    let off = 0;
+    let bongs = 0;
+    let lifts = 0;
+    let marched = 0;
+    for (let i = 0; i < 10 * 60 * 60; i++) {
+      const tick = w.tick;
+      const ev = step(w);
+      applyTerrain(phone, sp, stage.bridges!, tick);
+      if (phone.bridges !== w.stage.bridges) off++;
+      const n = paradeAt(tick, sp.parade, marchers);
+      if (n !== w.marcherCount) off++;
+      for (let k = 0; k < n; k++) if (marchers[k].x !== w.marchers[k].x || marchers[k].z !== w.marchers[k].z) off++;
+      const rang = ev.filter((e) => e.type === 'bong').length;
+      if (rang !== (bongAt(tick) ? 1 : 0)) off++;
+      bongs += rang;
+      if (liftRises(tick)) lifts++;
+      if (n > 0) marched++;
+    }
+    out.clock = off === 0 ? `agree (${bongs} bongs, ${lifts} lifts, ${(marched / 60).toFixed(0)} s of parade)` : `${off} ticks disagree`;
+  }
+
+  // The Tube: into every station from open ground; out at the next, on free, dry ground.
+  {
+    const ports = stage.portals!;
+    const done: string[] = [];
+    ports.forEach((p, i) => {
+      const w = new World(21 + i, undefined, rulesFor('normal'), stage);
+      const s = w.snake;
+      s.mass = 30;
+      let from: { x: number; z: number } | null = null;
+      for (let k = 0; k < 8 && !from; k++) {
+        const x = p.at.x + Math.cos((k * Math.PI) / 4) * 4;
+        const z = p.at.z + Math.sin((k * Math.PI) / 4) * 4;
+        if (isFree(w.stage, x, z, 1.5) && isFree(w.stage, (x + p.at.x) / 2, (z + p.at.z) / 2, 1.5)) from = { x, z };
+      }
+      if (!from) return;
+      s.placeAt(from.x, from.z, Math.atan2(p.at.z - from.z, p.at.x - from.x));
+      for (let tick = 0; tick < 180; tick++) {
+        const e = step(w, toward(s, p.at.x, p.at.z)).find((o) => o.type === 'warp' && o.who === s.id);
+        if (e?.type !== 'warp') continue;
+        if (e.from === i && e.to === (i + 1) % ports.length && landsFree(w, e.x, e.z, s.radius) && s.x === e.x && s.z === e.z) done.push(p.id);
+        break;
+      }
+    });
+    out.tube = `${done.length}/${ports.length} stations`;
+  }
+
+  // Tower Bridge: on a bascule as it rises (launched to free ground, WHEE!), and in the gap while it is up (swims out).
+  {
+    const rise = LIFT_FIRST + LIFT_BELLS;
+    const w = new World(31, undefined, rulesFor('normal'), stage);
+    const s = w.snake;
+    s.mass = 10;
+    w.tick = rise - 30;
+    s.placeAt(63.5, sp.span.z, 0);
+    let launched = '';
+    for (let tick = 0; tick < 60 && !launched; tick++) {
+      const e = step(w).find((o) => o.type === 'launch' && o.who === s.id);
+      if (e) launched = landsFree(w, s.x, s.z, s.radius) && !inBox(sp.span, s.x, s.z) && s.launchFor > 0 ? 'launched to free ground' : `BAD at (${s.x.toFixed(1)}, ${s.z.toFixed(1)})`;
+    }
+    out.launch = launched || 'never launched';
+
+    const v = new World(32, undefined, rulesFor('normal'), stage);
+    const g = v.snake;
+    g.mass = 10;
+    v.tick = rise + LIFT_RISE + 60;
+    g.placeAt(sp.span.x, sp.span.z, Math.PI);
+    let ticks = 0;
+    while (ticks < 600 && inBox(sp.span, g.x, g.z)) {
+      step(v, { x: -1, z: 0, active: true, dash: false });
+      ticks++;
+    }
+    out.gap = ticks < 600 ? `swam out in ${(ticks / 60).toFixed(1)} s` : 'STUCK in the gap';
+  }
+
+  // The London Eye: in at the bottom capsule, back down on free ground after one turn.
+  {
+    const w = new World(41, undefined, rulesFor('normal'), stage);
+    const s = w.snake;
+    s.mass = 20;
+    s.placeAt(sp.eye.board.x + 4.5, sp.eye.board.z, Math.PI);
+    let on = -1;
+    let result = 'never boarded';
+    for (let tick = 0; tick < 60 * 25; tick++) {
+      const ev = step(w, on < 0 ? toward(s, sp.eye.board.x, sp.eye.board.z) : { x: 1, z: 0, active: true, dash: false });
+      for (const e of ev) {
+        if (e.type !== 'ride' || e.who !== s.id || e.by !== 'eye') continue;
+        if (e.on) on = tick;
+        else result = `back in ${((tick - on) / 60).toFixed(1)} s${landsFree(w, e.x, e.z, s.radius) ? ', on free ground' : ', BAD ground'}`;
+      }
+      if (on >= 0 && result !== 'never boarded') break;
+      if (on >= 0 && s.carried === null && tick > on + 1) break;
+    }
+    if (on >= 0 && result === 'never boarded') result = 'NEVER came back';
+    out.eye = result;
+    out.eyeTurn = `${(EYE_RIDE / 60).toFixed(0)} s`;
+  }
+
+  // The river bus: on at Westminster pier, off at Bankside.
+  {
+    const w = new World(51, undefined, rulesFor('normal'), stage);
+    const s = w.snake;
+    s.mass = 15;
+    const pier = sp.piers[0];
+    const from = { x: pier.board.x + Math.cos(pier.out) * 3, z: pier.board.z + Math.sin(pier.out) * 3 };
+    s.placeAt(from.x, from.z, pier.out + Math.PI);
+    let on = -1;
+    let result = 'never boarded';
+    for (let tick = 0; tick < 60 * 40; tick++) {
+      const ev = step(w, on < 0 ? toward(s, pier.board.x, pier.board.z) : { x: 0, z: 0, active: false, dash: false });
+      for (const e of ev) {
+        if (e.type !== 'ride' || e.who !== s.id) continue;
+        if (e.on) on = tick;
+        else {
+          const there = Math.hypot(e.x - sp.piers[1].board.x, e.z - sp.piers[1].board.z) < 4;
+          result = `${there ? 'to Bankside' : 'SOMEWHERE ELSE'} in ${((tick - on) / 60).toFixed(1)} s${landsFree(w, e.x, e.z, s.radius) ? '' : ', BAD ground'}`;
+        }
+      }
+      if (result !== 'never boarded') break;
+    }
+    out.boat = result;
+  }
+
+  // The parade: a snake walks straight into the column on the Mall. Pushed aside, never stuck, never hurt.
+  {
+    const w = new World(61, undefined, rulesFor('normal'), stage);
+    const s = w.snake;
+    s.mass = 40;
+    w.tick = PARADE_FIRST + 6 * 60;
+    const [a, b] = sp.parade;
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    const ux = (b.x - a.x) / len;
+    const uz = (b.z - a.z) / len;
+    // On the column's own side of the Mall (it marches out on the right of the route's middle line).
+    const sx = a.x + ux * 13 + uz * 1.2;
+    const sz = a.z + uz * 13 - ux * 1.2;
+    s.placeAt(sx, sz, Math.atan2(-uz, -ux));
+    s.immune = 0;
+    const m0 = s.mass;
+    let bumps = 0;
+    let stuck = 0;
+    let anchor = { x: s.x, z: s.z, tick: 0 };
+    for (let tick = 0; tick < 15 * 60; tick++) {
+      for (const e of step(w, { x: -ux, z: -uz, active: true, dash: false })) if (e.type === 'bump' && e.who === s.id && e.what === 'guard') bumps++;
+      if (Math.hypot(s.x - anchor.x, s.z - anchor.z) > 1) anchor = { x: s.x, z: s.z, tick };
+      else if (tick - anchor.tick > 180) stuck++;
+    }
+    out.parade = stuck === 0 && s.mass >= m0 && bumps > 0 ? `Ahem ×${bumps}, never stuck` : `bumps ${bumps}, stuck ${stuck} ticks, mass ${m0}→${s.mass.toFixed(1)}`;
+  }
+
+  // The wobbly bridge: walk onto the Millennium Bridge and be pushed side to side.
+  {
+    const w = new World(71, undefined, rulesFor('normal'), stage);
+    const s = w.snake;
+    const deck = sp.millennium;
+    s.placeAt(deck.x, deck.z + deck.d / 2 - 1, -Math.PI / 2);
+    let wobbles = 0;
+    let swayed = 0;
+    for (let tick = 0; tick < 120; tick++) {
+      const x0 = s.x;
+      wobbles += step(w, { x: 0, z: -1, active: true, dash: false }).filter((e) => e.type === 'wobble' && e.who === s.id).length;
+      if (inBox(deck, s.x, s.z) && Math.abs(s.x - x0) > 1e-4) swayed++;
+    }
+    out.wobble = wobbles === 1 && swayed > 30 && inBox(deck, s.x, s.z) ? 'WOBBLE, swayed, stayed on' : `wobbles ${wobbles}, swayed ${swayed}`;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- command line

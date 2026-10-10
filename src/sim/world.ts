@@ -11,12 +11,18 @@ import { isFree, makeHit, resolveAshore, resolveCircle, slideAlong, turnToward, 
 import { Cooper, COOPER_AURA, COOPER_RADIUS } from './cooper';
 import { type Food, type FoodKind, FOOD_VALUE, GOLDEN_MULTIPLIER, placeFood, TEA_TIME } from './food';
 import { type Hazard, type HazardKind, isSolidHazard, makeHazards, type Pellet, PELLET_LIFE_TICKS, placeHazard } from './hazards';
-import { type Circle, inBox, SCHOOL } from './layout';
+import { type Box, type Circle, inBox, SCHOOL } from './layout';
 import { Rng } from './rng';
 import type { Stage, Terrain } from './stage';
-import { type Input, Snake, type SnakeLook, TIERS } from './snake';
+import { type CarrierKind, type Input, Snake, type SnakeLook, TIERS } from './snake';
+import {
+  type Arrows, arrowsAt, ARROWS_REACH, type Boat, boatAt, bongAt, bridgesAt, type Burst, burstAt, confettiAt, liftRises, MARCHER_R,
+  type Marcher, paradeAt, projectOnPath, alongPath, type SetPieceSpots, setPieceSeedFor, spanClosed, WOBBLE_SPEED, wobbleAt,
+} from './setPieces';
 import { type CardId, type PowerId, rollCards, type UpgradeId } from './upgrades';
-import { distanceToLoop, driveVehicle, type Lane, local, makeLane, makeVehicles, type Vehicle, type VehicleKind, VEHICLES, type Walker } from './vehicles';
+import {
+  distanceToLoop, driveVehicle, type Lane, local, makeLane, makeVehicles, placeVehicle, pointAt, type Vehicle, type VehicleKind, VEHICLES, type Walker,
+} from './vehicles';
 import { inWater } from './water';
 import {
   type Button, BUTTON_LIFE, BUTTON_MASS, BUTTON_MAX, BUTTON_STEP, JEWEL_REACH, JEWEL_RESPAWN, JEWELS_FOR_CROWN, makeTreasures, moveTreasure, type Treasure,
@@ -106,6 +112,39 @@ const TOURIST_ROAM = 5;
 const TOURIST_KERB = 3.5;
 /** Held against the school trip's line this long, a snake is let through (the children duck under the rope). */
 const TRIP_LET_THROUGH = 1.2;
+// London's set pieces (A6).
+/** Golden treats in each BONG's ring round Big Ben, and about how many a whole minute's striking scatters (twelve o'clock: rings of two). */
+const BONG_RING = 5;
+const BONG_MINUTE = 15;
+/** Tower Bridge's ramp: this much faster, this long, after the bascules launch you. */
+const LAUNCH_ZOOM = 1.8;
+const LAUNCH_FOR = 1.6;
+/** The London Eye: one turn (ticks), the wait before another, and the little bonus for the view. */
+export const EYE_RIDE = 12 * 60;
+const EYE_COOL = 40;
+const EYE_GROWTH = 6;
+const EYE_SCORE = 100;
+/** The river bus: the wait before riding again, and its bonus. */
+const BOAT_COOL = 15;
+const BOAT_GROWTH = 3;
+const BOAT_SCORE = 60;
+/** The Tube: a head this close to a station's middle goes down; the wait before it can again; the grace on arrival. */
+export const TUBE_REACH = 1.3;
+const TUBE_COOL = 8;
+const TUBE_GRACE = 2;
+/** Held against the parade this long, a snake is let through (the guards step round it). */
+const PARADE_LET_THROUGH = 1.5;
+/** Food borrowed for a set piece comes from at least this far from every snake (nobody sees it vanish). */
+const BORROW_CLEAR = 15;
+/** The fireworks finale: a snake this close to a finale burst catches a sparkle (a gem). */
+const FINALE_REACH = 16;
+/** The parade's confetti: sweets, dropped behind the guards for whoever follows them. */
+const CONFETTI: readonly FoodKind[] = ['jellybaby', 'biscuit', 'strawberry', 'scone'];
+/** Set-piece scratch (one process may run many rooms, but never two steps at once). */
+const BOAT: Boat = { x: 0, z: 0, heading: 0, dock: -1, next: 0, leaveIn: 0 };
+const BURST: Burst = { tick: 0, k: 0, x: 0, z: 0, finale: false, colour: 0 };
+const ARROWS: Arrows = { x: 0, z: 0, heading: 0, t: 0, line: 0, x0: 0, z0: 0 };
+const SPOT = { x: 0, z: 0, heading: 0 };
 const PELLET_RETURN = 0.7; // share of the lost mass that lands on the ground as pellets
 const PELLET_MAX = 5;
 const PELLET_CAP = 150;
@@ -217,7 +256,41 @@ export type GameEvent =
   /** London: the Pearly Lights laid a trail of buttons from (x, z) to a treasure at (tx, tz). */
   | { type: 'pearly'; who: number; x: number; z: number; tx: number; tz: number }
   /** London: a pearl button eaten. */
-  | { type: 'button'; who: number; x: number; z: number; points: number };
+  | { type: 'button'; who: number; x: number; z: number; points: number }
+  /** London: Big Ben strikes: BONG `k` + 1 of `n`, and a ring of golden treats bursts out round (x, z). */
+  | { type: 'bong'; k: number; n: number; x: number; z: number }
+  /** London: `who` was on Tower Bridge as it rose: WHEE! down the ramp, landing at (x, z). */
+  | { type: 'launch'; who: number; x: number; z: number }
+  /** London: `who` got on (`on`) or off the London Eye or the river bus. */
+  | { type: 'ride'; who: number; by: CarrierKind; on: boolean; x: number; z: number }
+  /** London: `who` took the Tube from station `from` to `to` (indices into the stage's portals), popping out at (x, z). */
+  | { type: 'warp'; who: number; from: number; to: number; x: number; z: number }
+  /** London: `who` stepped onto the wobbly Millennium Bridge. */
+  | { type: 'wobble'; who: number; x: number; z: number }
+  /** London: the Red Arrows flew over `who`: a red, white and blue trail for the rest of the run. */
+  | { type: 'arrows'; who: number; x: number; z: number }
+  /** London: a sparkle from the fireworks finale landed on `who`: a gem. */
+  | { type: 'treat'; who: number; x: number; z: number };
+
+/**
+ * Where a lane's vehicles must pull up while Tower Bridge is shut: just short of each place the lane
+ * runs onto the span (as distances along the lane, for the front bumper).
+ */
+function spanStopLines(lane: Lane, span: Box): number[] {
+  const out: number[] = [];
+  const at = { x: 0, z: 0 };
+  const on = (s: number) => {
+    pointAt(lane, s, at);
+    return Math.abs(at.x - span.x) < span.w / 2 + 1 && Math.abs(at.z - span.z) < span.d / 2 + 1;
+  };
+  let was = on(0);
+  for (let s = 0.25; s <= lane.length; s += 0.25) {
+    const now = on(s);
+    if (now && !was) out.push(s - 1);
+    was = now;
+  }
+  return out;
+}
 
 /** Terrain with only bounds and solids: water counts as open. */
 const dryTerrain = (t: Terrain): Terrain => ({ bounds: t.bounds, solidBoxes: t.solidBoxes, solidCircles: t.solidCircles });
@@ -279,6 +352,7 @@ export class World {
   private readonly p = { x: 0, z: 0 };
   private readonly loc = { f: 0, l: 0 };
   private readonly loc2 = { f: 0, l: 0 };
+  private readonly landSpot = { x: 0, z: 0 };
   /** The stage with its rivers taken out (just the solids), for things that may cross water. */
   private dryStage: Terrain | null = null;
   /** Miss Sami's little natter with the mum: when she next says something, if the stage has her. */
@@ -299,6 +373,30 @@ export class World {
   private readonly tripHeld: number[] = [];
   /** Which difficulty this world runs at: rival personalities, food count, whether bots get upgrades. */
   readonly rules: Rules;
+  // London's set pieces (A6). All idle (null, empty) on a stage without them.
+  /** Where they happen, and the room's flavour (which ship, which way the jets fly): sent to phones in welcome. */
+  private readonly sp: SetPieceSpots | null;
+  readonly setPieceSeed: number;
+  /** The stage's own bridges (Tower Bridge down); `stage.bridges` is swapped for the lifted set while it is up. */
+  private readonly bridgesDown: readonly Box[];
+  /** Per lane: the distances along it where its vehicles must stop short of Tower Bridge's span while it is shut. */
+  private readonly spanStops: number[][] = [];
+  /** The Changing of the Guard this tick (a pure function of the tick: the phones work it out too), as solids. */
+  readonly marchers: Marcher[] = [];
+  marcherCount = 0;
+  private readonly paradeSolids: Circle[] = [];
+  /** What a snake bumps into while the parade is out: the rocks and log, plus the marchers. */
+  private readonly withParade: Circle[] = [];
+  /** Per snake: Tube, Eye and boat cooldowns (s), on the wobbly bridge last tick, and held against the parade (s). */
+  private readonly tubeCool: number[] = [];
+  /** Per snake: the station its head was in last tick (−1: none). The Tube takes you as you step in, not while you stand. */
+  private readonly tubeAt: number[] = [];
+  private readonly eyeCool: number[] = [];
+  private readonly boatCool: number[] = [];
+  private readonly wobbling: boolean[] = [];
+  private readonly paradeHeld: number[] = [];
+  /** Where the next borrowed food is looked for (round and round the list). */
+  private borrowAt = 0;
 
   /**
    * Solo: `new World(seed, look, rules)` seats the player at 0 and four rivals after them.
@@ -308,7 +406,11 @@ export class World {
   constructor(seed = 1, playerLook: SnakeLook | null = PLAYER_LOOK, rules: Rules = rulesFor('normal'), stage: Stage = SCHOOL) {
     this.rng = new Rng(seed);
     this.rules = rules;
-    this.stage = stage;
+    // A stage with set pieces changes under the snakes (Tower Bridge lifts): this world gets its own copy.
+    this.stage = stage.setPieces ? { ...stage } : stage;
+    this.sp = stage.setPieces ?? null;
+    this.setPieceSeed = this.sp ? setPieceSeedFor(seed) : 0;
+    this.bridgesDown = stage.bridges ?? [];
     this.cooper = new Cooper(stage.cooper);
     this.hazards = makeHazards(this.rng, stage);
     // What the snake bounces off: the rocks, plus the fallen log (the children clamber it instead).
@@ -361,6 +463,7 @@ export class World {
     if (stage.routes && stage.traffic) {
       for (const r of stage.routes) this.lanes.push(makeLane(r, stage.zebras ?? []));
       for (const v of makeVehicles(stage.traffic, stage.routes, this.lanes)) this.vehicles.push(v);
+      if (this.sp) for (const lane of this.lanes) this.spanStops.push(spanStopLines(lane, this.sp.span));
     }
     // London's Crown Jewels: last, and no RNG at all on a stage without them.
     for (const t of makeTreasures(stage, this.rng)) this.treasures.push(t);
@@ -459,6 +562,7 @@ export class World {
     const dt = STEP;
     const c = this.cooper;
 
+    if (this.sp) this.setPieces(this.sp);
     c.update(this, dt);
     for (const a of this.animals) updateAnimal(a, this, dt);
     this.updatePredators(dt);
@@ -484,6 +588,12 @@ export class World {
       // London's timers run down whether or not the snake is moving.
       if (s.teaFor > 0) s.teaFor -= dt;
       if (s.teaCool > 0) s.teaCool -= dt;
+      // London: on the Eye or the river bus, the ride moves you (and you cannot be touched).
+      if (s.carried) {
+        this.carry(s, this.sp!);
+        continue;
+      }
+      if (s.launchFor > 0) s.launchFor -= dt;
       const bot = this.bots.get(s);
       if (s.awayFor > 0) {
         s.awayFor -= dt;
@@ -512,14 +622,17 @@ export class World {
       if (this.puddles.length > 0 && !flying && this.puddle(s)) pace *= PUDDLE_ZOOM;
       if (s.teaFor > 0) pace *= TEA_ZOOM;
       if (this.buskers.length > 0 && this.dancing(s)) pace *= BUSK_ZOOM;
+      if (s.launchFor > 0) pace *= LAUNCH_ZOOM;
       s.speedFactor += (pace - s.speedFactor) * Math.min(1, dt * 4);
-      s.update(input, dt, !s.slowed, this.stage, this.snakeSolids);
+      // The parade is a moving wall, but never a trap: held against it a while, you are let through.
+      const solids = this.marcherCount > 0 && (this.paradeHeld[s.id] ?? 0) <= PARADE_LET_THROUGH ? this.withParade : this.snakeSolids;
+      s.update(input, dt, !s.slowed, this.stage, solids);
 
       const ouch = this.bonkRock(s);
       if (s.touchingWall && !s.wasTouchingWall && !ouch && s.bumpQuiet <= 0 && s.immune <= 0) {
         s.bumpQuiet = BUMP_QUIET;
         const g = this.stage.guard;
-        const guard = g !== undefined && Math.hypot(s.x - g.x, s.z - g.z) < s.radius + 1.2;
+        const guard = (g !== undefined && Math.hypot(s.x - g.x, s.z - g.z) < s.radius + 1.2) || this.byMarcher(s, 0.1);
         this.events.push({ type: 'bump', who: s.id, what: guard ? 'guard' : 'wall' });
       }
       if (this.stage.guard) this.lapGuard(s, dt);
@@ -527,6 +640,7 @@ export class World {
       if (!flying) {
         this.bumpCooper(s, dt);
         this.meetKids(s, dt);
+        if (this.sp) this.meetSetPieces(s, this.sp, dt);
       }
       this.meetAnimals(s, dt, flying);
       this.meetCreatures(s);
@@ -559,7 +673,7 @@ export class World {
 
     // London's traffic: everyone out of the buses and cabs (a frozen or paused snake too; it is
     // blinking then, so it is only nudged, never bonked).
-    if (this.vehicles.length > 0) for (const s of this.snakes) if (s.alive && !s.hasMagic('wings')) this.meetVehicles(s, dt);
+    if (this.vehicles.length > 0) for (const s of this.snakes) if (s.alive && !s.hasMagic('wings') && !s.carried) this.meetVehicles(s, dt);
     for (const s of this.snakes) if (s.alive) s.sampleBody();
     this.bonkSnakes();
     this.expirePellets();
@@ -1151,15 +1265,17 @@ export class World {
       n++;
     };
     for (const s of this.snakes) {
-      if (!s.alive) continue;
+      if (!s.alive || s.carried) continue;
       add(s.x, s.z, s.radius);
       for (let i = 0; i < s.bodyCount; i++) add(s.body[i * 2], s.body[i * 2 + 1], s.radius);
     }
     this.walkers.length = n;
+    // London: Tower Bridge shut for a lift (from the first bell till it is down): stop short of the span.
+    const shut = this.sp !== null && spanClosed(this.tick);
     for (const v of this.vehicles) {
       driveVehicle(v, this.lanes[v.route], this.vehicles, this.walkers, dt, {
         ding: (veh, honk) => this.events.push({ type: 'ding', kind: veh.kind, honk, x: veh.x, z: veh.z }),
-      });
+      }, shut ? this.spanStops[v.route] : undefined);
     }
   }
 
@@ -1713,7 +1829,7 @@ export class World {
 
   /** Out of sight of the beasts and the rivals: hidden (Fox Trick, Boo!) or up in the air (Dragon Wings). */
   private unseen(s: Snake): boolean {
-    return s.hasMagic('hidden') || s.hasMagic('wings');
+    return s.hasMagic('hidden') || s.hasMagic('wings') || s.carried !== null;
   }
 
   /** Rise Again: if the phoenix is with this snake, it undoes the hit about to land. True if it did. */
@@ -1738,31 +1854,39 @@ export class World {
    * nearest spot that is, searched ring by ring outward (ahead first). Never in a solid or the river.
    */
   land(s: Snake): void {
-    const r = s.radius + 0.3;
-    let x = s.x;
-    let z = s.z;
-    search: if (!this.landable(x, z, r)) {
-      for (let ring = 1; ring <= 120; ring++) {
-        const d = ring * 0.6;
-        const n = Math.max(8, Math.ceil(d * 5));
-        for (let k = 0; k < n; k++) {
-          const a = s.heading + (k % 2 === 0 ? 1 : -1) * Math.ceil(k / 2) * ((Math.PI * 2) / n);
-          const cx = s.x + Math.cos(a) * d;
-          const cz = s.z + Math.sin(a) * d;
-          if (!this.landable(cx, cz, r)) continue;
-          x = cx;
-          z = cz;
-          break search;
-        }
-      }
-      x = this.stage.fallbackSpot.x;
-      z = this.stage.fallbackSpot.z;
-    }
+    const { x, z } = this.landing(s.x, s.z, s.heading, s.radius + 0.3);
     // Moved to free ground: lay the body out afresh there, so no trail is left strung through a wall.
     if (x !== s.x || z !== s.z) s.placeAt(x, z, s.heading);
     s.touchingWall = s.wasTouchingWall = false;
     s.immune = Math.max(s.immune, 1);
     this.events.push({ type: 'land', who: s.id, x, z });
+  }
+
+  /**
+   * The nearest spot to (x0, z0) where a snake of radius `r` could come down (landable), searched ring
+   * by ring outward, the way it faces (`heading`) first; the stage's fallback spot if nothing is near.
+   */
+  private landing(x0: number, z0: number, heading: number, r: number): { x: number; z: number } {
+    const out = this.landSpot;
+    out.x = x0;
+    out.z = z0;
+    if (this.landable(x0, z0, r)) return out;
+    for (let ring = 1; ring <= 120; ring++) {
+      const d = ring * 0.6;
+      const n = Math.max(8, Math.ceil(d * 5));
+      for (let k = 0; k < n; k++) {
+        const a = heading + (k % 2 === 0 ? 1 : -1) * Math.ceil(k / 2) * ((Math.PI * 2) / n);
+        const cx = x0 + Math.cos(a) * d;
+        const cz = z0 + Math.sin(a) * d;
+        if (!this.landable(cx, cz, r)) continue;
+        out.x = cx;
+        out.z = cz;
+        return out;
+      }
+    }
+    out.x = this.stage.fallbackSpot.x;
+    out.z = this.stage.fallbackSpot.z;
+    return out;
   }
 
   /** Mighty Roar: beasts nearby run (lions home, ravens to the Tower); rivals are gently blown back. */
@@ -2149,6 +2273,262 @@ export class World {
       if (lost > 0) this.shed(o, lost, PELLET_RETURN, 4);
       this.events.push({ type: 'sneeze', who: o.id, by: s.id, x: o.x, z: o.z });
     }
+  }
+
+  // ---------------------------------------------------------------- London's set pieces (A6)
+
+  /**
+   * The set pieces' tick: Tower Bridge's road (river while it is up), the parade's marchers, and
+   * whatever happens on this exact tick: the launch as the bascules rise, a BONG, the confetti, a
+   * firework, the Red Arrows overhead. All keyed off the tick (setPieces.ts): the phones agree.
+   */
+  private setPieces(sp: SetPieceSpots): void {
+    const t = this.tick;
+    this.stage.bridges = bridgesAt(sp, this.bridgesDown, t);
+    this.marcherCount = paradeAt(t, sp.parade, this.marchers);
+    this.withParade.length = 0;
+    if (this.marcherCount > 0) {
+      for (const h of this.snakeSolids) this.withParade.push(h);
+      for (let i = 0; i < this.marcherCount; i++) {
+        const c = this.paradeSolids[i] ?? (this.paradeSolids[i] = { x: 0, z: 0, r: MARCHER_R });
+        c.x = this.marchers[i].x;
+        c.z = this.marchers[i].z;
+        this.withParade.push(c);
+      }
+    }
+    if (liftRises(t)) this.liftSpan(sp);
+    const bong = bongAt(t);
+    if (bong) this.bong(sp, bong.k, bong.n);
+    if (confettiAt(t, sp.parade, SPOT)) this.confetti(SPOT.x, SPOT.z, t);
+    if (burstAt(t, sp, this.setPieceSeed, BURST)) this.firework(sp, BURST);
+    if (arrowsAt(t, sp, this.setPieceSeed, ARROWS)) this.flyPast(ARROWS);
+  }
+
+  /** Is the snake's head against (within `slack` of touching) one of the parade's marchers? */
+  private byMarcher(s: Snake, slack: number): boolean {
+    for (let i = 0; i < this.marcherCount; i++) {
+      const m = this.marchers[i];
+      const reach = s.radius + MARCHER_R + slack;
+      if ((s.x - m.x) ** 2 + (s.z - m.z) ** 2 < reach * reach) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Move some food, from well away from everyone, to (x, z): how the set pieces scatter treats
+   * without growing the food list (so a room's food deltas stay as they are). False if none was free.
+   */
+  private borrowFood(x: number, z: number, golden: boolean, kind?: FoodKind): boolean {
+    const n = this.foods.length;
+    for (let tries = 0; tries < n; tries++) {
+      const f = this.foods[this.borrowAt];
+      this.borrowAt = (this.borrowAt + 1) % n;
+      if (f.born >= this.tick - 60 || !this.clearOfSnakes(f.x, f.z, BORROW_CLEAR)) continue;
+      f.x = x;
+      f.z = z;
+      f.golden = golden;
+      if (kind) f.kind = kind;
+      f.born = this.tick;
+      return true;
+    }
+    return false;
+  }
+
+  /** BONG! A ring of golden treats bursts out round Big Ben (wider each bong, turning a little each time). */
+  private bong(sp: SetPieceSpots, k: number, n: number): void {
+    const c = sp.bigBen;
+    const r = 7 + (k % 3) * 2;
+    const ring = Math.max(2, Math.min(BONG_RING, Math.round(BONG_MINUTE / n)));
+    for (let i = 0; i < ring; i++) {
+      const a = (i / ring) * Math.PI * 2 + k * 0.7;
+      const x = c.x + Math.cos(a) * r;
+      const z = c.z + Math.sin(a) * r;
+      if (isFree(this.stage, x, z, 0.6, this.hazards)) this.borrowFood(x, z, true);
+    }
+    this.events.push({ type: 'bong', k, n, x: c.x, z: c.z });
+  }
+
+  /**
+   * The bascules start to rise: anyone on them slides down the ramp to the nearer end, WHEE!, with
+   * a burst of speed; anything else standing on them steps off. The span is river from now on.
+   */
+  private liftSpan(sp: SetPieceSpots): void {
+    const span = sp.span;
+    const end = (x: number, out: number) => (x < span.x ? span.x - span.w / 2 - out : span.x + span.w / 2 + out);
+    // A cab still on it (held up crossing during the bells) is waved on across, first.
+    for (const v of this.vehicles) {
+      const reach = VEHICLES[v.kind].length / 2 + 0.5;
+      for (let k = 0; k < 160 && Math.abs(v.x - span.x) < span.w / 2 + reach && Math.abs(v.z - span.z) < span.d / 2 + 0.5; k++) {
+        placeVehicle(v, this.lanes[v.route], v.s + 0.25);
+      }
+    }
+    for (const s of this.snakes) {
+      if (!s.alive || s.carried || s.hasMagic('wings') || !inBox(span, s.x, s.z)) continue;
+      const heading = s.x < span.x ? Math.PI : 0;
+      const z = Math.min(span.z + span.d / 2 - 1.2, Math.max(span.z - span.d / 2 + 1.2, s.z));
+      const at = this.landing(end(s.x, 3.5), z, heading, s.radius + 0.3);
+      s.placeAt(at.x, at.z, heading);
+      s.launchFor = LAUNCH_FOR;
+      s.immune = Math.max(s.immune, 1.5);
+      s.touchingWall = s.wasTouchingWall = false;
+      this.events.push({ type: 'launch', who: s.id, x: at.x, z: at.z });
+    }
+    for (const a of this.animals) if (inBox(span, a.x, a.z)) a.x = end(a.x, 1.5);
+    for (const c of this.creatures) if (inBox(span, c.x, c.z)) c.x = end(c.x, 1.5);
+    for (const p of this.predators) if (p.kind !== 'raven' && inBox(span, p.x, p.z)) p.x = end(p.x, 1.5);
+  }
+
+  /** Sweets drop behind the parade, for whoever is following the band (only if someone is). */
+  private confetti(x: number, z: number, t: number): void {
+    if (this.clearOfSnakes(x, z, 10) || !isFree(this.stage, x, z, 0.5, this.hazards)) return;
+    this.borrowFood(x, z, false, CONFETTI[Math.floor(t / 120) % CONFETTI.length]);
+  }
+
+  /** A firework bursts over the river: a golden treat lands on the bank below; the finale's sparkles are gems. */
+  private firework(sp: SetPieceSpots, b: Burst): void {
+    alongPath(sp.river, projectOnPath(sp.river, b.x, b.z), SPOT);
+    for (const side of b.k % 2 === 0 ? [1, -1] : [-1, 1]) {
+      const x = b.x - Math.sin(SPOT.heading) * 9.5 * side;
+      const z = b.z + Math.cos(SPOT.heading) * 9.5 * side;
+      if (isFree(this.stage, x, z, 0.6, this.hazards) && this.borrowFood(x, z, true)) break;
+    }
+    if (!b.finale) return;
+    for (const s of this.snakes) {
+      if (s.alive && Math.hypot(s.x - b.x, s.z - b.z) < FINALE_REACH) this.events.push({ type: 'treat', who: s.id, x: s.x, z: s.z });
+    }
+  }
+
+  /** The Red Arrows overhead: whoever is under the lead jet's track gets the red, white and blue trail. */
+  private flyPast(a: Arrows): void {
+    for (const s of this.snakes) {
+      if (!s.alive || s.rwb || Math.hypot(s.x - a.x, s.z - a.z) > ARROWS_REACH) continue;
+      s.rwb = true;
+      this.events.push({ type: 'arrows', who: s.id, x: s.x, z: s.z });
+    }
+  }
+
+  /** A snake slithering about London's set pieces: the wobbly bridge, the Tube, the Eye, the river bus, the parade. */
+  private meetSetPieces(s: Snake, sp: SetPieceSpots, dt: number): void {
+    const id = s.id;
+    this.tubeCool[id] = Math.max(0, (this.tubeCool[id] ?? 0) - dt);
+    this.eyeCool[id] = Math.max(0, (this.eyeCool[id] ?? 0) - dt);
+    this.boatCool[id] = Math.max(0, (this.boatCool[id] ?? 0) - dt);
+    // Pressed against the parade: the clock toward being let through.
+    this.paradeHeld[id] = this.marcherCount > 0 && this.byMarcher(s, 0.05) ? (this.paradeHeld[id] ?? 0) + dt : 0;
+
+    // The Millennium Bridge sways: a lazy sideways push, a bit more for a bigger snake (never off the deck).
+    const deck = sp.millennium;
+    const on = !s.swimming && inBox(deck, s.x, s.z);
+    if (on) {
+      if (!this.wobbling[id]) this.events.push({ type: 'wobble', who: id, x: s.x, z: s.z });
+      const nx = s.x + WOBBLE_SPEED * (0.6 + s.radius) * wobbleAt(this.tick) * dt;
+      if (Math.abs(nx - deck.x) <= deck.w / 2 - 0.4) s.x = nx;
+    }
+    this.wobbling[id] = on;
+
+    // The Tube: step into one station, out at the next. Arriving (or starting) in one, you must step out first.
+    const ports = this.stage.portals;
+    if (ports) {
+      let inside = -1;
+      for (let i = 0; i < ports.length && inside < 0; i++) if (Math.hypot(s.x - ports[i].at.x, s.z - ports[i].at.z) <= TUBE_REACH) inside = i;
+      const was = this.tubeAt[id] ?? inside;
+      this.tubeAt[id] = inside;
+      if (inside >= 0 && inside !== was && this.tubeCool[id] <= 0) {
+        this.warp(s, inside);
+        return;
+      }
+    }
+
+    // The London Eye: into the capsule at the bottom, any size (one capsule, one ride).
+    const eye = sp.eye.board;
+    if (this.eyeCool[id] <= 0 && Math.hypot(s.x - eye.x, s.z - eye.z) < s.radius + 0.9) {
+      s.carried = { by: 'eye', until: this.tick + EYE_RIDE, pier: -1 };
+      s.x = eye.x;
+      s.z = eye.z;
+      s.immune = Math.max(s.immune, 0.5);
+      this.events.push({ type: 'ride', who: id, by: 'eye', on: true, x: eye.x, z: eye.z });
+      return;
+    }
+
+    // The river bus: on at a pier while it is tied up there (and not about to cast off).
+    if (this.boatCool[id] <= 0) {
+      boatAt(this.tick, sp, BOAT);
+      const pier = BOAT.dock >= 0 ? sp.piers[BOAT.dock] : null;
+      if (pier && BOAT.leaveIn >= 60 && Math.hypot(s.x - pier.board.x, s.z - pier.board.z) < s.radius + 1) {
+        s.carried = { by: 'boat', until: -1, pier: BOAT.next };
+        s.immune = Math.max(s.immune, 0.5);
+        this.events.push({ type: 'ride', who: id, by: 'boat', on: true, x: pier.board.x, z: pier.board.z });
+      }
+    }
+  }
+
+  /** Down the Tube at station `i`, up at the next one, facing the way its body lies free. "Mind the gap!" */
+  private warp(s: Snake, i: number): void {
+    const ports = this.stage.portals!;
+    const j = (i + 1) % ports.length;
+    const to = ports[j].at;
+    s.placeAt(to.x, to.z, this.exitHeading(to.x, to.z, s.length));
+    s.immune = Math.max(s.immune, TUBE_GRACE);
+    s.touchingWall = s.wasTouchingWall = false;
+    this.tubeCool[s.id] = TUBE_COOL;
+    this.tubeAt[s.id] = j;
+    this.events.push({ type: 'warp', who: s.id, from: i, to: j, x: to.x, z: to.z });
+  }
+
+  /** The heading out of a spot whose body (laid straight behind) crosses the least: the first of the best. */
+  private exitHeading(x: number, z: number, length: number): number {
+    let best = 0;
+    let fewest = Infinity;
+    for (let k = 0; k < 16 && fewest > 0; k++) {
+      const heading = wrapAngle((k * Math.PI) / 8);
+      let blocked = 0;
+      for (let d = 1; d <= Math.min(length, 20); d += 1) {
+        if (!isFree(this.stage, x - Math.cos(heading) * d, z - Math.sin(heading) * d, 0.4, this.hazards)) blocked++;
+      }
+      if (blocked < fewest) {
+        fewest = blocked;
+        best = heading;
+      }
+    }
+    return best;
+  }
+
+  /** On a ride: the Eye holds you up in its capsule till the turn is done; the boat carries you to its next pier. */
+  private carry(s: Snake, sp: SetPieceSpots): void {
+    const c = s.carried!;
+    s.immune = Math.max(s.immune, 0.5);
+    s.dashing = false;
+    if (c.by === 'eye') {
+      if (this.tick >= c.until) this.alight(s, sp.eye.exit.x, sp.eye.exit.z, sp.eye.heading);
+      return;
+    }
+    boatAt(this.tick, sp, BOAT);
+    if (BOAT.dock === c.pier) {
+      const p = sp.piers[c.pier];
+      this.alight(s, p.board.x, p.board.z, p.out);
+      return;
+    }
+    s.follow(BOAT.x, BOAT.z, BOAT.heading);
+  }
+
+  /** Off the ride, onto free ground near (x, z), with a little bonus for the trip. */
+  private alight(s: Snake, x: number, z: number, heading: number): void {
+    const by = s.carried!.by;
+    const at = this.landing(x, z, heading, s.radius + 0.3);
+    s.placeAt(at.x, at.z, heading);
+    s.carried = null;
+    s.immune = Math.max(s.immune, 1.5);
+    s.touchingWall = s.wasTouchingWall = false;
+    if (by === 'eye') {
+      this.eyeCool[s.id] = EYE_COOL;
+      s.gain(EYE_GROWTH);
+      s.score += EYE_SCORE;
+    } else {
+      this.boatCool[s.id] = BOAT_COOL;
+      s.gain(BOAT_GROWTH);
+      s.score += BOAT_SCORE;
+    }
+    this.events.push({ type: 'ride', who: s.id, by, on: false, x: at.x, z: at.z });
   }
 
   // ---------------------------------------------------------------- snake on snake

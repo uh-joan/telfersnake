@@ -198,6 +198,86 @@ export class Hud {
   }
   private flashEl: HTMLDivElement | null = null;
 
+  /**
+   * London's Tube: the screen rushes down a tunnel, and a little tube map lights the line from
+   * station `from` to `to` (a train dot runs along it). `spots` are the stations on the map; `names`
+   * their (place) names, only the two ends of the trip are written.
+   */
+  tube(names: readonly string[], spots: readonly { x: number; z: number }[], from: number, to: number): void {
+    const B = this.stage.bounds;
+    const W = 240;
+    const H = Math.round((W * (B.maxZ - B.minZ)) / (B.maxX - B.minX));
+    const X = (x: number) => 14 + ((x - B.minX) / (B.maxX - B.minX)) * (W - 28);
+    const Y = (z: number) => 14 + ((z - B.minZ) / (B.maxZ - B.minZ)) * (H - 28);
+    const NS = 'http://www.w3.org/2000/svg';
+    const el = (tag: string, attrs: Record<string, string | number>) => {
+      const e = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+      return e;
+    };
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'tube-map', role: 'img', 'aria-label': `Tube: ${names[from]} to ${names[to]}` });
+    const loop = spots.map((p) => `${X(p.x).toFixed(1)},${Y(p.z).toFixed(1)}`).join(' ');
+    svg.append(el('polygon', { points: loop, class: 'tube-line' }));
+    const a = spots[from];
+    const b = spots[to];
+    const trip = el('line', { x1: X(a.x), y1: Y(a.z), x2: X(b.x), y2: Y(b.z), class: 'tube-trip' });
+    svg.append(trip);
+    spots.forEach((p, i) => svg.append(el('circle', { cx: X(p.x), cy: Y(p.z), r: i === from || i === to ? 7 : 5, class: i === to ? 'tube-stop here' : 'tube-stop' })));
+    const train = el('circle', { cx: X(a.x), cy: Y(a.z), r: 5, class: 'tube-train' });
+    train.append(el('animate', { attributeName: 'cx', from: X(a.x), to: X(b.x), dur: '0.9s', begin: '0.25s', fill: 'freeze' }));
+    train.append(el('animate', { attributeName: 'cy', from: Y(a.z), to: Y(b.z), dur: '0.9s', begin: '0.25s', fill: 'freeze' }));
+    svg.append(train);
+    for (const [i, cls] of [[from, 'from'], [to, 'to']] as const) {
+      const t = el('text', { x: X(spots[i].x), y: Y(spots[i].z) - 11, class: `tube-name ${cls}` });
+      t.textContent = names[i];
+      svg.append(t);
+    }
+    if (!this.tubeEl) {
+      this.tubeEl = document.createElement('div');
+      this.tubeEl.className = 'tube-whoosh';
+      this.tubeEl.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(this.tubeEl);
+    }
+    const tunnel = document.createElement('div');
+    tunnel.className = 'tube-tunnel';
+    const card = document.createElement('div');
+    card.className = 'tube-card';
+    card.append(svg);
+    this.tubeEl.replaceChildren(tunnel, card);
+    this.tubeEl.classList.remove('show');
+    void this.tubeEl.offsetWidth; // restart the CSS animation
+    this.tubeEl.classList.add('show');
+  }
+  private tubeEl: HTMLDivElement | null = null;
+
+  /**
+   * Up on the London Eye: little pins over every Crown Jewel and magic creature on the map, so the
+   * bird's-eye view is a scout. `on` false hides them.
+   */
+  pins(world: WorldView, stage: Stage, on: boolean): void {
+    let n = 0;
+    const pin = (x: number, z: number, icon: string) => {
+      stage.project(x, 2, z, this.sp);
+      if (!this.sp.visible) return;
+      let el = this.pinEls[n];
+      if (!el) {
+        el = this.pinEls[n] = document.createElement('div');
+        el.className = 'pin';
+        this.labels.appendChild(el);
+      }
+      if (el.textContent !== icon) el.textContent = icon;
+      el.style.visibility = 'visible';
+      el.style.transform = `translate(${this.sp.x}px, ${this.sp.y}px) translate(-50%, -100%)`;
+      n++;
+    };
+    if (on) {
+      for (const t of world.treasures) if (t.respawnIn <= 0) pin(t.x, t.z, '💎');
+      for (const c of world.creatures) if (c.respawnIn <= 0) pin(c.x, c.z, '✨');
+    }
+    for (let i = n; i < this.pinEls.length; i++) this.pinEls[i].style.visibility = 'hidden';
+  }
+  private readonly pinEls: HTMLDivElement[] = [];
+
   announce(title: string, sub = ''): void {
     this.bannerTitle.textContent = title;
     this.bannerSub.textContent = sub;
@@ -427,8 +507,9 @@ export class Hud {
     c.fillStyle = '#fffaf0';
     for (const b of world.buttons) c.fillRect(X(b.x) - 1, Z(b.z) - 1, 2, 2);
 
-    // Fantastic creatures are hidden — unless Owl Eyes is active, which reveals them as violet stars.
-    if (world.snake.hasMagic('owl')) {
+    // Fantastic creatures are hidden — unless Owl Eyes is active (or you are up on the London Eye),
+    // which reveals them as violet stars.
+    if (world.snake.hasMagic('owl') || world.snake.carried?.by === 'eye') {
       c.fillStyle = '#b197fc';
       for (const cr of world.creatures) {
         if (cr.respawnIn > 0) continue;

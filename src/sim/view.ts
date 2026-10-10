@@ -28,6 +28,8 @@ export interface CooperState {
  */
 export interface WorldView {
   readonly tick: number;
+  /** London's set pieces: the room's flavour (setPieces.ts). 0 elsewhere. */
+  readonly setPieceSeed: number;
   /** The place being played: the HUD reads it to paint the right minimap. */
   readonly stage: Stage;
   /** Which snake belongs to the person looking at this screen. */

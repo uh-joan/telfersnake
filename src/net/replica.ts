@@ -9,8 +9,10 @@ import { isSolidHazard } from '../sim/hazards';
 import type { Circle } from '../sim/layout';
 import { blankVehicle, type Vehicle, VEHICLE_KINDS, VEHICLES } from '../sim/vehicles';
 import { blankTreasure, type Button, type Treasure } from '../sim/treasures';
-import { type Input, Snake } from '../sim/snake';
+import { CARRIERS, type Input, Snake } from '../sim/snake';
 import type { Stage } from '../sim/stage';
+import { applyTerrain, MARCHER_R, type Marcher, paradeAt } from '../sim/setPieces';
+import type { Box } from '../sim/layout';
 import type { CardId } from '../sim/upgrades';
 import type { CooperState, WorldView } from '../sim/view';
 import { beePosition, type GameEvent, STEP } from '../sim/world';
@@ -48,6 +50,11 @@ export class Replica implements WorldView {
   tick = 0;
   readonly me: number;
   readonly room: string;
+  /** The place, as this phone plays it: a stage with set pieces is copied, its bridges set from the tick. */
+  readonly stage: Stage;
+  readonly setPieceSeed: number;
+  private readonly bridgesDown: readonly Box[];
+  private readonly marchers: Marcher[] = [];
   readonly snakes: Snake[] = [];
   readonly hats: string[] = [];
   readonly trails: string[] = [];
@@ -95,7 +102,10 @@ export class Replica implements WorldView {
   private shownHeading = 0;
   private wasAlive: boolean[] = [];
 
-  constructor(welcome: Welcome, readonly stage: Stage, private readonly sendInput: (q: number, input: Input) => void) {
+  constructor(welcome: Welcome, stage: Stage, private readonly sendInput: (q: number, input: Input) => void) {
+    this.stage = stage.setPieces ? { ...stage } : stage;
+    this.bridgesDown = stage.bridges ?? [];
+    this.setPieceSeed = welcome.setPieceSeed ?? 0;
     this.me = welcome.me;
     this.room = welcome.room;
     this.tick = this.renderTick = welcome.tick;
@@ -216,6 +226,10 @@ export class Replica implements WorldView {
       if (extra) {
         s.jewels = extra[0];
         s.crowned = extra[1] === 1;
+        // London's rides (the server moves a rider: no predicting it) and the Red Arrows' trail.
+        const by = CARRIERS[(extra[2] ?? 0) - 1];
+        s.carried = by ? { by, until: -1, pier: -1 } : null;
+        s.rwb = extra[3] === 1;
       }
       s.setUpgrades(unpackUpgrades(upgrades));
       s.helmetReady = (flags & HELMET_READY) !== 0;
@@ -267,7 +281,7 @@ export class Replica implements WorldView {
     const mine = this.snake;
     this.silentFor += dt;
     // Not heard from the server for a while: do not let my snake slide on alone through a frozen world.
-    const free = mine.alive && !this.cards && !this.away && !this.paused && !this.frozen && this.silentFor < 2;
+    const free = mine.alive && !this.cards && !this.away && !this.paused && !this.frozen && !mine.carried && this.silentFor < 2;
 
     this.updateBlockers();
     this.owed = Math.min(this.owed + dt, 0.25);
@@ -303,6 +317,15 @@ export class Replica implements WorldView {
     const b = this.blockers;
     b.length = 0;
     for (const h of this.solids) b.push(h);
+    // London's set pieces, worked out from the tick as the server does: Tower Bridge's span (river while
+    // it is up) and the parade's marchers. My snake runs about DELAY_TICKS ahead of the picture.
+    const sp = this.stage.setPieces;
+    if (sp) {
+      const now = this.tick + DELAY_TICKS;
+      applyTerrain(this.stage, sp, this.bridgesDown, now);
+      const n = paradeAt(now, sp.parade, this.marchers);
+      for (let i = 0; i < n; i++) b.push({ x: this.marchers[i].x, z: this.marchers[i].z, r: MARCHER_R });
+    }
     for (const v of this.vehicles) {
       if (v.route < 0) continue; // not placed yet
       const spec = VEHICLES[v.kind];

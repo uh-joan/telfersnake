@@ -20,6 +20,7 @@ import type { Box, Circle } from './layout';
 import { inBox } from './layout';
 import type { Rng } from './rng';
 import type { Landmark, Portal, Route, Spot, Stage, Terrain, WaterZone } from './stage';
+import { alongPath, type Pier, type SetPieceSpots } from './setPieces';
 import { laneLoop, type VehicleKind } from './vehicles';
 import { inWater } from './water';
 
@@ -50,6 +51,21 @@ export const MILLENNIUM_BRIDGE: Box = { x: 24, z: -6, w: 4, d: 22 };
 /** Tower Bridge's deck, east–west across the river's southward run (the towers stand on it, in the river). */
 export const TOWER_BRIDGE: Box = { x: 65, z: 30, w: 24, d: 6 };
 export const BRIDGES: Box[] = [WESTMINSTER_BRIDGE, MILLENNIUM_BRIDGE, TOWER_BRIDGE];
+/**
+ * Tower Bridge's two bascules: the road between the towers' inner faces (59.8 + 1.5 to 70.2 − 1.5),
+ * split down the middle. When they lift (A6) this span is river, and the deck is just its two ends.
+ */
+export const TOWER_BRIDGE_SPAN: Box = { x: 65, z: TOWER_BRIDGE.z, w: 7.4, d: TOWER_BRIDGE.d };
+const SPAN_W = TOWER_BRIDGE_SPAN.x - TOWER_BRIDGE_SPAN.w / 2;
+const SPAN_E = TOWER_BRIDGE_SPAN.x + TOWER_BRIDGE_SPAN.w / 2;
+const DECK_W = TOWER_BRIDGE.x - TOWER_BRIDGE.w / 2;
+const DECK_E = TOWER_BRIDGE.x + TOWER_BRIDGE.w / 2;
+/** The bridges while Tower Bridge is up: its span lifted out, its two ends still there. */
+export const BRIDGES_LIFTED: Box[] = [
+  WESTMINSTER_BRIDGE, MILLENNIUM_BRIDGE,
+  { x: (DECK_W + SPAN_W) / 2, z: TOWER_BRIDGE.z, w: SPAN_W - DECK_W, d: TOWER_BRIDGE.d },
+  { x: (SPAN_E + DECK_E) / 2, z: TOWER_BRIDGE.z, w: DECK_E - SPAN_E, d: TOWER_BRIDGE.d },
+];
 
 // ---------------------------------------------------------------- the twelve landmarks (footprints)
 
@@ -317,15 +333,61 @@ export const RAVEN_PERCHES: Spot[] = [
 ];
 export const RAVEN_PERCH_Y = 3.2;
 
-/** The Tube stations (they become portals in A6). Westminster is where you arrive. */
+/** The Tube stations: step in at one, pop out at the next (A6). Westminster is where you arrive. */
 export const TUBE: Portal[] = [
   { id: 'westminster', at: { x: -46, z: 8 } },
   { id: 'piccadilly', at: { x: -24, z: -56 } },
   { id: 'southken', at: { x: -62, z: 8 } },
   { id: 'bank', at: { x: 38, z: -46 } },
-  { id: 'towerhill', at: { x: 56, z: -30 } },
+  { id: 'towerhill', at: { x: 54, z: -34 } }, // off the cabs' lane
   { id: 'londonbridge', at: { x: 36, z: 32 } },
 ];
+
+/** The stations' names, for their roundel signs and the mini tube map (place names, in TUBE order). */
+export const TUBE_NAMES: Record<string, string> = {
+  westminster: 'WESTMINSTER', piccadilly: 'PICCADILLY', southken: 'SOUTH KEN',
+  bank: 'BANK', towerhill: 'TOWER HILL', londonbridge: 'LONDON BRIDGE',
+};
+
+// ---------------------------------------------------------------- the set pieces (A6)
+
+/**
+ * The river bus's piers: Westminster (on the Embankment, just downstream of the bridge), Bankside
+ * (by the Globe) and Tower (below the Tower's walls). Each boarding spot is dry bank a metre off the
+ * water, opposite where the boat ties up on the river's centre line.
+ */
+export const PIERS: Pier[] = [
+  { id: 'westminster', at: { x: -20.5, z: -5 }, board: { x: -27.7, z: -8.6 }, out: Math.atan2(-3.6, -7.2) },
+  { id: 'bankside', at: { x: 16, z: -9.2 }, board: { x: 13.7, z: -1.5 }, out: Math.atan2(7.7, -2.3) },
+  { id: 'tower', at: { x: 51.4, z: 7.4 }, board: { x: 54.1, z: -0.1 }, out: Math.atan2(-7.5, 2.7) },
+];
+
+/** Where the fireworks burst: evenly along the river from Westminster to Tower Bridge. */
+const FIREWORK_SPOTS: Spot[] = Array.from({ length: 9 }, (_, i) => {
+  const p = { x: 0, z: 0, heading: 0 };
+  alongPath(THAMES.path, 50 + i * 14, p);
+  return { x: p.x, z: p.z };
+});
+
+export const SET_PIECES: SetPieceSpots = {
+  bigBen: { x: BIG_BEN.x, z: BIG_BEN.z },
+  // The bottom capsule hangs over the strip of bank between the Eye's legs and the water.
+  eye: { board: { x: -6, z: -4.4 }, exit: { x: -1.5, z: -1.5 }, heading: 0 },
+  span: TOWER_BRIDGE_SPAN,
+  bridgesUp: BRIDGES_LIFTED,
+  millennium: MILLENNIUM_BRIDGE,
+  // From the Palace gates down the Mall, stopping short of Trafalgar's lions.
+  parade: [{ x: -35.5, z: -25.6 }, { x: -24, z: -33 }, { x: -20.5, z: -35.5 }],
+  piers: PIERS,
+  river: THAMES.path,
+  // Along the river, corner to corner, and north–south over Trafalgar Square.
+  arrows: [
+    [{ x: -100, z: 22 }, { x: 100, z: 4 }],
+    [{ x: -100, z: -62 }, { x: 100, z: 56 }],
+    [{ x: -22, z: -82 }, { x: 12, z: 82 }],
+  ],
+  fireworks: FIREWORK_SPOTS,
+};
 
 /**
  * You pop out of the Underground at Westminster, under Big Ben, facing the bridge. (The plan's
@@ -576,6 +638,8 @@ export const LONDON: Stage = {
   perches: RAVEN_PERCHES,
   landmarks: LANDMARKS,
   plinths: LION_PLINTHS,
+  portals: TUBE,
+  setPieces: SET_PIECES,
   cameraZoom: 0.9,
   paintMinimap: (c, X, Z, scale) => {
     const box = (b: Box) => c.fillRect(X(b.x - b.w / 2), Z(b.z - b.d / 2), b.w * scale, b.d * scale);
@@ -610,6 +674,17 @@ export const LONDON: Stage = {
     for (const b of SOLID_BOXES) box(b);
     for (const p of SOLID_CIRCLES) disc(p);
     for (const l of LANDMARKS) paintIcon(c, l.id, X(l.at.x), Z(l.at.z), scale);
+    // The Tube stations: a little red ring with a blue bar.
+    for (const t of TUBE) {
+      const r = 2.2 * scale;
+      c.lineWidth = Math.max(1.5, 0.9 * scale);
+      c.strokeStyle = '#dc241f';
+      c.beginPath();
+      c.arc(X(t.at.x), Z(t.at.z), r, 0, Math.PI * 2);
+      c.stroke();
+      c.fillStyle = '#1d2a8c';
+      c.fillRect(X(t.at.x) - r * 1.35, Z(t.at.z) - 0.45 * scale, r * 2.7, 0.9 * scale);
+    }
   },
 };
 

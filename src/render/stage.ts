@@ -27,6 +27,10 @@ const SUN_FROM = new THREE.Vector3(-30, 60, 25);
 const SHADOW_BOX = 42;
 const FOV_LANDSCAPE = 42;
 const FOV_PORTRAIT = 54; // a tall screen needs a wider lens, but not so wide the school looks tiny
+const CAMERA_FAR = 400;
+/** The bird's-eye view (London's Eye ride): half the width it tries to fit across the screen, and its furthest pull-back. */
+const OVERVIEW_HALF_WIDTH = 88;
+const OVERVIEW_MAX = 320;
 
 export interface ScreenPoint {
   x: number;
@@ -40,7 +44,7 @@ export interface ScreenPoint {
  */
 export class Stage {
   readonly scene = new THREE.Scene();
-  readonly camera = new THREE.PerspectiveCamera(FOV_LANDSCAPE, 1, 0.5, 400);
+  readonly camera = new THREE.PerspectiveCamera(FOV_LANDSCAPE, 1, 0.5, CAMERA_FAR);
   private readonly renderer: THREE.WebGLRenderer;
   private readonly hemi: THREE.HemisphereLight;
   private readonly sun: THREE.DirectionalLight;
@@ -52,6 +56,13 @@ export class Stage {
   private distance = 17;
   /** The stage's camera distance multiplier (Stage.cameraZoom): 1 everywhere but London. */
   zoom = 1;
+  /**
+   * London's Eye ride (A6): while true, the camera cranes up and out to a bird's-eye view of the
+   * whole map (`overviewOf`), then eases back down to the snake when it is false again.
+   */
+  overview = false;
+  private crane = 0;
+  private readonly overviewAt = new THREE.Vector3();
   private primed = false;
   private readonly v = new THREE.Vector3();
   width = 1;
@@ -147,8 +158,15 @@ export class Stage {
     return this.renderer.capabilities.maxTextureSize;
   }
 
+  /** Where the bird's-eye view looks (the middle of the map) and from how far: set per stage. */
+  overviewOf(x: number, z: number, distance: number): void {
+    this.overviewAt.set(x, distance, z);
+  }
+
   /** Ease the camera after the snake; pull back as it grows, and further in portrait. */
   follow(x: number, z: number, heading: number, radius: number, dt: number): void {
+    this.crane += ((this.overview ? 1 : 0) - this.crane) * (1 - Math.exp(-dt * 1.3));
+    if (this.crane < 0.001) this.crane = 0;
     // Zoomed to show roughly 10 m across at the start (portrait), so the snake and the school
     // read at a friendly size; it eases back as the snake grows and needs to see further.
     const pullBack = this.camera.aspect < 1 ? 1.4 : 1.15;
@@ -168,12 +186,22 @@ export class Stage {
       this.distance += (wantDistance - this.distance) * (1 - Math.exp(-dt * 1.5));
     }
 
-    this.camera.position.set(
-      this.focus.x,
-      Math.sin(TILT) * this.distance,
-      this.focus.z + Math.cos(TILT) * this.distance,
-    );
-    this.camera.lookAt(this.focus);
+    // Up on the London Eye: blend toward the bird's-eye view of the whole map.
+    const k = this.crane * this.crane * (3 - 2 * this.crane);
+    const fx = this.focus.x + (this.overviewAt.x - this.focus.x) * k;
+    const fz = this.focus.z + (this.overviewAt.z - this.focus.z) * k;
+    // A tall phone sees less across: back off further (within reach of the far plane) so the map's width fits.
+    const across = Math.tan(((this.camera.fov / 2) * Math.PI) / 180) * this.camera.aspect;
+    const birdsEye = Math.min(OVERVIEW_MAX, Math.max(this.overviewAt.y, OVERVIEW_HALF_WIDTH / across));
+    const dist = this.distance + (birdsEye - this.distance) * k;
+    const far = k > 0 ? CAMERA_FAR + dist : CAMERA_FAR;
+    if (this.camera.far !== far) {
+      this.camera.far = far;
+      this.camera.updateProjectionMatrix();
+    }
+    this.v.set(fx, 0, fz);
+    this.camera.position.set(fx, Math.sin(TILT) * dist, fz + Math.cos(TILT) * dist);
+    this.camera.lookAt(this.v);
     if (this.sun.castShadow) {
       // Keep the shadow box centred on what the camera sees (a little north of the focus), snapped
       // to whole shadow texels so the edges do not shimmer as it slides.
@@ -198,6 +226,14 @@ export class Stage {
     // Checked every frame rather than on resize events: iOS reports stale sizes mid-rotation
     // and moves its toolbars without firing one.
     if (this.canvas.clientWidth !== this.width || this.canvas.clientHeight !== this.height) this.resize();
+    // The bird's-eye view sees the whole map: push the haze back while it is up (for this frame only).
+    const fog = this.scene.fog as THREE.Fog;
+    const near = fog.near;
+    const far = fog.far;
+    fog.near = near * (1 + this.crane * 2.5);
+    fog.far = far * (1 + this.crane * 2.5);
     this.renderer.render(this.scene, this.camera);
+    fog.near = near;
+    fog.far = far;
   }
 }

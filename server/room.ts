@@ -107,6 +107,7 @@ export class Room {
       foods: w.foods.map(foodRow), pellets: w.pellets.map(pelletRow),
       ...(w.vehicles.length > 0 ? { vehicleKinds: w.vehicles.map(vehicleKindIndex) } : {}),
       ...(w.treasures.length > 0 ? { treasureCount: w.treasures.length } : {}),
+      ...(w.stage.setPieces ? { setPieceSeed: w.setPieceSeed } : {}),
     });
     this.broadcast({ t: 'seats', seats: this.seats() });
     return true;
