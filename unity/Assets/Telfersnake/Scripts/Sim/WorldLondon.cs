@@ -11,8 +11,8 @@ namespace Telfer.Sim
     {
         // ---------------------------------------------------------------- lions and ravens
 
-        /// <summary>Out of sight of the beasts: hidden (Fox Trick). Flight and rides come with London's legends.</summary>
-        bool Unseen(Snake s) => s.HasMagic(MagicId.Hidden);
+        /// <summary>Out of sight of the beasts and the rivals: hidden (Fox Trick, Boo!), up in the air (Dragon Wings) or on a ride.</summary>
+        bool Unseen(Snake s) => s.HasMagic(MagicId.Hidden) || s.HasMagic(MagicId.Wings) || s.Carried;
 
         /// <summary>The nearest living snake head within `range` of (x, z) that a beast can see.</summary>
         Snake NearestVisible(float x, float z, float range)
@@ -37,6 +37,7 @@ namespace Telfer.Sim
             foreach (var s in Snakes)
             {
                 if (!s.alive || s.immune > 0 || Unseen(s) || Collide.Hypot(s.x - p.x, s.z - p.z) > spec.biteReach + s.Radius) continue;
+                if (Rise(s)) { p.biteIn = spec.biteEvery; return true; }
                 s.immune = OUCH_GRACE;
                 float lost = s.mass < 1 ? 0 : Math.Min(spec.biteCap, Math.Max(raven ? 1 : 2, s.mass * spec.biteShare * ferocity));
                 if (lost > 0) Shed(s, lost, PELLET_RETURN, raven ? 2 : 4);
@@ -249,12 +250,14 @@ namespace Telfer.Sim
             walkers.Clear();
             foreach (var s in Snakes)
             {
-                if (!s.alive) continue;
+                if (!s.alive || s.Carried) continue;
                 float r = s.Radius;
                 walkers.Add(new Walker { x = s.x, z = s.z, r = r });
                 for (int i = 0; i < s.bodyCount; i++) walkers.Add(new Walker { x = s.body[i * 2], z = s.body[i * 2 + 1], r = r });
             }
-            foreach (var v in Vehicles) Sim.Vehicles.Drive(v, Lanes[v.route], Vehicles, walkers, dt, Ding);
+            // Tower Bridge shut for a lift (from the first bell till it is down): stop short of the span.
+            bool shut = sp != null && Sim.SetPieces.SpanClosed(Tick);
+            foreach (var v in Vehicles) Sim.Vehicles.Drive(v, Lanes[v.route], Vehicles, walkers, dt, Ding, shut ? spanStops[v.route] : null);
         }
 
         /// <summary>
@@ -299,6 +302,18 @@ namespace Telfer.Sim
                 float sp = s.BaseSpeed * s.speedFactor;
                 float closing = ((float)Math.Cos(s.heading) * sp - (float)Math.Cos(v.heading) * v.speed) * nx + ((float)Math.Sin(s.heading) * sp - (float)Math.Sin(v.heading) * v.speed) * nz;
                 if (closing >= 0) continue;
+                if (s.HasMagic(MagicId.Giant))
+                {
+                    // Gog & Magog: the bus bounces off *you*. It stops dead and honks; no bonk.
+                    v.speed = 0;
+                    if (s.bumpQuiet <= 0)
+                    {
+                        s.bumpQuiet = BUMP_QUIET;
+                        Events.Add(new GameEvent { type = EventType.Ding, vehicle = v.kind, honk = true, x = v.x, z = v.z });
+                    }
+                    continue;
+                }
+                if (Rise(s)) continue;
                 s.immune = OUCH_GRACE;
                 float full = s.mass < 1 ? 0 : Math.Min(spec.bonkCap, Math.Max(1, s.mass * spec.bonkShare));
                 float lost = full * (1 - s.rockGuard);

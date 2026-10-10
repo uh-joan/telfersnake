@@ -9,6 +9,15 @@ namespace Telfer.Sim
         // London (appended): an animal's call, a gull's theft, Tea Time; a lion's yawn ("roar" on the wire), a raven's CAW,
         // a bus's DING DING (or honk), a bonk by a vehicle, a puddle's splash.
         Cry, Steal, TeaTime, Roar, Caw, Ding, VBonk, Splash,
+        // London's people (A4): a bump into the Royal Guard (Ahem), the Bobby's whistle, three laps round the guard
+        // (his smile for the room, a gem for `who`), a tourist's photo, the living statue's BOO.
+        BumpGuard, Whistle, Guard, GuardSmile, Photo, Boo,
+        // London's legends (A5): the phoenix undoes a hit, a flight lands, the Mighty Roar's ring (and a rival blown
+        // back), a Crown Jewel (i, n) and the ROYAL crown, the pearly trail (to tx, tz) and a button eaten.
+        Rise, Land, Ring, Roared, Jewel, Royal, Pearly, ButtonEat,
+        // London's set pieces (A6): a BONG (k of n), the ramp launch, on/off a ride, a Tube warp (from, to), the wobbly
+        // bridge, the Red Arrows' trail, a finale sparkle (a gem).
+        Bong, Launch, Ride, Warp, Wobble, Arrows, Treat,
     }
 
     public sealed class GameEvent
@@ -38,6 +47,13 @@ namespace Telfer.Sim
         /// <summary>Ding / VBonk: which vehicle, and whether it honked (a cab, or a bus kept waiting).</summary>
         public VehicleKind vehicle;
         public bool honk;
+        /// <summary>London: a jewel's index (k) and how many are held (n); a BONG's k of n; a warp's stations; a ride's carrier and on/off; the pearly trail's end.</summary>
+        public int k, n, from, to;
+        public float tx, tz;
+        public Carrier carrier;
+        public bool on;
+        /// <summary>Say: who in London is speaking ("sami", "beefeater"), null for the warden.</summary>
+        public string speaker;
     }
 
     /// <summary>
@@ -123,7 +139,12 @@ namespace Telfer.Sim
         {
             Rng = new Rng(seed);
             Mode = mode;
-            Stage = stage ?? School.Stage;
+            stage = stage ?? School.Stage;
+            // A stage with set pieces changes under the snakes (Tower Bridge lifts): this world gets its own copy.
+            Stage = stage.SetPieces != null ? stage.Copy() : stage;
+            sp = stage.SetPieces;
+            setPieceSeed = sp != null ? Sim.SetPieces.SeedFor(seed) : 0;
+            bridgesDown = stage.Bridges;
             ferocity = Rivals.Ferocity(mode);
             Cooper = new Cooper(Stage.Warden);
             Hazards = Sim.Hazards.Make(Rng, Stage);
@@ -164,13 +185,19 @@ namespace Telfer.Sim
             }
             Predators = Sim.Predators.Make(Stage, Rng);
             Kids = Sim.Kids.Make(Stage, Rng);
+            foreach (var k in Kids) if (k.kind == KidKind.Busker) buskers.Add(k);
+            tripTotal = Stage.TripPath != null ? Sim.Kids.LoopLength(Stage.TripPath) : 0;
+            if (Stage.Chatters != null) for (int i = 0; i < Stage.Chatters.Length; i++) chatterIn.Add(3 + i * 2.5f);
             Creatures = Sim.Creatures.Make(Stage, Rng);
             // London's traffic: fixed routes, evenly spread, no RNG.
             if (Stage.Routes != null && Stage.Traffic != null)
             {
                 foreach (var r in Stage.Routes) Lanes.Add(Sim.Vehicles.MakeLane(r, Stage.Zebras));
                 Vehicles.AddRange(Sim.Vehicles.Make(Stage.Traffic, Stage.Routes, Lanes));
+                if (sp != null) foreach (var lane in Lanes) spanStops.Add(SpanStopLines(lane, sp.span));
             }
+            // London's Crown Jewels: last, and no RNG at all on a stage without them.
+            Treasures = Sim.Treasures.Make(Stage, Rng);
         }
 
         /// <summary>
@@ -189,6 +216,7 @@ namespace Telfer.Sim
             Predators = new List<Predator>();
             Kids = new List<Kid>();
             Creatures = new List<Creature>();
+            Treasures = new List<Treasure>();
             MeIndex = me;
             IsReplica = true;
             RefreshHazardCircles();
@@ -251,6 +279,8 @@ namespace Telfer.Sim
         {
             playerInput = input;
             const float dt = STEP;
+            bool london = Stage.Id == StageId.London;
+            if (sp != null) SetPiecesTick(sp);
             Cooper.Update(this, dt);
             foreach (var a in Animals) Sim.Animals.Update(a, this, dt);
             UpdatePredators(dt);
@@ -258,7 +288,11 @@ namespace Telfer.Sim
             UpdateKids(dt);
             UpdateProjectiles(dt);
             UpdateCreatures(dt);
+            if (Treasures.Count > 0) UpdateTreasures(dt);
+            if (Buttons.Count > 0) ExpireButtons();
             ChatterSami(dt);
+            if (Stage.Chatters != null) ChatterLondon(dt);
+            if (Stage.Statue != null) StatueTick(dt);
 
             foreach (var s in Snakes)
             {
@@ -268,33 +302,64 @@ namespace Telfer.Sim
                     if (s.respawnIn <= 0) Respawn(s);
                     continue;
                 }
+                bool flew = s.HasMagic(MagicId.Wings);
                 s.TickMagic(dt);
+                if (flew && !s.HasMagic(MagicId.Wings)) Land(s); // Dragon Wings wore off: down to free, dry ground
                 // London's timers run down whether or not the snake is moving.
                 if (s.teaFor > 0) s.teaFor -= dt;
                 if (s.teaCool > 0) s.teaCool -= dt;
+                // London: on the Eye or the river bus, the ride moves you (and you cannot be touched).
+                if (s.Carried) { Carry(s, sp); continue; }
+                if (s.launchFor > 0) s.launchFor -= dt;
                 bots.TryGetValue(s, out var bot);
                 if (s.frozenFor > 0) { s.frozenFor -= dt; continue; }
                 var inp = bot != null ? bot.Think(s, this, dt) : playerInput;
 
                 s.slowed = Collide.Hypot(s.x - Cooper.x, s.z - Cooper.z) < Cooper.AURA;
                 float pace = s.slowed ? SLOW_FACTOR : 1;
-                if (Stage.Water != null && Water.In(Stage, s.x, s.z)) pace *= SWIM_FACTOR;
-                if (puddles.Count > 0 && Puddle(s)) pace *= PUDDLE_ZOOM;
+                // Flying (Dragon Wings): no paddle, no puddles. River Rider: the Thames is a fast lane.
+                bool flying = s.HasMagic(MagicId.Wings);
+                if (Stage.Water != null && !flying && Water.In(Stage, s.x, s.z)) pace *= s.HasMagic(MagicId.River) ? RIVER_ZOOM : SWIM_FACTOR;
+                if (puddles.Count > 0 && !flying && Puddle(s)) pace *= PUDDLE_ZOOM;
                 if (s.teaFor > 0) pace *= TEA_ZOOM;
+                if (buskers.Count > 0 && Dancing(s)) pace *= BUSK_ZOOM;
+                if (s.launchFor > 0) pace *= LAUNCH_ZOOM;
                 s.speedFactor += (pace - s.speedFactor) * Math.Min(1, dt * 4);
-                s.Update(inp, dt, !s.slowed, Stage, snakeSolids);
+                // The parade is a moving wall, but never a trap: held against it a while, you are let through.
+                held.TryGetValue(s.id, out float paradeHeldFor);
+                var solids = marcherCount > 0 && paradeHeldFor <= Sim.SetPieces.PARADE_LET_THROUGH ? withParade : snakeSolids;
+                s.Update(inp, dt, !s.slowed, Stage, solids);
 
                 bool ouch = BonkRock(s);
                 if (s.touchingWall && !s.wasTouchingWall && !ouch && s.bumpQuiet <= 0 && s.immune <= 0)
                 {
                     s.bumpQuiet = BUMP_QUIET;
-                    Events.Add(new GameEvent { type = EventType.BumpWall, who = s.id, x = s.x, z = s.z });
+                    var g = Stage.Guard;
+                    bool guard = (g != null && Collide.Hypot(s.x - g[0], s.z - g[1]) < s.Radius + 1.2f) || ByMarcher(s, 0.1f);
+                    Events.Add(new GameEvent { type = guard ? EventType.BumpGuard : EventType.BumpWall, who = s.id, x = s.x, z = s.z });
                 }
+                if (Stage.Guard != null) LapGuard(s, dt);
 
-                BumpCooper(s, dt);
-                MeetAnimals(s, dt);
-                MeetKids(s, dt);
+                if (london)
+                {
+                    // London keeps world.ts's order: the warden, the people, the set pieces, then the animals.
+                    if (!flying)
+                    {
+                        BumpCooper(s, dt);
+                        MeetKids(s, dt);
+                        if (sp != null) MeetSetPieces(s, sp, dt);
+                    }
+                    MeetAnimals(s, dt, flying);
+                }
+                else
+                {
+                    BumpCooper(s, dt);
+                    MeetAnimals(s, dt);
+                    MeetKids(s, dt);
+                }
                 MeetCreatures(s);
+                if (Treasures.Count > 0) MeetJewels(s);
+                if (Buttons.Count > 0) EatButtons(s);
                 PullFood(s, dt);
                 Eat(s);
                 Bees(s);
@@ -318,7 +383,7 @@ namespace Telfer.Sim
             }
 
             // London's traffic: everyone out of the buses and cabs (a frozen snake too; it is blinking then, so only nudged).
-            if (Vehicles.Count > 0) foreach (var s in Snakes) if (s.alive) MeetVehicles(s, dt);
+            if (Vehicles.Count > 0) foreach (var s in Snakes) if (s.alive && !s.HasMagic(MagicId.Wings) && !s.Carried) MeetVehicles(s, dt);
             foreach (var s in Snakes) if (s.alive) s.SampleBody();
             BonkSnakes();
             for (int i = Pellets.Count - 1; i >= 0; i--)
@@ -339,12 +404,13 @@ namespace Telfer.Sim
 
         bool BonkRock(Snake s)
         {
-            if (!s.touchingWall || s.immune > 0) return false;
+            if (!s.touchingWall || s.immune > 0 || s.HasMagic(MagicId.Wings)) return false;
             foreach (var h in Hazards)
             {
                 if (!h.Solid) continue;
                 float reach = s.Radius + h.r + 0.02f;
                 if ((s.x - h.x) * (s.x - h.x) + (s.z - h.z) * (s.z - h.z) > reach * reach) continue;
+                if (Rise(s)) return true;
                 s.immune = OUCH_GRACE;
                 float full = s.mass < 1 ? 0 : Math.Min(OUCH_MAX, Math.Max(1, s.mass * OUCH_SHARE));
                 float lost = full * (1 - s.rockGuard);
@@ -386,13 +452,15 @@ namespace Telfer.Sim
             if (Cooper.Bumped(this)) Events.Add(new GameEvent { type = EventType.BumpCooper, who = s.id, x = s.x, z = s.z });
         }
 
-        void MeetAnimals(Snake s, float dt)
+        void MeetAnimals(Snake s, float dt, bool flying = false)
         {
+            // Gog & Magog: a giant gulps like the next size up.
+            int tier = s.HasMagic(MagicId.Giant) ? s.Tier + 1 : s.Tier;
             foreach (var a in Animals)
             {
                 var spec = a.Spec;
                 float d2 = (a.x - s.x) * (a.x - s.x) + (a.z - s.z) * (a.z - s.z);
-                if (s.Tier >= spec.tier)
+                if (tier >= spec.tier)
                 {
                     float reach = s.BiteReach * GULP_REACH + spec.radius;
                     if (d2 > reach * reach) continue;
@@ -401,6 +469,8 @@ namespace Telfer.Sim
                     Sim.Animals.Place(a, this, RESPAWN_CLEARANCE);
                     continue;
                 }
+                // Too big to swallow: it stands its ground and the snake goes boing (a flyer just passes over).
+                if (flying) continue;
                 float r2 = s.Radius + spec.radius;
                 if (d2 >= r2 * r2) continue;
                 Shove(s, a.x, a.z, r2, dt);
@@ -530,7 +600,7 @@ namespace Telfer.Sim
             float range = 4 + s.breathLevel;
             bool worth = false;
             foreach (var f in Foods) if (InBreath(s, f.x, f.z, range)) { worth = true; break; }
-            if (!worth) foreach (var o in Snakes) if (o != s && o.alive && o.immune <= 0 && InBreath(s, o.x, o.z, range)) { worth = true; break; }
+            if (!worth) foreach (var o in Snakes) if (o != s && o.alive && o.immune <= 0 && !o.HasMagic(MagicId.Wings) && InBreath(s, o.x, o.z, range)) { worth = true; break; }
             if (!worth) foreach (var a in Animals) if (s.Tier >= a.Spec.tier && InBreath(s, a.x, a.z, range)) { worth = true; break; }
             if (!worth) foreach (var p in Predators) if (p.Awake && InBreath(s, p.x, p.z, range)) { worth = true; break; }
             if (!worth) { s.breathIn = BREATH_RECHECK; return; }
@@ -543,7 +613,8 @@ namespace Telfer.Sim
                 if (p.Awake && InBreath(s, p.x, p.z, range)) Spook(p, false);
             foreach (var o in Snakes)
             {
-                if (o == s || !o.alive || o.immune > 0 || !InBreath(s, o.x, o.z, range)) continue;
+                if (o == s || !o.alive || o.immune > 0 || o.HasMagic(MagicId.Wings) || !InBreath(s, o.x, o.z, range)) continue;
+                if (Rise(o)) continue; // the phoenix takes the scorch
                 o.immune = OUCH_GRACE;
                 float lost = o.mass < 1 ? 0 : Math.Min(OUCH_MAX, Math.Max(2, o.mass * BREATH_SHARE));
                 if (lost > 0) Shed(o, lost, PELLET_RETURN, 4);
@@ -557,10 +628,10 @@ namespace Telfer.Sim
         {
             foreach (var a in Snakes)
             {
-                if (!a.alive || a.immune > 0 || a.HasMagic(MagicId.Hidden) || (Stage.Sanctuary.HasValue && Stage.Sanctuary.Value.Contains(a.x, a.z))) continue;
+                if (!a.alive || a.immune > 0 || Unseen(a) || (Stage.Sanctuary.HasValue && Stage.Sanctuary.Value.Contains(a.x, a.z))) continue;
                 foreach (var b in Snakes)
                 {
-                    if (b == a || !b.alive || b.immune > 0 || b.HasMagic(MagicId.Hidden)) continue;
+                    if (b == a || !b.alive || b.immune > 0 || Unseen(b)) continue;
                     float gap = Collide.Hypot(a.x - b.x, a.z - b.z);
                     if (gap > b.Length + 3) continue;
                     float hitX = 0, hitZ = 0;
@@ -579,17 +650,22 @@ namespace Telfer.Sim
                     }
                     if (!struck) continue;
 
-                    if (a.helmetReady)
+                    bool risen = Rise(a); // the phoenix, first: it is the one that wears off
+                    if (risen || a.helmetReady)
                     {
-                        a.helmetReady = false;
-                        a.helmetIn = a.helmetRecharge;
-                        a.immune = HELMET_GRACE;
+                        // The phoenix or the helmet takes it: bounce straight back the way it came.
+                        if (!risen)
+                        {
+                            a.helmetReady = false;
+                            a.helmetIn = a.helmetRecharge;
+                            a.immune = HELMET_GRACE;
+                        }
                         a.heading = (float)Math.Atan2(a.z - hitZ, a.x - hitX);
                         Collide.ResolveCircle(Stage, a.x + (float)Math.Cos(a.heading) * 0.6f, a.z + (float)Math.Sin(a.heading) * 0.6f, a.Radius, ScratchHit, HazardCircles);
                         a.x = ScratchHit.x; a.z = ScratchHit.z;
                         // London: the bounce must not land the head in a parked bus (it is blinking now: a nudge, never a bonk).
                         if (Vehicles.Count > 0) MeetVehicles(a, STEP);
-                        Events.Add(new GameEvent { type = EventType.Helmet, who = a.id, x = a.x, z = a.z });
+                        if (!risen) Events.Add(new GameEvent { type = EventType.Helmet, who = a.id, x = a.x, z = a.z });
                     }
                     else Bonk(a, b);
                     break;
@@ -620,6 +696,8 @@ namespace Telfer.Sim
             s.immune = RESPAWN_GRACE;
             s.teaStep = 0; s.teaCool = 0;
             s.speedFactor = 1;
+            // London: a fresh start at the Tube, the Eye and the boat (a respawn by a station is not stepping in).
+            if (sp != null) { tubeAt.Remove(s.id); tubeCool[s.id] = eyeCool[s.id] = boatCool[s.id] = 0; }
             s.touchingWall = s.wasTouchingWall = false;
             Events.Add(new GameEvent { type = EventType.Respawn, who = s.id, x = s.x, z = s.z });
         }

@@ -6,10 +6,9 @@
  *   tsx scripts/trace.ts traffic [ticks=1200] [out.json]            the buses and cabs alone, scripted walkers
  *   tsx scripts/trace.ts compare <ts.json> <cs.json>                 how far apart the two are
  *
- * `world` plays London as far as the HD port has got (the menu, the zoo, the lions, ravens, traffic and
- * hazards): the people, the legends, the jewels and the set pieces are taken off the stage, so neither side
- * draws RNG for them. The player follows a fixed tour (Westminster → the Mall → Trafalgar's lions → the
- * Strand → the Tower's ravens), dashing now and then, and always takes the first card. Per tick it records
+ * `world` plays the whole of London (the menu, the zoo, the lions, ravens and traffic, the people, the
+ * legends and jewels, the set pieces). The player follows a fixed tour (Westminster → round the Royal Guard →
+ * Trafalgar's lions → the Strand → the Tower → the Eye → the Tube → the Elfin Oak), 20 s at most per leg, dashing now and then, and always takes the first card. Per tick it records
  * the event types and the positions of the player, the vehicles, the predators and the first animals.
  *
  * `traffic` drives the vehicles module directly (no RNG anywhere), with a walker parked on a zebra and
@@ -19,33 +18,16 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { LONDON } from '../src/sim/londonLayout';
 import { rulesFor } from '../src/sim/modes';
-import type { Stage } from '../src/sim/stage';
 import { driveVehicle, makeLane, makeVehicles, type Walker } from '../src/sim/vehicles';
 import { World } from '../src/sim/world';
 
-/** London as the HD port has it so far (A2 + A3): no people, legends, jewels or set pieces. */
-const LONDON_A3: Stage = {
-  ...LONDON,
-  kids: [],
-  creatureCount: 0,
-  jewelSpots: undefined,
-  setPieces: undefined,
-  chatters: undefined,
-  statue: undefined,
-  guard: undefined,
-  touristSpots: undefined,
-  buskerSpots: undefined,
-  tripPath: undefined,
-  portals: undefined,
-};
-
 /** The player's tour, in metres. */
 export const TOUR = [
-  [-36, -6], [-30, -22], [-20, -34], [-12, -36], [-4, -38], [4, -39], [20, -35], [34, -33], [48, -26], [55, -12], [50, -24], [20, -30], [-12, -34], [-30, -22], [-40, 0],
+  [-36, -6], [-30, -22], [-38, -30], [-44, -30], [-40, -34], [-36, -30], [-20, -34], [-12, -36], [-4, -38], [4, -39], [20, -35], [34, -33], [48, -26], [52, -18], [55, -12], [50, -24], [20, -30], [-6, -8], [-6, -4.4], [-24, -50], [-24, -56], [-60, -48], [-70, -50], [-50, -20], [-40, 0],
 ];
 
-/** Events the port does not have yet (A4+), left out of the counts. */
-const NOT_YET = new Set(['whistle']);
+/** Events the port does not have yet, left out of the counts (none since B3 part 2). */
+const NOT_YET = new Set<string>();
 
 interface Trace {
   kind: string;
@@ -59,16 +41,20 @@ interface Trace {
 }
 
 function runWorld(seed: number, ticks: number): Trace {
-  const w = new World(seed, undefined, rulesFor('normal'), LONDON_A3);
+  const w = new World(seed, undefined, rulesFor('normal'), LONDON);
   const counts: Record<string, number> = {};
   const events: string[][] = [];
   const pos: number[][] = [];
   let leg = 0;
+  let legT = 0;
   for (let t = 0; t < ticks; t++) {
     if (w.cards) w.choose(0);
     const s = w.snake;
     const [tx, tz] = TOUR[leg % TOUR.length];
-    if (Math.hypot(tx - s.x, tz - s.z) < 3) leg++;
+    if (Math.hypot(tx - s.x, tz - s.z) < 3 || ++legT > 1200) {
+      leg++;
+      legT = 0;
+    }
     const dx = tx - s.x;
     const dz = tz - s.z;
     const d = Math.hypot(dx, dz) || 1;

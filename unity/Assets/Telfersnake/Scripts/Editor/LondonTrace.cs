@@ -17,7 +17,7 @@ namespace Telfer.EditorTools
         /// <summary>The player's tour (scripts/trace.ts TOUR).</summary>
         static readonly float[] TOUR =
         {
-            -36, -6, -30, -22, -20, -34, -12, -36, -4, -38, 4, -39, 20, -35, 34, -33, 48, -26, 55, -12, 50, -24, 20, -30, -12, -34, -30, -22, -40, 0,
+            -36, -6, -30, -22, -38, -30, -44, -30, -40, -34, -36, -30, -20, -34, -12, -36, -4, -38, 4, -39, 20, -35, 34, -33, 48, -26, 52, -18, 55, -12, 50, -24, 20, -30, -6, -8, -6, -4.4f, -24, -50, -24, -56, -60, -48, -70, -50, -50, -20, -40, 0,
         };
 
         /// <summary>The classic sim's name for an event (world.ts GameEvent type).</summary>
@@ -28,6 +28,9 @@ namespace Telfer.EditorTools
                 case EventType.BumpWall: case EventType.BumpCooper: case EventType.BumpKid: return "bump";
                 case EventType.TeaTime: return "teatime";
                 case EventType.VBonk: return "vbonk";
+                case EventType.BumpGuard: return "bump";
+                case EventType.GuardSmile: return "guardSmile";
+                case EventType.ButtonEat: return "button";
                 default: return t.ToString().ToLowerInvariant();
             }
         }
@@ -48,14 +51,14 @@ namespace Telfer.EditorTools
         static void Run(int seed, int ticks, SortedDictionary<string, int> counts, List<List<string>> events, List<List<float>> pos)
         {
             var w = new World((uint)seed, Mode.Normal, London.Stage);
-            int leg = 0;
+            int leg = 0, legT = 0;
             for (int t = 0; t < ticks; t++)
             {
                 if (w.Me.cards != null) w.Choose(0);
                 var s = w.Me;
                 int k = leg % (TOUR.Length / 2);
                 float tx = TOUR[k * 2], tz = TOUR[k * 2 + 1];
-                if (Collide.Hypot(tx - s.x, tz - s.z) < 3) leg++;
+                if (Collide.Hypot(tx - s.x, tz - s.z) < 3 || ++legT > 1200) { leg++; legT = 0; }
                 float dx = tx - s.x, dz = tz - s.z, d = Collide.Hypot(dx, dz);
                 if (d == 0) d = 1;
                 w.Step(new SnakeInput { x = dx / d, z = dz / d, active = true, dash = (t / 90) % 6 == 5 });

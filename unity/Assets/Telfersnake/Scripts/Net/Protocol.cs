@@ -32,10 +32,11 @@ namespace Telfer.Net
             "corgi", "swan", "gull", "pelican", "horse", "dino" };
         public static readonly string[] HAZARD_KINDS = { "rock", "stones", "sticks", "puddle", "umbrella", "roadworks" };
         public static readonly string[] PREDATOR_KINDS = { "bear", "wolf", "lion", "raven" };
-        public static readonly string[] KID_KINDS = { "naughty", "nice", "runner" };
-        public static readonly string[] PROJECTILE_KINDS = { "pebble", "kiss" };
-        public static readonly string[] CREATURE_KINDS = { "stag", "unicorn", "owl", "frog", "kitsune", "pixie", "squirrel", "wisp" };
-        public static readonly string[] MAGIC_IDS = { "rainbow", "hidden", "magnet", "owl", "halo" };
+        public static readonly string[] KID_KINDS = { "naughty", "nice", "runner", "tourist", "trip", "busker" };
+        public static readonly string[] PROJECTILE_KINDS = { "pebble", "kiss", "chip" };
+        public static readonly string[] CREATURE_KINDS = { "stag", "unicorn", "owl", "frog", "kitsune", "pixie", "squirrel", "wisp",
+            "dragon", "lionroyal", "phoenix", "mermaid", "ghost", "gog", "fairy", "pearly" };
+        public static readonly string[] MAGIC_IDS = { "rainbow", "hidden", "magnet", "owl", "halo", "wings", "river", "giant", "phoenix", "roar" };
 
         public static string Wire(Mode m) => m == Mode.Easy ? "easy" : m == Mode.God ? "god" : "normal";
         public static string Wire(StageId s) => s == StageId.Common ? "common" : "school";
