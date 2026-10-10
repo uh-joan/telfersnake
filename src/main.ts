@@ -431,8 +431,8 @@ function show(next: Screen): void {
     refreshModePicker();
     refreshStagePicker();
     refreshWallet();
-    refreshAlbumButton();
   }
+  if (next === 'start' || next === 'pause') refreshAlbumButton();
   // A shared playground cannot stop for one player, so their snake stands aside, safe, while they are in a menu.
   if (!run.over) connection?.away(next !== null);
   screen = next;
@@ -451,15 +451,20 @@ const shop = new Shop(save, () => sfx, () => {
 
 // ---------------------------------------------------------------- London's keepsakes: stamps and postcards
 
-const album = new Album(save, () => sfx, () => show('start'));
+/** Where the album was opened from, to go back there (the pause screen keeps the game paused). */
+let albumFrom: Screen = 'start';
 
-/** The album opens off the start screen, once there is a London to collect. */
+const album = new Album(save, () => sfx, () => show(albumFrom));
+
+/** The album opens off the start screen and the pause screen, once there is a London to collect. */
 function refreshAlbumButton(): void {
   $('start-album').hidden = !save.londonUnlocked;
+  $('pause-album').hidden = !save.londonUnlocked;
 }
 
 function openAlbum(): void {
-  if (starting || screen !== 'start') return;
+  if (starting || (screen !== 'start' && screen !== 'pause')) return;
+  albumFrom = screen;
   wakeAudio()?.pick();
   show('album');
   album.open();
@@ -1427,18 +1432,27 @@ $('start-shop').addEventListener('click', openShop);
 $('start-album').addEventListener('click', openAlbum);
 $('results-shop').addEventListener('click', openShop);
 $('pause-shop').addEventListener('click', openShop);
+$('pause-album').addEventListener('click', openAlbum);
 $('again').addEventListener('click', () => location.reload());
 
 const pauseButton = $('pause-btn');
 pauseButton.addEventListener('pointerdown', (e) => e.stopPropagation());
-pauseButton.addEventListener('click', () => {
+const pause = () => {
   if (screen !== null || world.cards) return;
   sfx?.pick();
   show('pause');
-});
-$('resume').addEventListener('click', () => {
+};
+const resume = () => {
   sfx?.pick();
   show(null);
+};
+pauseButton.addEventListener('click', pause);
+$('resume').addEventListener('click', resume);
+// Esc pauses and plays again. (The album, open over the pause screen, takes its own Esc first.)
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || e.repeat) return;
+  if (screen === 'pause') resume();
+  else pause();
 });
 $('finish').addEventListener('click', () => {
   if (screen === 'pause') finishRun();

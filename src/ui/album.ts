@@ -37,7 +37,7 @@ export class Album {
     });
     document.addEventListener('keydown', (e) => {
       if (!this.isOpen || e.key !== 'Escape') return;
-      e.stopPropagation();
+      e.stopImmediatePropagation(); // this Esc is the album's alone: the pause screen behind stays
       if (this.zoom.classList.contains('show')) this.unzoom();
       else this.close();
     });
