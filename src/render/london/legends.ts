@@ -13,7 +13,7 @@ import { model, paint, PAINTED } from '../paint';
 /** Each gem's colour, by JEWEL_KINDS index: ruby, sapphire, emerald, diamond, amethyst. */
 export const JEWEL_COLOURS = [0xe0115f, 0x1f5fe0, 0x14b86a, 0xe8f6ff, 0x9b4de0];
 const GOLD = 0xffc93c;
-const BUTTON_MAX = 32;
+const BUTTON_MAX = 96;
 
 /** A gem of cut `i` (each a different shape), sat in a small crown, with its centre about 1.1 m up. */
 function jewelModel(i: number): THREE.BufferGeometry {

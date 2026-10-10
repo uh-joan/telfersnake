@@ -28,5 +28,8 @@
     "outOfBounds": 0,
     "stuck": 1,
     "tooMany": 0
-  }
+  },
+  "london/easy/3600/1": "b3877978",
+  "london/normal/3600/1": "bbdc41e2",
+  "london/god/3600/1": "4621b9b2"
 }

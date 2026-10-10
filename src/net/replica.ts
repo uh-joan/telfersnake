@@ -181,7 +181,7 @@ export class Replica implements WorldView {
       t.z = z;
       t.respawnIn = present ? 0 : 1;
     });
-    if (snap.pb) this.buttons = snap.pb.map(([x, z, born]) => ({ x, z, born }));
+    if (snap.pb) this.buttons = snap.pb.map(([x, z, born]) => ({ x, z, born, owner: -1 }));
     // Pebbles and kisses are brief: take the newest list straight, arc height from the flight progress.
     this.projectiles = snap.pj.map(([x, z, kind, t]) => ({ kind: PROJECTILE_KINDS[kind], x, z, dx: 0, dz: 0, speed: 0, left: 1 - t, total: 1 }));
     for (const e of snap.e) {

@@ -621,6 +621,7 @@ export class World {
 
   /** Shrink a rival like a rock bonk and puff pellets; `by` is credited (for gems). */
   private scorch(target: Snake, by: Snake, share: number, cap: number): void {
+    if (this.rise(target)) return; // the phoenix takes it: your next hit, whatever it is
     target.immune = OUCH_GRACE;
     const lost = target.mass < 1 ? 0 : Math.min(cap, Math.max(2, target.mass * share));
     if (lost > 0) this.shed(target, lost, PELLET_RETURN, 3);
@@ -636,7 +637,7 @@ export class World {
     let best: Snake | null = null;
     let bestD = Infinity;
     for (const o of this.snakes) {
-      if (o === s || !o.alive || o.immune > 0) continue;
+      if (o === s || !o.alive || o.immune > 0 || o.hasMagic('wings')) continue;
       const d = Math.hypot(o.x - s.x, o.z - s.z);
       if (d > range || d >= bestD) continue;
       if (Math.abs(wrapAngle(Math.atan2(o.z - s.z, o.x - s.x) - s.heading)) > LASER_HALF_ANGLE) continue;
@@ -668,7 +669,7 @@ export class World {
     let fired = scares;
     if (scares) this.events.push({ type: 'power', who: s.id, kind: 'stink', x: bx, z: bz, heading: s.heading, range: radius });
     for (const o of this.snakes) {
-      if (o === s || !o.alive || o.immune > 0 || Math.hypot(o.x - bx, o.z - bz) > radius) continue;
+      if (o === s || !o.alive || o.immune > 0 || o.hasMagic('wings') || Math.hypot(o.x - bx, o.z - bz) > radius) continue;
       if (!fired) {
         fired = true;
         this.events.push({ type: 'power', who: s.id, kind: 'stink', x: bx, z: bz, heading: s.heading, range: radius });
@@ -689,7 +690,7 @@ export class World {
     let fired = scares;
     if (scares) this.events.push({ type: 'power', who: s.id, kind: 'zap', x: s.x, z: s.z, heading: s.heading, range: radius });
     for (const o of this.snakes) {
-      if (o === s || !o.alive || o.immune > 0 || Math.hypot(o.x - s.x, o.z - s.z) > radius) continue;
+      if (o === s || !o.alive || o.immune > 0 || o.hasMagic('wings') || Math.hypot(o.x - s.x, o.z - s.z) > radius) continue;
       if (!fired) {
         fired = true;
         this.events.push({ type: 'power', who: s.id, kind: 'zap', x: s.x, z: s.z, heading: s.heading, range: radius });
@@ -709,7 +710,7 @@ export class World {
     let best: Snake | null = null;
     let bestD = Infinity;
     for (const o of this.snakes) {
-      if (o === s || !o.alive || o.immune > 0 || o.frozenFor > 0) continue;
+      if (o === s || !o.alive || o.immune > 0 || o.frozenFor > 0 || o.hasMagic('wings')) continue;
       const d = Math.hypot(o.x - s.x, o.z - s.z);
       if (d <= radius && d < bestD) {
         bestD = d;
@@ -1757,8 +1758,8 @@ export class World {
       x = this.stage.fallbackSpot.x;
       z = this.stage.fallbackSpot.z;
     }
-    s.x = x;
-    s.z = z;
+    // Moved to free ground: lay the body out afresh there, so no trail is left strung through a wall.
+    if (x !== s.x || z !== s.z) s.placeAt(x, z, s.heading);
     s.touchingWall = s.wasTouchingWall = false;
     s.immune = Math.max(s.immune, 1);
     this.events.push({ type: 'land', who: s.id, x, z });
@@ -1770,7 +1771,8 @@ export class World {
     this.events.push({ type: 'ring', who: s.id, x: s.x, z: s.z, r: ROAR_REACH });
     this.scarePredators(s.x, s.z, ROAR_REACH, false);
     for (const o of this.snakes) {
-      if (o === s || !o.alive || o.hasMagic('wings')) continue;
+      // Not the unseen (hidden or flying), nor anyone choosing a card or standing aside in a menu.
+      if (o === s || !o.alive || this.unseen(o) || o.cards !== null || o.awayFor > 0) continue;
       const dx = o.x - s.x;
       const dz = o.z - s.z;
       const d = Math.hypot(dx, dz);
@@ -1817,12 +1819,13 @@ export class World {
       if (Number.isNaN(tx)) return;
       this.cacheAt(tx, tz);
     }
-    this.buttons.length = 0;
+    // One trail per snake: a fresh one replaces only this snake's own, never anyone else's.
+    for (let i = this.buttons.length - 1; i >= 0; i--) if (this.buttons[i].owner === s.id) this.buttons.splice(i, 1);
     const d = Math.hypot(tx - s.x, tz - s.z);
-    for (let k = 2; k < d - 1 && this.buttons.length < BUTTON_MAX; k += BUTTON_STEP) {
+    for (let k = 2, n = 0; k < d - 1 && n < BUTTON_MAX; k += BUTTON_STEP, n++) {
       const x = s.x + ((tx - s.x) * k) / d;
       const z = s.z + ((tz - s.z) * k) / d;
-      if (isFree(this.stage, x, z, 0.3, this.hazards)) this.buttons.push({ x, z, born: this.tick });
+      if (isFree(this.stage, x, z, 0.3, this.hazards)) this.buttons.push({ x, z, born: this.tick, owner: s.id });
     }
     this.events.push({ type: 'pearly', who: s.id, x: s.x, z: s.z, tx, tz });
   }
@@ -2120,7 +2123,7 @@ export class World {
     // Only puff when there is something in front worth puffing at.
     let worth = false;
     for (const f of this.foods) if (this.inBreath(s, f.x, f.z, range)) { worth = true; break; }
-    if (!worth) for (const o of this.snakes) if (o !== s && o.alive && o.immune <= 0 && this.inBreath(s, o.x, o.z, range)) { worth = true; break; }
+    if (!worth) for (const o of this.snakes) if (o !== s && o.alive && o.immune <= 0 && !o.hasMagic('wings') && this.inBreath(s, o.x, o.z, range)) { worth = true; break; }
     if (!worth) for (const a of this.animals) if (s.tier >= ANIMALS[a.kind].tier && this.inBreath(s, a.x, a.z, range)) { worth = true; break; }
     if (!worth) for (const p of this.predators) if (awake(p) && this.inBreath(s, p.x, p.z, range)) { worth = true; break; }
     if (!worth) {
@@ -2138,7 +2141,8 @@ export class World {
       if (awake(p) && this.inBreath(s, p.x, p.z, range)) this.spook(p, false);
     }
     for (const o of this.snakes) {
-      if (o === s || !o.alive || o.immune > 0 || !this.inBreath(s, o.x, o.z, range)) continue;
+      if (o === s || !o.alive || o.immune > 0 || o.hasMagic('wings') || !this.inBreath(s, o.x, o.z, range)) continue;
+      if (this.rise(o)) continue; // the phoenix takes the scorch
       o.immune = OUCH_GRACE;
       // Scorch it smaller, capped like a rock bonk so it stays fair on the biggest rivals.
       const lost = o.mass < 1 ? 0 : Math.min(OUCH_MAX, Math.max(2, o.mass * BREATH_SHARE));

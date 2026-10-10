@@ -59,6 +59,8 @@ export interface Button {
   z: number;
   /** The tick it was laid: the trail fades BUTTON_LIFE seconds after. */
   born: number;
+  /** Whose trail it is (a snake id): a new trail replaces only its owner's. -1 on a client. */
+  owner: number;
 }
 export const BUTTON_LIFE = 30;
 export const BUTTON_MASS = 0.6;

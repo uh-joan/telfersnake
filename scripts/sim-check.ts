@@ -58,8 +58,12 @@ import { TRIP_GAP } from '../src/sim/kids';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASELINES = join(HERE, 'baselines.json');
-/** The stages the fingerprint guards. A new stage joins this list once its rules settle. */
-const GUARDED: StageId[] = ['school', 'common'];
+/**
+ * The stages the fingerprint guards. A new stage joins this list once its rules settle. London joined
+ * at A5: a later phase that means to change how London plays re-baselines London alone
+ * (`fingerprint london <mode> --baseline`, each mode) and says so; the school's and the Common's never move.
+ */
+const GUARDED: StageId[] = ['school', 'common', 'london'];
 
 // ---------------------------------------------------------------- the scripted thumb
 
@@ -188,6 +192,10 @@ function fingerprint(id: StageId, mode: Mode, ticks: number, seed: number): stri
     for (const c of w.creatures) pos(c);
     for (const f of w.foods) pos(f);
     for (const z of w.hazards) pos(z);
+    // London's buses, jewels and pearl buttons (empty lists elsewhere: the old hashes stay put).
+    for (const v of w.vehicles) pos(v);
+    for (const t of w.treasures) pos(t);
+    for (const b of w.buttons) pos(b);
     h.num(w.pellets.length);
     h.num(w.projectiles.length);
   }
