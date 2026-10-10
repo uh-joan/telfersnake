@@ -317,7 +317,7 @@ Each arrow is a merged, verified PR; ══► is a production deploy (every pha
 
 ## 9. Progress log
 
-### 🌙 Nightly build, 2026-10-09 → 10 — the classic is complete; HD in progress
+### 🌙 Nightly build, 2026-10-09 → 10 — classic and HD both complete
 
 Built end to end as a stack of PRs, one per phase. Each PR was verified and reviewed by a separate reviewer before the next phase started. **Nothing is merged or deployed:** merging to `main` needs a human review.
 
@@ -333,6 +333,11 @@ Built end to end as a stack of PRs, one per phase. Each PR was verified and revi
 | A7 · Keepsakes | uh-joan/telfersnake#20 | `london-a7` |
 | HD B0–B2 · Stage, map, landmarks | uh-joan/telfersnake#19 | `london-b0` (on A6) |
 | HD B3 · Cast & set pieces | uh-joan/telfersnake#21 | `london-b3` |
+| HD B4–B5 · Polish, online, postcards, WebGL | uh-joan/telfersnake#22 | `london-b4` |
+
+**Merge order:** #12 → #13 → #14 → #15 → #16 → #17 → #18 → #20 (A7), then #19 → #21 → #22. The HD branches sit on A6. They only touch `unity/` and `scripts/trace.ts`, so they merge cleanly after A7.
+
+**HD:** cross-play was verified (HD and the web in one London room). The WebGL build is 12 MB. The School/Common fingerprints for HD match. Parity with classic is exact for about 100–200 ticks; after that the C# floats drift and event counts agree within about 10–15%.
 
 **Classic end-to-end verification (on `london-a7`): PASS.**
 - Build clean. 36/36 fingerprints pass (4 seeds × 3 modes × school/Common/London), and school/Common invariants equal main.
