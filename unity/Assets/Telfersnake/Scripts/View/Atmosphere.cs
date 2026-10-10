@@ -206,6 +206,10 @@ namespace Telfer.View
         float baseFogStart, baseFogEnd;
         /// <summary>Where the weather happens: the camera's focus (set every frame by the game).</summary>
         public Vector3 Around;
+        /// <summary>The title screen: London shows itself in its best light (no fog, no rain), whatever the sky was doing.</summary>
+        public bool Calm;
+        /// <summary>How far the camera is from what it looks at: the pea-souper thickens round that, never over it.</summary>
+        public float Reach = 30;
         /// <summary>How wet the paper is (0..1): LondonEnv gives it a puddle sheen.</summary>
         public static System.Action<float> Wet;
         ParticleSystem rain;
@@ -284,9 +288,9 @@ namespace Telfer.View
                 weather = POOL[Random.Range(0, POOL.Length)];
                 skyHold = Random.Range(weather == Sky.Clear ? 50f : 35f, weather == Sky.Clear ? 90f : 60f);
             }
-            float k = 1 - Mathf.Exp(-dt / 5f);
-            fogAmt = Mathf.Lerp(fogAmt, weather == Sky.Fog ? 1 : 0, k);
-            rainAmt = Mathf.Lerp(rainAmt, weather == Sky.Rain ? 1 : 0, k);
+            float k = 1 - Mathf.Exp(-dt / (Calm ? 1.5f : 5f));
+            fogAmt = Mathf.Lerp(fogAmt, weather == Sky.Fog && !Calm ? 1 : 0, k);
+            rainAmt = Mathf.Lerp(rainAmt, weather == Sky.Rain && !Calm ? 1 : 0, k);
             goldAmt = Mathf.Lerp(goldAmt, weather == Sky.Golden ? 1 : 0, k);
             fireworksAmt = Mathf.MoveTowards(fireworksAmt, fireworksWant, dt * 0.6f);
 
@@ -303,14 +307,15 @@ namespace Telfer.View
         {
             float murk = Mathf.Max(fogAmt, rainAmt * 0.6f);
             Sun.intensity = sunBase * (1 - 0.3f * murk) * (1 - 0.3f * fireworksAmt) * (1 + 0.08f * goldAmt);
-            RenderSettings.fogStartDistance = Mathf.Lerp(Mathf.Lerp(baseFogStart, 50, rainAmt), 24, fogAmt);
-            RenderSettings.fogEndDistance = Mathf.Lerp(Mathf.Lerp(baseFogEnd, 190, rainAmt), 125, fogAmt);
+            // Thick round the edges of the shot, thin over the snake: start a little short of what the camera looks at.
+            RenderSettings.fogStartDistance = Mathf.Lerp(Mathf.Lerp(baseFogStart, 50, rainAmt), Mathf.Max(24, Reach - 6), fogAmt);
+            RenderSettings.fogEndDistance = Mathf.Lerp(Mathf.Lerp(baseFogEnd, 190, rainAmt), Reach + 95, fogAmt);
             var fc = Color.Lerp(Color.Lerp(baseFog, DRIZZLE, rainAmt), PEA_SOUP, fogAmt);
             fc = Color.Lerp(fc, new Color(1f, 0.83f, 0.66f), goldAmt * 0.5f);
             RenderSettings.fogColor = Color.Lerp(fc, new Color(0.25f, 0.24f, 0.36f), fireworksAmt * 0.5f);
             grade.colorFilter.Override(Color.Lerp(Color.white, new Color(1f, 0.92f, 0.8f), goldAmt * 0.45f));
             grade.postExposure.Override(0.18f - 0.32f * fireworksAmt - 0.05f * murk);
-            grade.saturation.Override(16f - 14f * fogAmt);
+            grade.saturation.Override(16f - 10f * fogAmt);
             bloom.threshold.Override(0.95f - 0.15f * fireworksAmt - 0.1f * goldAmt);
             bloom.tint.Override(Color.Lerp(new Color(1f, 0.93f, 0.82f), new Color(1f, 0.78f, 0.55f), goldAmt));
 
@@ -331,7 +336,7 @@ namespace Telfer.View
                 m.localScale = new Vector3(60 + i * 6, 1, 46 + i * 5);
             }
             var mc = mistMat.GetColor("_Color");
-            mc.a = fogAmt * 0.14f;
+            mc.a = fogAmt * 0.1f;
             mistMat.SetColor("_Color", mc);
         }
 

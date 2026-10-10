@@ -766,8 +766,10 @@ namespace Telfer.Game
                 var vel = W.Dir(me.heading) * (me.alive ? me.BaseSpeed * me.speedFactor : 0);
                 rig.Follow(me.alive ? meView.HeadPos : rig.transform.position + rig.transform.forward * 20, vel, me.Length, me.dashing, realDt);
             }
-            atmo.Focus(state == State.Title ? 70 : rig.FocusDistance);
+            atmo.Focus(state == State.Title ? Mathf.Max(70, rig.FocusDistance) : rig.FocusDistance); // London's title orbit is further out: keep it in focus (the phone blur starts 6 m past the focus)
             atmo.Around = rig.transform.position + rig.transform.forward * rig.FocusDistance;
+            atmo.Reach = rig.FocusDistance;
+            atmo.Calm = state == State.Title;
 
             if (attract == null && me.dashing && !wasDashing) synth.Play("zip", 0.8f);
             wasDashing = me.dashing;
