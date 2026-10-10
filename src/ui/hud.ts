@@ -1,4 +1,5 @@
 import { ANIMALS } from '../sim/animals';
+import { awake } from '../sim/predators';
 import { SCHOOL } from '../sim/layout';
 import type { Stage as PlayStage } from '../sim/stage';
 import { TIERS } from '../sim/snake';
@@ -287,7 +288,7 @@ export class Hud {
     for (const f of world.foods) c.fillRect(X(f.x) - 1, Z(f.z) - 1, 2, 2);
 
     c.fillStyle = '#33363d';
-    for (const h of world.hazards) c.fillRect(X(h.x) - 2, Z(h.z) - 2, 4, 4);
+    for (const h of world.hazards) if (h.kind !== 'puddle') c.fillRect(X(h.x) - 2, Z(h.z) - 2, 4, 4);
 
     // Animals: yellow if the snake can gulp them, pink if they would boop it.
     const tier = world.snake.tier;
@@ -298,11 +299,29 @@ export class Hud {
       c.fill();
     }
 
-    // Predators: red danger dots, a touch bigger for the bear.
+    // London's puddles are not things to bump: little blue pools, not dark squares.
+    c.fillStyle = '#6fb8e6';
+    for (const h of world.hazards) if (h.kind === 'puddle') c.fillRect(X(h.x) - 2, Z(h.z) - 2, 4, 4);
+
+    // London's traffic: buses as small red rectangles, cabs as small black ones, turned along the road.
+    for (const v of world.vehicles) {
+      if (v.route < 0) continue; // not placed yet
+      c.save();
+      c.translate(X(v.x), Z(v.z));
+      c.rotate(v.heading);
+      c.fillStyle = v.kind === 'bus' ? '#d62d20' : '#1d1f24';
+      if (v.kind === 'bus') c.fillRect(-5, -2, 10, 4);
+      else c.fillRect(-3.5, -1.6, 7, 3.2);
+      c.restore();
+    }
+
+    // Predators: red danger dots, a touch bigger for the bear. A lion asleep on its plinth, or a
+    // raven roosting on the Tower, is not a danger yet.
     for (const pr of world.predators) {
+      if (!awake(pr)) continue;
       c.fillStyle = '#e03131';
       c.beginPath();
-      c.arc(X(pr.x), Z(pr.z), pr.kind === 'bear' ? 3.4 : 2.6, 0, Math.PI * 2);
+      c.arc(X(pr.x), Z(pr.z), pr.kind === 'bear' || pr.kind === 'lion' ? 3.4 : 2.6, 0, Math.PI * 2);
       c.fill();
     }
 

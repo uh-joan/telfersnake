@@ -5,6 +5,7 @@ import type { Hazard, Pellet } from './hazards';
 import type { Kid, Projectile } from './kids';
 import type { Predator } from './predators';
 import type { Snake } from './snake';
+import type { Vehicle } from './vehicles';
 import type { Stage } from './stage';
 import type { CardId } from './upgrades';
 import type { GameEvent } from './world';
@@ -37,6 +38,8 @@ export interface WorldView {
   readonly foods: readonly Food[];
   readonly animals: readonly Animal[];
   readonly predators: readonly Predator[];
+  /** London's buses and cabs (empty elsewhere). */
+  readonly vehicles: readonly Vehicle[];
   readonly kids: readonly Kid[];
   readonly projectiles: readonly Projectile[];
   readonly creatures: readonly Creature[];

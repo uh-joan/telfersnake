@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { TOWER } from '../../../sim/londonLayout';
+import { RAVEN_PERCHES, RAVEN_PERCH_Y, TOWER } from '../../../sim/londonLayout';
 import {
-  box, cone, crenellations, cyl, extrude, inkMaterial, inked, lathe, merge, outlineGeometry, PALETTE, sphere, toonMaterial,
+  box, cone, crenellations, cyl, extrude, inkMaterial, inked, lathe, merge, outlineGeometry, PALETTE, rel, sphere, toonMaterial,
   windows, type LandmarkBuild,
 } from './kit';
 
@@ -130,9 +130,11 @@ export function build(): LandmarkBuild {
     cyl(0.03, 0.03, 0.18, BEAK, -0.08, 0, 0.02, 4),
   ]).scale(1.6, 1.6, 1.6);
   const walk = (wall: number) => wall - T * 0.3; // on the inner half of the wall walk, clear of the merlons
+  // The first two are the hunting pair's perches (RAVEN_PERCHES): empty while those two are out.
+  const perch = RAVEN_PERCHES.map((p) => rel('tower', p.x, p.z));
   const RAVENS = [
-    { x: -1.2, y: WH, z: walk(d / 2), h: 0.4 },
-    { x: 6.0 - 1.4, y: WH, z: walk(d / 2), h: -0.5 },
+    { x: perch[0].x, y: RAVEN_PERCH_Y, z: perch[0].z, h: 0.4 },
+    { x: perch[1].x, y: RAVEN_PERCH_Y, z: perch[1].z, h: -0.5 },
     { x: -walk(w / 2), y: WH, z: -2.6, h: -1.3 },
     { x: walk(w / 2), y: WH, z: 2.4, h: 1.2 },
     { x: -2.5, y: WH, z: -walk(d / 2), h: 0.3 },
@@ -143,6 +145,10 @@ export function build(): LandmarkBuild {
   const hull = new THREE.InstancedMesh(outlineGeometry(ravenGeo, 0.04), inkMaterial(), RAVENS.length);
   hull.instanceMatrix = ravens.instanceMatrix;
   ravens.frustumCulled = hull.frustumCulled = false; // they hop: skip the stale bounding sphere
+  // The predator view sets away[i] while raven i of the pair is out hunting (its live twin is drawn instead).
+  ravens.name = 'towerRavens';
+  ravens.userData.away = RAVENS.map(() => false);
+  const away = ravens.userData.away as boolean[];
   group.add(ravens, hull);
 
   const m = new THREE.Matrix4();
@@ -150,6 +156,7 @@ export function build(): LandmarkBuild {
   const e = new THREE.Euler(0, 0, 0, 'YXZ');
   const p = new THREE.Vector3();
   const one = new THREE.Vector3(1, 1, 1);
+  const zero = new THREE.Vector3(0, 0, 0);
   const place = (t: number) => {
     RAVENS.forEach((r, i) => {
       const period = 2.4 + i * 0.37;
@@ -164,7 +171,7 @@ export function build(): LandmarkBuild {
       const bob = Math.sin(clock * 7) * 0.04;
       e.set(peck + bob, r.h + turn, 0);
       q.setFromEuler(e);
-      m.compose(p.set(r.x, r.y + lift, r.z), q, one);
+      m.compose(p.set(r.x, r.y + lift, r.z), q, away[i] ? zero : one);
       ravens.setMatrixAt(i, m);
     });
     ravens.instanceMatrix.needsUpdate = true;

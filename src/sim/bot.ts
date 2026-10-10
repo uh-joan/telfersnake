@@ -2,6 +2,7 @@ import { ANIMALS } from './animals';
 import { isFree } from './collide';
 import { FOOD_VALUE, GOLDEN_MULTIPLIER } from './food';
 import type { Input, Snake, SnakeLook } from './snake';
+import { local, VEHICLES } from './vehicles';
 import { crossesWater } from './water';
 import type { World } from './world';
 
@@ -55,6 +56,7 @@ const HUNT_RANGE = 12;
 const PROBE_ANGLE = 0.9;
 /** How much less a bot fancies a snack it would have to swim for (unless it is worth a chase). */
 const ACROSS_WATER = 0.3;
+const AT = { f: 0, l: 0 };
 
 export class Bot {
   private readonly input: Input = { x: 1, z: 0, active: true, dash: false };
@@ -193,8 +195,16 @@ export class Bot {
       const px = me.x + Math.cos(angle) * reach;
       const pz = me.z + Math.sin(angle) * reach;
       for (const h of w.hazards) {
+        if (h.kind === 'puddle') continue; // London's puddles are for sliding through
         const r = h.r + me.radius + 0.4;
         if ((h.x - px) ** 2 + (h.z - pz) ** 2 < r * r) return true;
+      }
+      // London's buses and cabs: a moving wall, with a margin for where it will have got to.
+      for (const v of w.vehicles) {
+        const spec = VEHICLES[v.kind];
+        local(v, px, pz, AT);
+        const lead = v.speed * 0.8; // it is coming this way
+        if (AT.f > -spec.length / 2 - me.radius - 0.8 && AT.f < spec.length / 2 + me.radius + 0.8 + lead && Math.abs(AT.l) < spec.width / 2 + me.radius + 0.8) return true;
       }
       for (const o of w.snakes) {
         if (o === me || !o.alive || o.immune > 0) continue;

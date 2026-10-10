@@ -7,6 +7,7 @@ import type { KidKind } from './kids';
 import type { Box, Circle } from './layout';
 import type { PredatorKind } from './predators';
 import type { Rng } from './rng';
+import type { VehicleKind } from './vehicles';
 
 /**
  * A stage is a place to play: its fence and fixed solids (what collision needs), where things
@@ -128,6 +129,12 @@ export interface Stage extends Terrain {
   // school and the Common play exactly as before.
   /** Roads the buses and cabs drive. */
   routes?: readonly Route[];
+  /** Who drives them: so many of a kind on a route (by id). Unset: no traffic. */
+  traffic?: readonly { kind: VehicleKind; route: string; count: number }[];
+  /** Zebra crossings (centre and the road's direction): every bus and cab stops for anyone on one. */
+  zebras?: readonly (Spot & { angle: number })[];
+  /** Where the raven pair roost between hunts, one per raven. */
+  perches?: readonly Spot[];
   /** Tube stations. */
   portals?: readonly Portal[];
   /** The sights, for stamps and the minimap. */

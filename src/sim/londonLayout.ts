@@ -17,7 +17,8 @@ import { foodWeights, pickFoodKind } from './food';
 import type { Box, Circle } from './layout';
 import { inBox } from './layout';
 import type { Rng } from './rng';
-import type { Landmark, Portal, Spot, Stage, Terrain, WaterZone } from './stage';
+import type { Landmark, Portal, Route, Spot, Stage, Terrain, WaterZone } from './stage';
+import { laneLoop, type VehicleKind } from './vehicles';
 import { inWater } from './water';
 
 export const LONDON_BOUNDS = { minX: -85, maxX: 85, minZ: -65, maxZ: 65 };
@@ -134,19 +135,128 @@ export interface Road {
   width: number;
 }
 
-/** The streets: the Mall, the Strand, the Embankment, the south bank road and the outer ring. */
+/** The streets: the Mall, the Strand, the Embankment, the south bank road and the outer ring. The bus and cab roads are wider (two lanes). */
 export const ROADS: Road[] = [
   { id: 'mall', path: [{ x: -38, z: -24 }, { x: -24, z: -33 }, { x: -14, z: -40 }], width: 5 }, // the red road
   { id: 'piccadilly', path: [{ x: -56, z: -30 }, { x: -40, z: -42 }, { x: -30, z: -50 }, { x: -18, z: -44 }], width: 4 },
-  { id: 'strand', path: [{ x: -12, z: -42 }, { x: 4, z: -40 }, { x: 16, z: -36 }, { x: 34, z: -34 }, { x: 48, z: -28 }, { x: 62, z: -26 }], width: 4 },
+  { id: 'strand', path: [{ x: -12, z: -42 }, { x: 4, z: -39 }, { x: 16, z: -35 }, { x: 34, z: -33 }, { x: 48, z: -28 }, { x: 62, z: -26 }], width: 5.2 },
   { id: 'whitehall', path: [{ x: -12, z: -42 }, { x: -24, z: -26 }, { x: -34, z: -14 }], width: 4 },
-  { id: 'embankment', path: [{ x: -36, z: -14 }, { x: -18, z: -22 }, { x: 0, z: -24 }, { x: 22, z: -20 }, { x: 44, z: -9 }, { x: 74, z: -6 }], width: 4 },
+  { id: 'embankment', path: [{ x: -36, z: -14 }, { x: -18, z: -22 }, { x: 0, z: -24 }, { x: 22, z: -20 }, { x: 44, z: -9 }, { x: 74, z: -6 }], width: 5.2 },
   { id: 'southbank', path: [{ x: -8, z: 4 }, { x: -18, z: 14 }, { x: -30, z: 26 }, { x: -50, z: 34 }], width: 4 },
-  { id: 'borough', path: [{ x: -8, z: 4 }, { x: 4, z: 6 }, { x: 22, z: 20 }, { x: 40, z: 28 }, { x: 53, z: 30 }], width: 4 },
+  // Bankside, swinging south of the Globe (the 13 bus runs it).
+  { id: 'borough', path: [{ x: -7, z: 6 }, { x: 4, z: 7.5 }, { x: 10, z: 18 }, { x: 24, z: 24 }, { x: 40, z: 28 }, { x: 53, z: 30 }], width: 5.2 },
   // Over Tower Bridge and up the east bank to the Embankment.
-  { id: 'towerbridge', path: [{ x: 77, z: 30 }, { x: 80, z: 16 }, { x: 78, z: 2 }, { x: 74, z: -6 }], width: 4 },
-  { id: 'kensington', path: [{ x: -84, z: -8 }, { x: -56, z: -10 }, { x: -48, z: -12 }, { x: -36, z: -14 }], width: 4 },
+  { id: 'towerbridge', path: [{ x: 77, z: 30 }, { x: 80, z: 16 }, { x: 78, z: 2 }, { x: 74, z: -6 }], width: 5.2 },
+  { id: 'kensington', path: [{ x: -84, z: -8 }, { x: -58, z: -11 }, { x: -48, z: -13.2 }, { x: -36, z: -15 }], width: 5.2 },
+  // Past Big Ben to Westminster Bridge (the bus to the South Bank), and the City's back way to Tower Bridge (the cabs').
+  { id: 'westminster', path: [{ x: -36, z: -14 }, { x: -36, z: 0 }, { x: -30, z: 2 }], width: 5.2 },
+  { id: 'minories', path: [{ x: 62, z: -26 }, { x: 73, z: -25 }, { x: 78, z: -14 }, { x: 78, z: 2 }], width: 5.2 },
 ];
+
+/** Distance from (x, z) to a polyline. */
+export function distanceToPath(path: readonly Spot[], x: number, z: number): number {
+  let best = Infinity;
+  for (let i = 0; i + 1 < path.length; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const t = Math.min(1, Math.max(0, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz)));
+    best = Math.min(best, Math.hypot(x - a.x - dx * t, z - a.z - dz * t));
+  }
+  return best;
+}
+
+/** Distance from (x, z) to the Thames' centre line. */
+export function riverDistance(x: number, z: number): number {
+  return distanceToPath(THAMES.path, x, z);
+}
+
+/** Is (x, z) clear of the river and of every landmark (for paint and street furniture alike)? */
+export function clearOfSights(x: number, z: number, margin: number): boolean {
+  if (riverDistance(x, z) < THAMES.width / 2 + margin) return false;
+  for (const l of LANDMARKS) if (Math.hypot(x - l.at.x, z - l.at.z) < Math.min(l.radius, 9) + margin) return false;
+  return true;
+}
+
+/** A zebra crossing: centre, the road's direction there (radians, in the x/z plane) and the road width. */
+export interface Zebra {
+  x: number;
+  z: number;
+  angle: number;
+  width: number;
+}
+
+/**
+ * The zebra crossings: one at the middle of each longer street segment, where it is dry and open.
+ * Painted by the ground, and every bus and cab stops for anyone on one (vehicles.ts).
+ */
+export const ZEBRAS: Zebra[] = ROADS.flatMap((r: Road) => {
+  const out: Zebra[] = [];
+  for (let i = 0; i + 1 < r.path.length; i++) {
+    const a = r.path[i];
+    const b = r.path[i + 1];
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    if (len < 14) continue;
+    const x = (a.x + b.x) / 2;
+    const z = (a.z + b.z) / 2;
+    if (!clearOfSights(x, z, 3)) continue;
+    out.push({ x, z, angle: Math.atan2(b.z - a.z, b.x - a.x), width: r.width });
+  }
+  return out;
+});
+
+// ---------------------------------------------------------------- traffic (A3)
+
+/**
+ * The bus and cab routes, as road centre lines (each vertex on a painted street) with their stops
+ * as vertex indices. Each becomes a lane loop: out on the left, round, and back (laneLoop). Laid
+ * so that a whole bus, swinging round its corners and its turn at each end, stays clear of every
+ * solid and out of the river (bridges excepted), with room to spare; and well away from the lions.
+ */
+const line = (pts: [number, number][]): Spot[] => pts.map(([x, z]) => ({ x, z }));
+const ROUTE_LINES: { id: string; center: Spot[]; stops: number[]; lane?: number }[] = [
+  // The 11: South Kensington, along the Embankment to Blackfriars.
+  {
+    id: 'bus-north',
+    center: line([[-78, -8.5], [-72, -9.25], [-58, -11], [-48, -13.2], [-36, -15], [-18, -22], [-12.6, -22.6], [0, -24], [22, -20], [28.6, -16.7], [44, -9]]),
+    stops: [1, 6, 9],
+  },
+  // The 12: Parliament Square, over Westminster Bridge and down Bankside to Borough.
+  {
+    id: 'bus-south',
+    center: line([[-36, 0], [-30, 2], [-12, 2], [-7, 6], [4, 7.5], [5.8, 10.65], [10, 18], [24, 24], [28.8, 25.2], [40, 28]]),
+    stops: [1, 5, 8],
+  },
+  // The cabs: the Strand to the Tower, and over Tower Bridge.
+  {
+    id: 'cab',
+    center: line([[8, -37.67], [16, -35], [34, -33], [48, -28], [62, -26], [73, -25], [78, -14], [78, 2], [80, 16], [77, 30], [52, 30]]),
+    stops: [],
+    lane: 0.95, // cabs are narrower: the lanes sit closer, so there is room by Tower Bridge's legs
+  },
+];
+
+export const ROUTES: Route[] = ROUTE_LINES.map(({ id, center, stops, lane }) => ({ id, loop: true, ...laneLoop(center, stops, lane) }));
+
+/** Five buses and three cabs. */
+const TRAFFIC: { kind: VehicleKind; route: string; count: number }[] = [
+  { kind: 'bus', route: 'bus-north', count: 3 },
+  { kind: 'bus', route: 'bus-south', count: 2 },
+  { kind: 'cab', route: 'cab', count: 3 },
+];
+
+// ---------------------------------------------------------------- the ravens' perches
+
+/**
+ * The raven pair's homes: two of the six ravens on the Tower's south wall walk (tower.ts draws the
+ * other four, and these two whenever their birds are at home). At `RAVEN_PERCH_Y` metres up.
+ */
+export const RAVEN_PERCHES: Spot[] = [
+  { x: TOWER.x - 1.2, z: TOWER.z + TOWER.d / 2 - 0.27 },
+  { x: TOWER.x + 4.6, z: TOWER.z + TOWER.d / 2 - 0.27 },
+];
+export const RAVEN_PERCH_Y = 3.2;
 
 /** The Tube stations (they become portals in A6). Westminster is where you arrive. */
 export const TUBE: Portal[] = [
@@ -303,17 +413,22 @@ export const LONDON: Stage = {
     }
   },
   sanctuary: null,
-  hazardArea: null, // puddles, umbrellas and roadworks come with A3
-  hazardKinds: [],
+  // Dropped umbrellas, roadworks and the odd puddle, anywhere open (and never on a bus route).
+  hazardArea: { rough: BOUNDS, share: 0 },
+  hazardKinds: ['puddle', 'umbrella', 'roadworks'],
   logs: [],
-  predators: [],
+  // The four Trafalgar lions (one per plinth, in LION_PLINTHS order) and the Tower's raven pair.
+  predators: [{ kind: 'lion', count: LION_PLINTHS.length }, { kind: 'raven', count: RAVEN_PERCHES.length }],
   kids: [],
   creatureCount: 0,
   // Big and open, so four more rivals keep it lively (as on the Common).
   extraRivals: 4,
   greeters: null,
   cooper: BOBBY,
-  routes: [], // the buses and cabs arrive in A3
+  routes: ROUTES,
+  traffic: TRAFFIC,
+  zebras: ZEBRAS,
+  perches: RAVEN_PERCHES,
   landmarks: LANDMARKS,
   plinths: LION_PLINTHS,
   cameraZoom: 0.9,

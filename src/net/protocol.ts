@@ -9,6 +9,7 @@ import type { Mode } from '../sim/modes';
 import type { StageId } from '../sim/stage';
 import type { Snake, SnakeLook } from '../sim/snake';
 import { type CardId, UPGRADE_IDS, type UpgradeId } from '../sim/upgrades';
+import { VEHICLE_KINDS, type Vehicle } from '../sim/vehicles';
 import type { GameEvent } from '../sim/world';
 
 /**
@@ -49,8 +50,14 @@ export interface Seat {
 export type SnakeRow = [number, number, number, number, number, number, number, number, number, number];
 /** x, z, heading, speed, travel, dazed, born */
 export type AnimalRow = [number, number, number, number, number, number, number];
-/** x, z, heading, speed (kind is fixed per index, sent once in welcome) */
-export type PredatorRow = [number, number, number, number];
+/**
+ * x, z, heading, speed (kind is fixed per index, sent once in welcome), and for London's lions and
+ * ravens a fifth: their state (LION / RAVEN in predators.ts: statue or awake, perched or out).
+ * Readers that know only four columns (the HD client) simply never look at it.
+ */
+export type PredatorRow = [number, number, number, number] | [number, number, number, number, number];
+/** London's buses and cabs: x, z, heading, speed (kind fixed per index, sent once in welcome). */
+export type VehicleRow = [number, number, number, number];
 /** x, z, heading, speed (kind is fixed per index, sent once in welcome) */
 export type KidRow = [number, number, number, number];
 /** x, z, kind, t (flight progress 0..1, for the client's arc) */
@@ -85,6 +92,8 @@ export interface Snapshot {
   pd: PredatorRow[];
   kd: KidRow[];
   cr: CreatureRow[];
+  /** London's traffic. Absent where there is none (the HD client ignores it either way). */
+  vh?: VehicleRow[];
   /** Pebbles and kisses in flight: the whole (usually short) list, every snapshot. */
   pj: ProjectileRow[];
   /** Only the foods that changed since the last snapshot. */
@@ -100,6 +109,8 @@ export type ServerMessage =
   | {
       t: 'welcome'; me: number; room: string; stage: StageId; tick: number; seats: Seat[];
       hazards: HazardRow[]; animalKinds: number[]; predatorKinds: number[]; kidKinds: number[]; creatureKinds: number[]; foods: FoodRow[]; pellets: PelletRow[];
+      /** London's buses and cabs, by VEHICLE_KINDS index. Absent where there is no traffic. */
+      vehicleKinds?: number[];
     }
   | { t: 'seats'; seats: Seat[] }
   | Snapshot
@@ -141,7 +152,10 @@ export function snakeRow(s: Snake): SnakeRow {
 }
 
 export const animalRow = (a: Animal): AnimalRow => [r2(a.x), r2(a.z), r3(a.heading), r2(a.speed), r2(a.travel), r2(Math.max(0, a.dazed)), a.born];
-export const predatorRow = (p: Predator): PredatorRow => [r2(p.x), r2(p.z), r3(p.heading), r2(p.speed)];
+export const predatorRow = (p: Predator): PredatorRow =>
+  p.kind === 'lion' || p.kind === 'raven' ? [r2(p.x), r2(p.z), r3(p.heading), r2(p.speed), p.state] : [r2(p.x), r2(p.z), r3(p.heading), r2(p.speed)];
+export const vehicleRow = (v: Vehicle): VehicleRow => [r2(v.x), r2(v.z), r3(v.heading), r2(v.speed)];
+export const vehicleKindIndex = (v: Vehicle) => VEHICLE_KINDS.indexOf(v.kind);
 export const predatorKindIndex = (p: Predator) => PREDATOR_KINDS.indexOf(p.kind);
 export const kidRow = (k: Kid): KidRow => [r2(k.x), r2(k.z), r3(k.heading), r2(k.speed)];
 export const kidKindIndex = (k: Kid) => KID_KINDS.indexOf(k.kind);
@@ -161,7 +175,7 @@ export const animalKindIndex = (a: Animal) => ANIMAL_KINDS.indexOf(a.kind);
  * fanfare would play on every phone. Only events that carry a `who` can be listed.
  */
 const PER_SEAT: ReadonlySet<Extract<GameEvent, { who: number }>['type']> = new Set([
-  'cards', 'bump', 'boop', 'ouch', 'pellet', 'tier', 'helmet', 'pelt', 'kiss', 'magic', 'teatime',
+  'cards', 'bump', 'boop', 'ouch', 'pellet', 'tier', 'helmet', 'pelt', 'kiss', 'magic', 'teatime', 'splash',
 ] as const);
 
 export function eventIsFor(e: GameEvent, seat: number): boolean {
