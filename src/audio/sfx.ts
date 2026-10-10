@@ -511,6 +511,25 @@ export class Sfx {
     this.tone(300, 0.7, { type: 'sine', gain: 0.1, vibrato: [60, 6] });
   }
 
+  // ---------------------------------------------------------------- London's keepsakes (A7)
+
+  /** A rubber stamp coming down on a passport: THUNK (a low thud, a papery slap). */
+  stamp(): void {
+    this.tone(120, 0.18, { type: 'sine', gain: 0.32, slideTo: 55 });
+    this.tone(260, 0.06, { type: 'square', gain: 0.05, slideTo: 140 });
+    this.hiss(0.09, 1800, 500, 0.22, 0, 1.4);
+  }
+
+  /** A new postcard for the album: a little rising "ta-daa" on a music box. */
+  postcard(): void {
+    [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.35, { type: 'sine', gain: 0.07, delay: 0.25 + i * 0.09 }));
+  }
+
+  /** The Tiny Big Ben hat's chime: the Quarters' first phrase, small and high. */
+  chime(): void {
+    [659.3, 830.6, 740, 493.9].forEach((f, i) => this.bellNote(f, i * 0.32, 0.9, 0.035));
+  }
+
   /** Not enough stars yet: soft, never scolding. */
   nope(): void {
     this.tone(220, 0.14, { type: 'sine', gain: 0.12, slideTo: 180 });

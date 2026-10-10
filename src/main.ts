@@ -25,7 +25,7 @@ import { TrailView } from './render/trailView';
 import { LondonPeople } from './render/london/people';
 import { JEWEL_COLOURS, LegendView } from './render/london/legends';
 import { SetPieceView } from './render/london/setPieceView';
-import { TUBE_NAMES } from './sim/londonLayout';
+import { SAMI, TUBE_NAMES } from './sim/londonLayout';
 import { Stage } from './render/stage';
 import { Weather } from './render/weather';
 import { UpgradeFx } from './render/upgradeFx';
@@ -45,6 +45,8 @@ import { Hud } from './ui/hud';
 import { Shop } from './ui/shop';
 import { playCommonUnlock, playLondonUnlock } from './ui/unlockSplash';
 import { track, returningPlayer } from './meta/analytics';
+import { awardPostcard, LANDMARK_CARDS, type PostcardId } from './meta/postcards';
+import { Album } from './ui/album';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -313,7 +315,7 @@ const PLACES: Record<StageId, Place> = {
     price: 600, currency: 'stars', requires: 'common',
     bonus: { stars: 1.5, gem: 0.5 }, // a one-in-two chance of a bonus gem
     greeting: 'Welcome to London! Mind the gap, and mind the river.',
-    welcome: { seen: (s) => s.londonSeen, mark: (s) => { s.londonSeen = true; }, title: '🇬🇧 London!', sub: '🎡 sights & surprises' },
+    welcome: { seen: (s) => s.londonSeen, mark: (s) => { s.londonSeen = true; }, title: '🇬🇧 London!', sub: '🎡 💂 🐉 🚇' },
     splash: () => {
       playLondonUnlock(); // the Golden Ticket: gate, Tube train, Big Ben…
       wakeAudio()?.goldenTicket(); // …beep, whoosh, BONG
@@ -415,7 +417,7 @@ function cycleAudio(): void {
 
 // ---------------------------------------------------------------- screens
 
-type Screen = 'start' | 'pause' | 'results' | 'shop' | 'name' | null;
+type Screen = 'start' | 'pause' | 'results' | 'shop' | 'name' | 'album' | null;
 let screen: Screen = 'start';
 
 function show(next: Screen): void {
@@ -429,6 +431,7 @@ function show(next: Screen): void {
     refreshModePicker();
     refreshStagePicker();
     refreshWallet();
+    refreshAlbumButton();
   }
   // A shared playground cannot stop for one player, so their snake stands aside, safe, while they are in a menu.
   if (!run.over) connection?.away(next !== null);
@@ -445,6 +448,57 @@ const shop = new Shop(save, () => sfx, () => {
   shop.changed = false;
   show(shopFrom);
 });
+
+// ---------------------------------------------------------------- London's keepsakes: stamps and postcards
+
+const album = new Album(save, () => sfx, () => show('start'));
+
+/** The album opens off the start screen, once there is a London to collect. */
+function refreshAlbumButton(): void {
+  $('start-album').hidden = !save.londonUnlocked;
+}
+
+function openAlbum(): void {
+  if (starting || screen !== 'start') return;
+  wakeAudio()?.pick();
+  show('album');
+  album.open();
+}
+
+const POSTCARD_NAME = Object.fromEntries(LANDMARK_CARDS.map((c) => [c.id, c.name])) as Record<string, string>;
+
+/** Keep a postcard for ever (London only), with a little fanfare the first time. */
+function keepPostcard(id: PostcardId): void {
+  if (world.stage.id !== 'london' || !awardPostcard(save, id)) return;
+  writeSave(save);
+  window.setTimeout(() => {
+    hud.toast('📮', 'Postcard!');
+    sfx?.postcard();
+  }, 900); // after the moment's own fanfare
+}
+
+/**
+ * Your snake reached a sight for the first time this run: THUNK, an inked stamp on the screen and
+ * on the minimap. The first stamp ever earns its postcard; all twelve in one run is WHOLE LONDON.
+ */
+function stampSight(id: string): void {
+  hud.stamped.add(id);
+  hud.stamp(id, POSTCARD_NAME[id] ?? id.toUpperCase());
+  sfx?.stamp();
+  if (!save.stamps.includes(id)) save.stamps.push(id);
+  keepPostcard(id as PostcardId);
+  writeSave(save);
+  const all = world.stage.landmarks?.length ?? 0;
+  if (all > 0 && hud.stamped.size === all) {
+    window.setTimeout(() => {
+      hud.announce('WHOLE LONDON!', '🇬🇧 📮 🏆');
+      sparkles.burst(world.snake.x, world.snake.z, CONFETTI, 40, 1.8);
+      sparkles.burst(world.snake.x, world.snake.z, GOLD, 30, 1.6);
+      sfx?.goldenTicket();
+      keepPostcard('whole');
+    }, 1600); // once the twelfth stamp has landed
+  }
+}
 
 let countUp = 0;
 
@@ -796,7 +850,10 @@ function handleEvents(): void {
           hud.announce(title, sub);
           sfx?.golden();
           if (e.kind === 'stag' || e.kind === 'dragon') sfx?.tierUp();
-          if (e.kind === 'dragon') sfx?.whoosh();
+          if (e.kind === 'dragon') {
+            sfx?.whoosh();
+            keepPostcard('dragon');
+          }
         }
         break;
       }
@@ -856,6 +913,7 @@ function handleEvents(): void {
         hud.announce('👑 ROYAL!', '💎💎💎💎💎');
         sfx?.goldenTicket();
         sfx?.tierUp();
+        keepPostcard('royal');
         break;
       case 'cry':
         // London's animals: a swan's HONK, a corgi's yip, a whole flock of pigeons lifting off.
@@ -879,6 +937,7 @@ function handleEvents(): void {
         if (!mine) break;
         hud.announce('TEA TIME!', '🫖 🥪 🍰');
         sfx?.teaTime();
+        keepPostcard('teatime');
         break;
       case 'say':
         // A grown-up says something, in a speech bubble over their head (Cooper, the keeper, Miss Sami…).
@@ -904,6 +963,7 @@ function handleEvents(): void {
         hud.popup('🙂 💎', world.snake.x, world.snake.z, 'fun'); // at you, so his face stays in view
         sfx?.golden();
         sfx?.chaChing();
+        keepPostcard('guard');
         break;
       case 'photo':
         // A tourist took your picture: CLICK! A flash round the edges of your screen, and a sticker.
@@ -927,6 +987,7 @@ function handleEvents(): void {
         if (!mine) break;
         hud.announce('WHEE!', '🌉 ⬆️ 💨');
         sfx?.whee();
+        keepPostcard('launch');
         break;
       case 'ride':
         sparkles.burst(e.x, e.z, e.by === 'eye' ? CONFETTI : BUBBLES, 14, 1);
@@ -934,6 +995,7 @@ function handleEvents(): void {
         if (e.on && e.by === 'eye') {
           hud.announce('🎡 LONDON EYE!', '👀 💎 ✨');
           sfx?.rideUp();
+          keepPostcard('eyeride');
         } else if (e.on) {
           hud.popup('⛴️ ALL ABOARD!', e.x, e.z, 'fun');
           sfx?.toot();
@@ -950,6 +1012,7 @@ function handleEvents(): void {
         hud.tube(ports.map((p) => TUBE_NAMES[p.id] ?? p.id), ports.map((p) => p.at), e.from, e.to);
         hud.popup('🚇 Mind the gap!', e.x, e.z, 'fun');
         sfx?.mindTheGap();
+        keepPostcard('tube');
         break;
       }
       case 'wobble':
@@ -971,6 +1034,7 @@ function handleEvents(): void {
         earnGem();
         hud.popup('🎆 💎', e.x, e.z, 'good');
         sfx?.golden();
+        keepPostcard('fireworks');
         break;
       case 'boo':
         // The living statue moves! Then freezes again.
@@ -996,6 +1060,7 @@ let trailIn = 0;
 let perkFxIn = 0;
 let wasDashing = false;
 let buskIn = 0;
+let chimeIn = 6;
 const tail = { x: 0, z: 0 };
 
 function frame(now: number): void {
@@ -1059,6 +1124,18 @@ function frame(now: number): void {
         buskIn = 2.4;
         sfx?.busk();
       } else if (!dancing) buskIn = 0;
+    }
+
+    // London's stamps: the first time this run your head comes within a sight's reach.
+    if (london && s.alive && world.stage.landmarks) {
+      for (const l of world.stage.landmarks) {
+        if (!hud.stamped.has(l.id) && (s.x - l.at.x) ** 2 + (s.z - l.at.z) ** 2 < l.radius * l.radius) stampSight(l.id);
+      }
+    }
+    // The Tiny Big Ben hat chimes now and then.
+    if (save.hat === 'tiny-bigben' && (chimeIn -= dt) <= 0) {
+      chimeIn = 20;
+      sfx?.chime();
     }
 
     if ((bankIn -= dt) <= 0) {
@@ -1167,7 +1244,9 @@ let starting = false;
 $('play').addEventListener('click', async () => {
   if (screen !== 'start' || starting) return;
   starting = true;
-  wakeAudio()?.bell();
+  // London's arrival: the Westminster Quarters from Big Ben, instead of the school bell.
+  if (save.stage === 'london') wakeAudio()?.quarters();
+  else wakeAudio()?.bell();
   const greeting = here().greeting;
   $('start').classList.add('busy'); // every button on the start screen is dead until we are in
 
@@ -1194,8 +1273,13 @@ $('play').addEventListener('click', async () => {
     welcome.mark(save);
     writeSave(save);
     hud.announce(welcome.title, welcome.sub);
+    if (save.stage === 'london') sfx?.bong(); // and Big Ben himself says hello
   }
-  hud.say(greeting, world.snake.x, world.snake.z);
+  hud.stamped.clear(); // a fresh passport every run
+  // In London it is Miss Sami who says hello, by the Tube exit at Westminster where you pop out
+  // (over her head when she is on screen; a tall phone may only see the snake, so then over it).
+  const sami = world.stage.id === 'london' && stage.project(SAMI.x, 2, SAMI.z, { x: 0, y: 0, visible: false }).visible;
+  hud.say(greeting, sami ? SAMI.x : world.snake.x, sami ? SAMI.z : world.snake.z);
   runStartedAt = performance.now();
   show(null);
 });
@@ -1329,6 +1413,7 @@ function chooseStage(id: StageId): void {
   }
   writeSave(save);
   refreshStagePicker();
+  refreshAlbumButton();
   // First time in: a wordless splash.
   if (justUnlocked) p.splash?.();
 }
@@ -1339,6 +1424,7 @@ refreshStagePicker();
 // ---------------------------------------------------------------- the rest of the buttons
 
 $('start-shop').addEventListener('click', openShop);
+$('start-album').addEventListener('click', openAlbum);
 $('results-shop').addEventListener('click', openShop);
 $('pause-shop').addEventListener('click', openShop);
 $('again').addEventListener('click', () => location.reload());
@@ -1380,6 +1466,7 @@ document.addEventListener('visibilitychange', () => {
 // ---------------------------------------------------------------- start up
 
 refreshWallet();
+refreshAlbumButton();
 $('start-name').textContent = save.name;
 $('best-score').textContent = String(save.bestScore);
 $('build').textContent = __BUILD__;
@@ -1388,7 +1475,7 @@ hud.teachDash = !save.dashed; // the dash button introduces itself until it has 
 applyAudio();
 
 if (import.meta.env.DEV) {
-  Object.assign(window, { __game: { get world() { return world; }, get connection() { return connection; }, solo, stage, save, pump: (n = 1) => { for (let i = 0; i < n; i++) frame(last + 1000 / 60); } } }); // pump(n): run n frames by hand (screenshots while the pane is hidden)
+  Object.assign(window, { __game: { get world() { return world; }, get connection() { return connection; }, solo, stage, save, hud, pump: (n = 1) => { for (let i = 0; i < n; i++) frame(last + 1000 / 60); } } }); // pump(n): run n frames by hand (screenshots while the pane is hidden)
 }
 
 requestAnimationFrame(frame);

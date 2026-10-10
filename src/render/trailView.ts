@@ -8,7 +8,7 @@ import { trailPalette } from '../meta/catalogue';
  * it never touches the sim.
  */
 
-type Shape = 'orb' | 'flake' | 'heart' | 'bubble';
+type Shape = 'orb' | 'flake' | 'heart' | 'bubble' | 'pennant' | 'drop' | 'feather' | 'puff';
 
 interface Style {
   shape: Shape;
@@ -18,10 +18,12 @@ interface Style {
   size: number;
   sway: number; // horizontal drift wobble
   twinkle: boolean; // glow shapes only: pulse the brightness
+  burst: number; // sideways speed outward (fireworks), m/s
+  y0: number; // height a mote starts at (rain starts high and falls)
 }
 
-const S = (shape: Shape, rise: number, grav: number, spin: number, size: number, sway: number, twinkle = false): Style =>
-  ({ shape, rise, grav, spin, size, sway, twinkle });
+const S = (shape: Shape, rise: number, grav: number, spin: number, size: number, sway: number, twinkle = false, burst = 0, y0 = 0.35): Style =>
+  ({ shape, rise, grav, spin, size, sway, twinkle, burst, y0 });
 
 /** Every trail's personality. Anything unlisted falls back to a gentle glow. */
 const STYLES: Record<string, Style> = {
@@ -43,6 +45,14 @@ const STYLES: Record<string, Style> = {
   'union-trail': S('orb', 0.9, 0.4, 0, 1.1, 0.2, true),
   'river-splash': S('bubble', 1.6, 0.4, 0, 1.0, 1.2),
   'fairy-dust': S('orb', 0.7, 0.2, 0, 0.8, 0.9, true),
+  // London's Tuck Shop trails (A7).
+  fireworks: S('orb', 3.2, 3.4, 0, 0.75, 0.2, true, 2.6),
+  bunting: S('pennant', 0.8, 0.9, 1.6, 1.0, 1.0),
+  raindrops: S('drop', -1.5, 7, 0, 0.9, 0.1, false, 0, 2.6),
+  'tea-bubbles': S('bubble', 1.0, -0.1, 0, 0.8, 1.2),
+  'red-arrows': S('puff', 0.5, 0.15, 0, 1.4, 0.3),
+  'pigeon-feathers': S('feather', 0.9, 0.7, 2.2, 1.0, 1.6),
+  'thames-spray': S('drop', 2.6, 6.5, 0, 0.7, 0.3, false, 1.2),
 };
 /** Trails a magic lends (not sold in the Tuck Shop), and their colours. */
 const MAGIC_PALETTES: Record<string, number[]> = {
@@ -74,6 +84,14 @@ function heartGeometry(): THREE.BufferGeometry {
   geo.center();
   geo.scale(0.42, 0.42, 0.42);
   geo.rotateX(-Math.PI / 2); // lay it flat so the follow camera sees the heart
+  return geo;
+}
+
+/** A little flag triangle hanging point-down, like a bunting pennant. */
+function pennantGeometry(): THREE.BufferGeometry {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute([-0.32, 0.25, 0, 0.32, 0.25, 0, 0, -0.4, 0], 3));
+  geo.computeVertexNormals();
   return geo;
 }
 
@@ -142,6 +160,7 @@ class Emitter {
       this.mesh.setColorAt(i, this.col);
     });
     this.mesh.count = this.motes.length;
+    this.mesh.visible = this.mesh.count > 0; // an empty shape costs no draw call
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
@@ -158,6 +177,10 @@ export class TrailView {
       flake: new Emitter(new THREE.PlaneGeometry(0.55, 0.62), 220, { additive: false, tumble: true }),
       heart: new Emitter(heartGeometry(), 160, { additive: false }),
       bubble: new Emitter(new THREE.SphereGeometry(0.3, 10, 8), 160, { additive: false, opacity: 0.4 }),
+      pennant: new Emitter(pennantGeometry(), 160, { additive: false, tumble: true }),
+      drop: new Emitter(new THREE.SphereGeometry(0.12, 8, 6).scale(1, 2.4, 1), 200, { additive: false, opacity: 0.75 }),
+      feather: new Emitter(new THREE.PlaneGeometry(0.22, 0.7), 160, { additive: false, tumble: true }),
+      puff: new Emitter(new THREE.IcosahedronGeometry(0.34, 1), 200, { additive: false, opacity: 0.55 }),
     };
     for (const e of Object.values(this.emitters)) this.group.add(e.mesh);
   }
@@ -168,15 +191,17 @@ export class TrailView {
     const palette = MAGIC_PALETTES[trailId] ?? trailPalette(trailId);
     if (palette.length === 0) return;
     const em = this.emitters[style.shape];
-    if (em.motes.length >= 300) return;
+    if (em.motes.length >= em.mesh.instanceMatrix.count) return; // full: never draw past the buffer
     this.tint.setHex(palette[Math.floor(Math.random() * palette.length)]);
+    const out = Math.random() * Math.PI * 2;
+    const burst = style.burst * (0.6 + Math.random() * 0.6);
     em.motes.push({
       x: x + (Math.random() - 0.5) * 0.5,
-      y: 0.35,
+      y: style.y0 + Math.random() * (style.y0 > 1 ? 0.8 : 0),
       z: z + (Math.random() - 0.5) * 0.5,
-      vx: (Math.random() - 0.5) * 0.5,
+      vx: (Math.random() - 0.5) * 0.5 + Math.cos(out) * burst,
       vy: style.rise + (Math.random() - 0.5) * 0.4,
-      vz: (Math.random() - 0.5) * 0.5,
+      vz: (Math.random() - 0.5) * 0.5 + Math.sin(out) * burst,
       rot: Math.random() * 6.28,
       spin: style.spin * (Math.random() < 0.5 ? -1 : 1) * (0.7 + Math.random() * 0.6),
       grav: style.grav,

@@ -107,6 +107,20 @@
         </div>
       </div>
 
+      <div id="album" class="screen" role="dialog" aria-label="Postcards" aria-hidden="true">
+        <div id="album-top">
+          <h2 class="title">📮 Postcards</h2>
+          <span id="album-count">0/21</span>
+          <button id="album-close" class="round small" aria-label="Close the postcards">✖️</button>
+        </div>
+        <div id="album-board"></div>
+      </div>
+
+      <div id="postcard-zoom" role="dialog">
+        <div id="postcard-zoom-card"></div>
+        <button id="postcard-zoom-close" class="round small" aria-label="Put the postcard back">✖️</button>
+      </div>
+
       <div id="name" class="screen">
         <h2 class="title">Your name</h2>
         <input id="name-input" type="text" inputmode="text" autocomplete="off" autocapitalize="words" spellcheck="false" maxlength="16" aria-label="Your snake's name" />
@@ -149,7 +163,8 @@
         <button id="play" class="round go huge" aria-label="Play">▶️<em>Play</em></button>
 
         <div id="start-extras">
-          <button id="start-shop" class="round">🛒<em>Tuck Shop <span id="start-stars">⭐0</span></em></button>
+          <button id="start-shop" class="round">🛒<span id="start-stars" class="wallet">⭐0</span><em>Tuck Shop</em></button>
+          <button id="start-album" class="round" aria-label="Postcards" hidden>📮<em>Postcards</em></button>
           <button class="round sound" aria-label="Sound: everything, effects only, or off"><span>🔊</span><em>Sound</em></button>
         </div>
 

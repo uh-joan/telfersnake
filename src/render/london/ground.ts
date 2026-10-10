@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {
   BOROUGH, COVENT_GARDEN, HYDE_PARK, LANDMARKS, LONDON_BOUNDS, NELSON, PICCADILLY_FOUNTAIN, ROADS,
   SERPENTINE, SOUTH_BANK, ST_JAMES, ST_JAMES_LAKE, THAMES, VICTORIA_MEMORIAL, ZEBRAS,
+  BANDSTAND_PARK, CAROUSEL, SOUTH_GARDENS, TERRACE,
 } from '../../sim/londonLayout';
 import type { Box } from '../../sim/layout';
 import { Rng } from '../../sim/rng';
@@ -189,6 +190,9 @@ export function makePaperMap(maxAnisotropy: number, maxTextureSize: number): THR
       treeDot(x, z, rng.range(0.45, 0.8));
     }
   }
+
+  // ---- the south-west (A7): the South Bank gardens, the bandstand's round park, the terrace's pavement
+  paintSouthWest(c, X, Z, S, treeDot);
 
   // ---- sandy squares
   c.fillStyle = SAND;
@@ -401,6 +405,86 @@ function paintCompass(c: CanvasRenderingContext2D, cx: number, cy: number, r: nu
   c.fillText('E', r * 0.91, 0);
   c.fillText('W', -r * 0.91, 0);
   c.restore();
+}
+
+/** Flower beds and paths for the south-west's gardens, the bandstand park, and the terrace's pavement. */
+function paintSouthWest(
+  c: CanvasRenderingContext2D, X: (x: number) => number, Z: (z: number) => number, S: number,
+  treeDot: (x: number, z: number, r: number) => void,
+): void {
+  const g = SOUTH_GARDENS;
+  c.beginPath();
+  c.roundRect(X(g.x - g.w / 2), Z(g.z - g.d / 2), g.w * S, g.d * S, 2 * S);
+  c.fillStyle = PARK;
+  c.fill();
+  c.lineWidth = 0.5 * S;
+  c.strokeStyle = PARK_EDGE;
+  c.stroke();
+  // A sandy round under the carousel, and a path along the gardens to it.
+  c.fillStyle = SAND;
+  c.beginPath();
+  c.arc(X(CAROUSEL.x), Z(CAROUSEL.z), 3.6 * S, 0, Math.PI * 2);
+  c.fill();
+  c.strokeStyle = SAND;
+  c.lineWidth = 1.4 * S;
+  c.beginPath();
+  c.moveTo(X(g.x - g.w / 2 + 1), Z(g.z - 2.6));
+  c.lineTo(X(CAROUSEL.x - 3), Z(g.z - 2.6));
+  c.stroke();
+  // Flower beds: little clusters of bright dots.
+  const flowers = ['#ff6b9a', '#ffd23f', '#ffffff', '#b36bff', '#ff8a3d'];
+  const bed = (x: number, z: number, r: number, k: number) => {
+    c.beginPath();
+    c.ellipse(X(x), Z(z), r * 1.4 * S, r * S, 0, 0, Math.PI * 2);
+    c.fillStyle = '#7a5230';
+    c.fill();
+    for (let i = 0; i < 14; i++) {
+      const a = i * 2.4;
+      const d = (i % 5) / 5;
+      c.beginPath();
+      c.arc(X(x + Math.cos(a) * r * 1.1 * d), Z(z + Math.sin(a) * r * 0.75 * d), 0.28 * S, 0, Math.PI * 2);
+      c.fillStyle = flowers[(i + k) % flowers.length];
+      c.fill();
+    }
+  };
+  bed(g.x - 8, g.z + 2.4, 1.3, 0);
+  bed(g.x - 2, g.z + 2.6, 1.2, 2);
+  bed(g.x + 3.5, g.z - 3, 0.9, 4);
+
+  // The bandstand's park: a round lawn, a sandy ring path, flower beds round the edge, drawn trees.
+  const b = BANDSTAND_PARK;
+  c.beginPath();
+  c.arc(X(b.x), Z(b.z), b.r * S, 0, Math.PI * 2);
+  c.fillStyle = PARK;
+  c.fill();
+  c.lineWidth = 0.5 * S;
+  c.strokeStyle = PARK_EDGE;
+  c.stroke();
+  c.beginPath();
+  c.arc(X(b.x), Z(b.z), b.r * 0.55 * S, 0, Math.PI * 2);
+  c.lineWidth = 1.1 * S;
+  c.strokeStyle = SAND;
+  c.stroke();
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    bed(b.x + Math.cos(a) * b.r * 0.8, b.z + Math.sin(a) * b.r * 0.8, 0.8, i);
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    treeDot(b.x + Math.cos(a) * b.r * 0.82, b.z + Math.sin(a) * b.r * 0.82, 0.5);
+  }
+
+  // The terrace: a pavement along the bottom edge, and a little front garden for every house.
+  const t = TERRACE;
+  c.fillStyle = '#e4dccb';
+  c.fillRect(X(t.x0 - 1), Z(t.z - 1.8), (t.x1 - t.x0 + 2) * S, 4.7 * S);
+  c.lineWidth = 0.15 * S;
+  c.strokeStyle = 'rgba(43,33,24,0.45)';
+  c.strokeRect(X(t.x0 - 1), Z(t.z - 1.8), (t.x1 - t.x0 + 2) * S, 4.7 * S);
+  for (let x = t.x0 + 1.5; x < t.x1; x += 3) {
+    c.fillStyle = '#9ccc7a';
+    c.fillRect(X(x + 0.1), Z(t.z + 1.4), 1.2 * S, 1 * S);
+  }
 }
 
 function paintSerpent(c: CanvasRenderingContext2D, cx: number, cy: number, S: number): void {

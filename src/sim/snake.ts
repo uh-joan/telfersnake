@@ -80,6 +80,8 @@ export interface SnakeLook {
   head: number;
   /** Segment colours from the neck back, repeating. Default: four of `body`, one of `stripe`. */
   pattern?: number[];
+  /** Drawn only: the pattern chases along the body like lights (never read by the sim). */
+  shimmer?: boolean;
 }
 
 export class Snake {

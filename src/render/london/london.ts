@@ -6,6 +6,7 @@ import { makeBridges } from './bridges';
 import { makeFurniture } from './furniture';
 import { makePaperMap, SHEET } from './ground';
 import { makeLabels } from './labels';
+import { makeSouthWest } from './southwest';
 import { LANDMARK_BUILDERS, type LandmarkBuild, type LandmarkId } from './landmarks';
 import { makeThames } from './water';
 
@@ -161,6 +162,8 @@ export function makeLondon(maxAnisotropy: number, maxTextureSize = 4096, camera?
   const thames = makeThames();
   group.add(tableMesh, makePaperMap(maxAnisotropy, maxTextureSize), thames.group, makeBridges(), makeFurniture());
   group.add(makeElfinOak(ELFIN_OAK)); // the legends' glade in Kensington Gardens
+  const southWest = makeSouthWest(); // the carousel, the stalls, the bandstand and the terrace (A7)
+  group.add(southWest.group);
 
   // ---- the twelve landmarks, each built round its own origin and set down at its `at`
   const builds: LandmarkBuild[] = [];
@@ -214,6 +217,7 @@ export function makeLondon(maxAnisotropy: number, maxTextureSize = 4096, camera?
   const reveal = (x: number, z: number, dt: number) => {
     t += dt;
     thames.update(t);
+    southWest.animate(t);
     for (const b of builds) b.animate?.(t, dt);
     labels.update(x, z, t, dt);
     for (const o of occluders) {

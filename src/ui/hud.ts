@@ -1,6 +1,7 @@
 import { ANIMALS } from '../sim/animals';
 import { awake } from '../sim/predators';
 import { SCHOOL } from '../sim/layout';
+import { paintIcon } from '../sim/londonLayout';
 import type { Stage as PlayStage } from '../sim/stage';
 import { MAGIC_IDS, type MagicId, TIERS } from '../sim/snake';
 import { JEWELS_FOR_CROWN } from '../sim/treasures';
@@ -83,6 +84,36 @@ export class Hud {
   private shownJewels = '';
   private shownMagics = '';
   private readonly magicBars: HTMLElement[] = [];
+
+  /** London: the sights stamped this run, inked on the minimap. */
+  readonly stamped = new Set<string>();
+  private stampEl: HTMLDivElement | null = null;
+
+  /**
+   * A rubber stamp slams down in the middle of the screen: the sight's little picture inside a ring
+   * of red ink, and its short name. Gone again in a couple of seconds.
+   */
+  stamp(id: string, name: string): void {
+    if (!this.stampEl) {
+      this.stampEl = document.createElement('div');
+      this.stampEl.className = 'stamp';
+      this.stampEl.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(this.stampEl);
+    }
+    const ink = document.createElement('div');
+    ink.className = 'stamp-ink';
+    const art = document.createElement('canvas');
+    art.width = art.height = 132;
+    const c = art.getContext('2d');
+    if (c) paintIcon(c, id, 66, 76, 4.6);
+    const label = document.createElement('b');
+    label.textContent = name;
+    ink.append(art, label);
+    this.stampEl.replaceChildren(ink);
+    this.stampEl.classList.remove('show');
+    void this.stampEl.offsetWidth; // restart the CSS animation
+    this.stampEl.classList.add('show');
+  }
 
   constructor() {
     this.setStage(SCHOOL);
@@ -529,6 +560,34 @@ export class Hud {
       c.beginPath();
       c.arc(X(world.cooper.x), Z(world.cooper.z), 1.8, 0, Math.PI * 2);
       c.fill();
+    }
+
+    // London's stamps: a ring of red ink over every sight visited this run.
+    if (this.stamped.size > 0) {
+      c.lineCap = 'round';
+      c.lineJoin = 'round';
+      for (const l of this.stage.landmarks ?? []) {
+        if (!this.stamped.has(l.id)) continue;
+        const x = X(l.at.x);
+        const z = Z(l.at.z);
+        c.strokeStyle = 'rgba(200,30,40,0.95)';
+        c.lineWidth = 4;
+        c.beginPath();
+        c.arc(x, z, 14, 0, Math.PI * 2);
+        c.stroke();
+        // A big tick in a red badge at its corner.
+        c.fillStyle = '#c81e28';
+        c.beginPath();
+        c.arc(x + 12, z - 12, 8, 0, Math.PI * 2);
+        c.fill();
+        c.strokeStyle = '#ffffff';
+        c.lineWidth = 2.6;
+        c.beginPath();
+        c.moveTo(x + 8, z - 12);
+        c.lineTo(x + 11, z - 9);
+        c.lineTo(x + 16, z - 15);
+        c.stroke();
+      }
     }
 
     // Rivals first, then the player on top with a white head.
