@@ -107,7 +107,7 @@ export function build(): LandmarkBuild {
     cyl(0.5, 0.55, 0.6, SANDSTONE_SHADE, 0, capY + 1.25, 0, 10),
   );
 
-  // Nelson, half again life size so he reads from the street: coat, empty sleeve, sword and the bicorne hat.
+  // Nelson, half again life size so he reads from the street: coat, empty sleeve and the bicorne hat.
   const nY = capY + 1.85;
   const s = 1.5;
   const nelson: THREE.BufferGeometry[] = [
@@ -117,7 +117,6 @@ export function build(): LandmarkBuild {
     cyl(0.26, 0.28, 0.35, STATUE, 0, 1.15, 0, 10),
     sphere(0.17, STATUE, 0, 1.68, 0, 10, 8),
     box(0.1, 0.55, 0.12, STATUE, -0.34, 0.85, 0.05),
-    box(0.05, 0.75, 0.05, HAT, 0.36, 0.25, 0.1),
   ];
   const hat = new THREE.Shape();
   hat.moveTo(-0.42, 0);
