@@ -10,7 +10,7 @@ namespace Telfer.View
     public sealed class Fx : MonoBehaviour
     {
         public static Fx I;
-        ParticleSystem sparkles, crumbs, puffs, confetti, embers, fireworks;
+        ParticleSystem sparkles, crumbs, puffs, confetti, embers, fireworks, glitter;
         readonly List<(Transform t, Material m, float age, float life, float size, Color c)> rings = new List<(Transform, Material, float, float, float, Color)>();
         readonly Stack<(Transform, Material)> ringPool = new Stack<(Transform, Material)>();
         Mesh quad;
@@ -24,7 +24,10 @@ namespace Telfer.View
             confetti = Make("confetti", Mats.Glow(Color.white, 3, false, 1.2f), 0.6f, 600, 2.5f, true);
             embers = Make("embers", Mats.Glow(new Color(1, 0.6f, 0.2f), 0, true, 3f), -0.4f, 300, 0.9f, false);
             // London's fireworks: bright sparks (alpha-blended so they read on the cream paper, HDR so the bloom catches them).
-            fireworks = Make("fireworks", Mats.Glow(Color.white, 0, false, 1.5f), 0.22f, 1500, 2.2f, false);
+            fireworks = Make("fireworks", Mats.Glow(Color.white, 0, false, 2.6f), 0.22f, 5000, 2.2f, false);
+            // Their glitter: tiny additive stars that hang and twinkle after the burst.
+            glitter = Make("glitter", Mats.Glow(Color.white, 1, true, 3.2f), 0.06f, 1500, 2.6f, false);
+            var gn = glitter.noise; gn.enabled = true; gn.strength = 0.5f; gn.frequency = 1.5f;
             var sz = puffs.sizeOverLifetime; sz.enabled = true; sz.size = new ParticleSystem.MinMaxCurve(1, AnimationCurve.EaseInOut(0, 0.6f, 1, 1.6f));
             var rot = confetti.rotationOverLifetime; rot.enabled = true; rot.z = new ParticleSystem.MinMaxCurve(-6, 6);
             var noise = confetti.noise; noise.enabled = true; noise.strength = 0.6f; noise.frequency = 0.8f;
@@ -114,7 +117,8 @@ namespace Telfer.View
         /// </summary>
         public void Firework(Vector3 pos, Color c, float radius)
         {
-            const int SPARKS = 48;
+            // A peony: a big round ball of sparks of its colour (every sixth white) flying out to about `radius`.
+            const int SPARKS = 120;
             var e = new ParticleSystem.EmitParams();
             for (int i = 0; i < SPARKS; i++)
             {
@@ -122,14 +126,40 @@ namespace Telfer.View
                 float y = 1 - 2 * (i + 0.5f) / SPARKS, r = Mathf.Sqrt(1 - y * y), a = i * 2.399963f;
                 var dir = new Vector3(Mathf.Cos(a) * r, y, Mathf.Sin(a) * r);
                 e.position = pos;
-                e.velocity = dir * radius * Random.Range(0.85f, 1.05f);
-                e.startSize = Random.Range(3f, 4.2f);
-                e.startColor = i % 5 == 0 ? Color.white : c;
-                e.startLifetime = Random.Range(1.7f, 2.3f);
+                e.velocity = dir * radius * Random.Range(0.9f, 1.08f);
+                e.startSize = Random.Range(2.6f, 3.8f);
+                e.startColor = i % 6 == 0 ? Color.white : c;
+                e.startLifetime = Random.Range(1.8f, 2.6f);
                 fireworks.Emit(e, 1);
             }
-            // The bang itself: a bright flash at the heart of the burst.
-            Spray(sparkles, pos, Color.Lerp(c, Color.white, 0.5f), 10, 1.5f, 2.2f, 0.2f);
+            // A ring of a second colour round its waist, tipped toward the camera: two-colour shells.
+            Color.RGBToHSV(c, out float h, out float sat, out float val);
+            var c2 = Color.HSVToRGB((h + 0.45f) % 1, Mathf.Max(0.55f, sat), 1);
+            var tilt = Quaternion.Euler(Random.Range(-35f, 35f), Random.Range(0f, 360f), Random.Range(-20f, 20f));
+            for (int i = 0; i < 40; i++)
+            {
+                float a = i / 40f * Mathf.PI * 2;
+                e.position = pos;
+                e.velocity = tilt * new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a)) * radius * 0.68f;
+                e.startSize = Random.Range(2.2f, 3f);
+                e.startColor = c2;
+                e.startLifetime = Random.Range(1.5f, 2f);
+                fireworks.Emit(e, 1);
+            }
+            // Glitter that hangs and twinkles where the ball was.
+            for (int i = 0; i < 46; i++)
+            {
+                e.position = pos + Random.insideUnitSphere * radius * 0.9f;
+                e.velocity = Random.insideUnitSphere * 0.6f;
+                e.startSize = Random.Range(0.5f, 1f);
+                e.startColor = Color.Lerp(c, Color.white, 0.7f);
+                e.startLifetime = Random.Range(1.6f, 2.8f);
+                glitter.Emit(e, 1);
+            }
+            // The bang itself: a bright flash at the heart, and a coloured glow spreading on the water below.
+            Spray(sparkles, pos, Color.Lerp(c, Color.white, 0.5f), 14, 1.5f, 3.2f, 0.2f);
+            Spray(sparkles, pos, Color.white, 2, 0.2f, 5f, 0.1f, 1, 0.25f);
+            Ring(new Vector3(pos.x, 0.25f, pos.z), Color.Lerp(c, Color.white, 0.2f), radius * 2.4f, 1.1f);
         }
 
         /// <summary>Feathers or dust of the given colours bursting from `pos` (the classic's sparkles.burst).</summary>
@@ -171,6 +201,47 @@ namespace Telfer.View
                 e.startLifetime = Random.Range(1.6f, 2.8f);
                 confetti.Emit(e, 1);
             }
+        }
+
+        /// <summary>
+        /// London's trails (A7 trailView.ts), each its own motion: raindrops falling from above the snake,
+        /// feathers and bunting tumbling down, tea bubbles rising, Thames spray thrown up and out, soft
+        /// Red Arrows smoke, firework sparks bursting outward. Anything else is the plain sparkle.
+        /// </summary>
+        public void Trail(Vector3 pos, Color c, string style)
+        {
+            var e = new ParticleSystem.EmitParams();
+            switch (style)
+            {
+                case "raindrops":
+                    e.position = pos + new Vector3(Random.Range(-0.4f, 0.4f), 2.6f, Random.Range(-0.4f, 0.4f));
+                    e.velocity = Vector3.down * 3.5f; e.startSize = 0.16f; e.startColor = c; e.startLifetime = 0.75f;
+                    crumbs.Emit(e, 1);
+                    return;
+                case "pigeon-feathers":
+                case "bunting":
+                    e.position = pos + Vector3.up * 0.8f;
+                    e.velocity = new Vector3(Random.Range(-0.6f, 0.6f), Random.Range(0.4f, 1.2f), Random.Range(-0.6f, 0.6f));
+                    e.startSize = style == "bunting" ? 0.3f : 0.26f; e.startColor = c; e.rotation = Random.Range(0, 360); e.startLifetime = 1.8f;
+                    confetti.Emit(e, 1);
+                    return;
+                case "tea-bubbles":
+                    Spray(puffs, pos + Vector3.up * 0.3f, new Color(c.r, c.g, c.b, 0.75f), 1, 0.5f, 0.32f, 2.2f, 0.3f, 1.4f);
+                    e.position = pos + Vector3.up * 0.4f; e.velocity = Vector3.up * 1.4f + Random.insideUnitSphere * 0.2f;
+                    e.startSize = 0.28f; e.startColor = Color.Lerp(c, Color.white, 0.4f); e.startLifetime = 1.2f;
+                    sparkles.Emit(e, 1);
+                    return;
+                case "thames-spray":
+                    Spray(crumbs, pos + Vector3.up * 0.3f, c, 2, 3.2f, 0.13f, 1.6f, 1, 0.8f);
+                    return;
+                case "red-arrows":
+                    Spray(puffs, pos + Vector3.up * 0.5f, new Color(c.r, c.g, c.b, 0.7f), 1, 0.4f, 0.9f, 0.4f, 1, 1.6f);
+                    return;
+                case "fireworks":
+                    Spray(sparkles, pos + Vector3.up * 0.6f, c, 3, 2.6f, 0.3f, 0.6f, 1, 0.6f);
+                    return;
+            }
+            Trail(pos, c);
         }
 
         public void Trail(Vector3 pos, Color c)

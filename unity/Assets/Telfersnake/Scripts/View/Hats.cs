@@ -45,6 +45,16 @@ namespace Telfer.View
                 case "acorn": Acorn(); break;
                 case "flower-crown": FlowerCrown(); break;
                 case "antlers": Antlers(); break;
+                // London (A7)
+                case "bearskin": Bearskin(); break;
+                case "bobby": Bobby(); break;
+                case "union-top-hat": UnionTopHat(); break;
+                case "beefeater": Beefeater(); break;
+                case "bowler": Bowler(); break;
+                case "tiara": Tiara(); break;
+                case "deerstalker": Deerstalker(); break;
+                case "pearly-cap": PearlyCap(); break;
+                case "tiny-bigben": TinyBigBen(); break;
                 default: ok = false; break;
             }
             UnityEngine.Mesh mesh = ok ? k.ToMesh("hat-" + id) : null;
@@ -486,6 +496,183 @@ namespace Telfer.View
                     k.Tint(0xf8f0dc).Sphere(tip, 0.03f, 6, 4);
                 }
             }
+        }
+    
+        // ------------------------------------------------------------------ London (A7, hats.ts)
+
+        /// <summary>The Guards' tall black fur hat: a lumpy column, a red plume, a gold chin strap.</summary>
+        static void Bearskin()
+        {
+            Root(V3(0, 0.78f, -0.3f), -6);
+            const uint fur = 0x16161a;
+            k.Tint(fur).Capsule(V3(0, 0.55f, 0), V3(0, 1.75f, 0), 0.72f, 16);
+            foreach (var (x, y, z) in new[] { (0.4f, 1.7f, 0.35f), (-0.45f, 1.3f, 0.3f), (0.1f, 2.0f, -0.3f), (-0.3f, 0.75f, -0.45f), (0.5f, 1.0f, -0.2f) })
+                k.Tint(0x202026).Blob(V3(x, y, z), V3(0.34f, 0.34f, 0.34f), 0.2f, (int)(x * 100 + y * 10), 1, true);
+            k.Tint(0xd8342c).Capsule(V3(-0.74f, 1.0f, 0), V3(-0.66f, 1.75f, 0), 0.12f, 8);
+            Put(V3(0, 0.05f, 0), V3(0, 0, 90));
+            k.Tint(0xf2c230).Torus(Vector3.zero, 0.98f, 0.05f, 20, 6, 180);
+            k.M = Matrix4x4.identity;
+        }
+
+        /// <summary>The custodian helmet: a tall navy dome, a silver star badge, a little rose on top.</summary>
+        static void Bobby()
+        {
+            Root(V3(0, 0.66f, -0.28f), -8);
+            const uint navy = 0x1f2a52;
+            k.Tint(navy).Sphere(V3(0, 0.55f, 0), V3(0.85f, 1.23f, 0.9f), 18, 12, 0, 0.62f);
+            k.Tint(navy).Torus(V3(0, 0.05f, 0), 0.88f, 0.1f, 22, 6);
+            k.Tint(0x2a3666).Cylinder(V3(0, 0.12f, 0), V3(0, 0.3f, 0), 0.86f, 0.84f, 20, false, false);
+            k.Tint(0xd3dae2);
+            Star(V3(0, 0.78f, 0.86f), V3(0, 0.25f, 1), 0.3f);
+            k.M = root;
+            k.Tint(0xd3dae2).Sphere(V3(0, 1.78f, 0), 0.16f, 8, 6);
+            k.M = Matrix4x4.identity;
+        }
+
+        /// <summary>A top hat in the flag: a blue crown with a red-and-white cross on each side, a red brim.</summary>
+        static void UnionTopHat()
+        {
+            Root(V3(0, 0.9f, -0.32f), -10);
+            k.Tint(0xc8102e).Cylinder(Vector3.zero, V3(0, 0.1f, 0), 1.1f, 1.1f, 24);
+            k.Tint(0x1f3fa8).Cylinder(V3(0, 0.05f, 0), V3(0, 1.3f, 0), 0.7f, 0.68f, 20, false, true);
+            for (int i = 0; i < 4; i++)
+            {
+                float a = i * 90;
+                var face = Quaternion.Euler(0, a, 0);
+                foreach (var (w, h, c, d) in new[] { (0.42f, 1.2f, 0xffffffu, 0.705f), (0.22f, 1.2f, 0xc8102eu, 0.715f), (0.95f, 0.3f, 0xffffffu, 0.705f), (0.95f, 0.15f, 0xc8102eu, 0.715f) })
+                {
+                    k.M = root * Matrix4x4.TRS(face * V3(0, 0.67f, d), face, Vector3.one);
+                    k.Tint(c).Box(Vector3.zero, V3(w * 0.72f, h * (h > 1 ? 0.95f : 1), 0.02f));
+                }
+            }
+            k.M = root;
+            k.Tint(0xffffff).Cylinder(V3(0, 1.29f, 0), V3(0, 1.33f, 0), 0.68f, 0.68f, 20);
+            k.M = Matrix4x4.identity;
+        }
+
+        /// <summary>The Yeoman Warder's Tudor bonnet: a flat navy crown, a red band, red-white-blue rosettes.</summary>
+        static void Beefeater()
+        {
+            Root(V3(0, 0.88f, -0.3f), -8);
+            const uint navy = 0x1d2557;
+            k.Tint(navy).Cylinder(V3(0, -0.04f, 0), V3(0, 0.14f, 0), 1.2f, 1.15f, 22);
+            k.Tint(navy).Cylinder(V3(0, 0.17f, 0), V3(0, 0.59f, 0), 0.82f, 1.0f, 22);
+            k.Tint(0xc8102e).Cylinder(V3(0, 0.15f, 0), V3(0, 0.29f, 0), 0.87f, 0.87f, 22, false, false);
+            for (int i = 0; i < 5; i++)
+            {
+                float a = i / 5f * Mathf.PI * 2 + Mathf.PI / 2;
+                var d = V3(Mathf.Cos(a), 0, Mathf.Sin(a));
+                foreach (var (r, c, o) in new[] { (0.17f, 0xc8102eu, 0.88f), (0.11f, 0xffffffu, 0.91f), (0.06f, 0x1f3fa8u, 0.94f) })
+                    k.Tint(c).Cylinder(d * o + V3(0, 0.24f, 0), d * (o + 0.05f) + V3(0, 0.24f, 0), r, r, 10);
+            }
+            k.M = Matrix4x4.identity;
+        }
+
+        /// <summary>A City gent's bowler: a round black dome, a curled brim, a grey band.</summary>
+        static void Bowler()
+        {
+            Root(V3(0, 0.86f, -0.3f), -10);
+            const uint felt = 0x1c1c1f;
+            k.Tint(felt).Sphere(V3(0, 0.12f, 0), V3(0.78f, 0.82f, 0.82f), 18, 10, 0, 0.5f);
+            k.M = root * Matrix4x4.TRS(V3(0, 0.12f, 0), Quaternion.identity, V3(1, 1, 1.12f));
+            k.Tint(felt).Torus(Vector3.zero, 0.9f, 0.1f, 24, 6);
+            k.M = root;
+            k.Tint(0x3a3a40).Cylinder(V3(0, 0.13f, 0), V3(0, 0.27f, 0), 0.8f, 0.79f, 20, false, false);
+            k.M = Matrix4x4.identity;
+        }
+
+        /// <summary>A sparkly tiara: a silver arc across the front with a fan of points and jewels.</summary>
+        static void Tiara()
+        {
+            Root(V3(0, 0.86f, -0.18f), -6);
+            k.Tint(0xe8ecf2).Torus(V3(0, 0.15f, 0), 0.85f, 0.08f, 22, 6, 180);
+            for (int i = 0; i < 7; i++)
+            {
+                float a = i / 6f * Mathf.PI;
+                float tall = 0.45f + 0.6f * Mathf.Sin(a);
+                var b = V3(Mathf.Cos(a) * 0.85f, 0.15f, Mathf.Sin(a) * 0.85f);
+                k.Tint(0xe8ecf2).Cylinder(b, b + V3(0, tall, 0), 0.1f, 0, 4);
+                k.Tint(i == 3 ? 0x4dabf7u : i % 2 == 1 ? 0xff8fabu : 0xffffffu).Sphere(V3(Mathf.Cos(a) * 0.9f, 0.3f, Mathf.Sin(a) * 0.9f), i == 3 ? 0.2f : 0.11f, 4, 2);
+            }
+            k.M = Matrix4x4.identity;
+        }
+
+        /// <summary>The detective's cap: a tweed dome, a peak front and back, ear flaps tied up with a bow.</summary>
+        static void Deerstalker()
+        {
+            Root(V3(0, 0.74f, -0.3f), -8);
+            const uint tweed = 0x9a7b52;
+            k.Tint(tweed).Sphere(Vector3.zero, V3(1.05f, 0.76f, 1.1f), 18, 10, 0, 0.5f);
+            for (int i = 0; i < 3; i++) k.Tint(0x6b5236).Torus(V3(0, 0.2f + i * 0.2f, 0), Mathf.Sqrt(Mathf.Max(0.01f, 1 - Mathf.Pow((0.2f + i * 0.2f) / 0.76f, 2))) * 1.06f, 0.022f, 22, 4);
+            for (int s = -1; s <= 1; s += 2)
+            {
+                k.Tint(0x8a6b45).Sphere(V3(0, 0.06f, s * 1.0f), V3(0.66f, 0.07f, 0.48f), 12, 4, 0, 0.5f);
+                Put(V3(s * 0.88f, 0.55f, 0), V3(0, 0, -s * 28));
+                k.Tint(tweed).Box(Vector3.zero, V3(0.08f, 0.5f, 0.6f));
+                k.M = root;
+            }
+            k.Tint(0x5a3a24).Torus(V3(0, 0.78f, 0), 0.12f, 0.05f, 10, 5);
+            k.M = Matrix4x4.identity;
+        }
+
+        /// <summary>Tiny Big Ben's front clock face, in the head's space: where its ticking hands turn (facing +z).</summary>
+        public static Matrix4x4 BigBenFace => Matrix4x4.TRS(V3(0, 0.88f, -0.3f), Quaternion.Euler(-6, 0, 0), Vector3.one) * Matrix4x4.Translate(V3(0, 1.85f, 0.475f));
+
+        static UnityEngine.Mesh hands;
+        /// <summary>The clock's two hands, in the XY plane about their pivot: the long one up, the short one right.</summary>
+        public static UnityEngine.Mesh BigBenHands()
+        {
+            if (hands) return hands;
+            var m = new MeshKit();
+            m.Tint(0x1c1c1f).Box(V3(0, 0.1f, 0), V3(0.04f, 0.24f, 0.02f));
+            m.Tint(0x1c1c1f).Box(V3(0.07f, 0, 0), V3(0.16f, 0.04f, 0.02f));
+            m.Tint(0xf2c230).Sphere(Vector3.zero, 0.03f, 6, 4);
+            return hands = m.ToMesh("bigben-hands");
+        }
+
+        /// <summary>The Pearly King's flat cap, sewn all over with pearl buttons.</summary>
+        static void PearlyCap()
+        {
+            Root(V3(0, 0.84f, -0.25f), -8);
+            const uint cloth = 0x1c1c1f;
+            k.Tint(cloth).Sphere(Vector3.zero, V3(1.06f, 0.48f, 1.14f), 18, 10, 0, 0.5f);
+            k.Tint(cloth).Sphere(V3(0, 0.04f, 0.9f), V3(0.68f, 0.06f, 0.45f), 14, 4, 0, 0.5f);
+            for (int ring = 0; ring < 3; ring++)
+            {
+                int n = 10 - ring * 3;
+                for (int i = 0; i < n; i++)
+                {
+                    float a = i / (float)n * Mathf.PI * 2 + ring * 0.3f, r = 0.9f - ring * 0.32f;
+                    float y = Mathf.Sqrt(Mathf.Max(0, 1 - (r / 1.05f) * (r / 1.05f))) * 0.48f + 0.04f;
+                    k.Tint(0xfffaf0).Sphere(V3(Mathf.Cos(a) * r * 1.0f, y, Mathf.Sin(a) * r * 1.08f), 0.075f, 6, 4);
+                }
+            }
+            for (int i = 0; i < 4; i++) k.Tint(0xfffaf0).Sphere(V3(-0.45f + i * 0.3f, 0.1f, 1.18f), 0.065f, 6, 4);
+            k.M = Matrix4x4.identity;
+        }
+
+        /// <summary>A clock tower for a hat: honey stone, a clock face on every side, a slate spire, gold on top.</summary>
+        static void TinyBigBen()
+        {
+            Root(V3(0, 0.88f, -0.3f), -6);
+            const uint stone = 0xe2b85c;
+            k.Tint(stone).Box(V3(0, 0.75f, 0), V3(0.7f, 1.5f, 0.7f));
+            for (int i = 0; i < 4; i++) k.Tint(0xc99a40).Box(V3(0, 0.3f + i * 0.33f, 0), V3(0.74f, 0.05f, 0.74f));
+            k.Tint(stone).Box(V3(0, 1.85f, 0), V3(0.86f, 0.75f, 0.86f));
+            for (int i = 0; i < 4; i++)
+            {
+                var face = Quaternion.Euler(0, i * 90, 0);
+                k.M = root * Matrix4x4.TRS(face * V3(0, 1.85f, 0.43f), face * Quaternion.Euler(90, 0, 0), Vector3.one);
+                k.Tint(0xfffbea).Cylinder(Vector3.zero, V3(0, 0.03f, 0), 0.3f, 0.3f, 18);
+                if (i == 0) continue; // the front face's hands tick (BigBenHands), the others stand still
+                k.Tint(0x1c1c1f).Box(V3(0, 0.04f, -0.1f), V3(0.04f, 0.02f, 0.24f));
+                k.Tint(0x1c1c1f).Box(V3(0.07f, 0.04f, 0), V3(0.16f, 0.02f, 0.04f));
+            }
+            k.M = root * Matrix4x4.TRS(V3(0, 2.22f, 0), Quaternion.Euler(0, 45, 0), Vector3.one);
+            k.Tint(0x434a57).Cylinder(Vector3.zero, V3(0, 0.9f, 0), 0.62f, 0, 4);
+            k.M = root;
+            k.Tint(0xf2c230).Cylinder(V3(0, 3.0f, 0), V3(0, 3.55f, 0), 0.07f, 0, 6);
+            k.M = Matrix4x4.identity;
         }
     }
 }

@@ -139,7 +139,7 @@ namespace Telfer.View
             }
             // The Eye in rainbow for the fireworks: lights round its rim, on the face the camera sees.
             eyeLightMat = RunAssets.Track(Mats.Glow(Color.white, 0, true, 3));
-            var ball = ModelsLondonZoo.Parts("eye-light", new[] { LK.Sphere(0.4f, 0xffffff, 0, 0, 0, 8, 6) });
+            var ball = ModelsLondonZoo.Parts("eye-light", new[] { LK.Sphere(0.55f, 0xffffff, 0, 0, 0, 8, 6) });
             for (int i = 0; i < EYE_LIGHTS; i++)
             {
                 var go = new GameObject("eye-light", typeof(MeshFilter), typeof(MeshRenderer));
@@ -287,6 +287,7 @@ namespace Telfer.View
             var me = world.Me;
             // Fireworks: a rocket's trail climbing before each bang, then the burst (echoed near you when it is far off).
             int show = Sim.SetPieces.FireworksClock(tick);
+            Atmosphere.I?.FireworksOn(show >= 0);
             if (show >= 0)
             {
                 int kNow = show / Sim.SetPieces.BURST_EVERY;
@@ -529,7 +530,7 @@ namespace Telfer.View
                 if (!show) continue;
                 var c = Color.HSVToRGB((i / (float)EYE_LIGHTS + time * 0.25f) % 1, 0.75f, 1);
                 mpb.SetColor("_BaseColor", c);
-                mpb.SetColor("_EmissionColor", c * 2.5f);
+                mpb.SetColor("_EmissionColor", c * 1.7f);
                 eyeLights[i].GetComponent<MeshRenderer>().SetPropertyBlock(mpb);
             }
 

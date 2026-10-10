@@ -36,11 +36,14 @@ namespace Telfer.Net
         public static readonly string[] PROJECTILE_KINDS = { "pebble", "kiss", "chip" };
         public static readonly string[] CREATURE_KINDS = { "stag", "unicorn", "owl", "frog", "kitsune", "pixie", "squirrel", "wisp",
             "dragon", "lionroyal", "phoenix", "mermaid", "ghost", "gog", "fairy", "pearly" };
+        public static readonly string[] VEHICLE_KINDS = { "bus", "cab" };
+        /// <summary>What carries a snake (snake.ts CARRIERS); on the wire a SnakeExtra's third column is index + 1.</summary>
+        public static readonly string[] CARRIERS = { "eye", "boat" };
         public static readonly string[] MAGIC_IDS = { "rainbow", "hidden", "magnet", "owl", "halo", "wings", "river", "giant", "phoenix", "roar" };
 
         public static string Wire(Mode m) => m == Mode.Easy ? "easy" : m == Mode.God ? "god" : "normal";
-        public static string Wire(StageId s) => s == StageId.Common ? "common" : "school";
-        public static StageId StageOf(string s) => s == "common" ? StageId.Common : StageId.School;
+        public static string Wire(StageId s) => s == StageId.Common ? "common" : s == StageId.London ? "london" : "school";
+        public static StageId StageOf(string s) => s == "common" ? StageId.Common : s == "london" ? StageId.London : StageId.School;
         public static string Wire(UpgradeId u) => u.ToString().ToLowerInvariant();
 
         /// <summary>An upgrade, power or card id ('snack' included) by its TS name; false if unknown.</summary>
@@ -97,7 +100,8 @@ namespace Telfer.Net
             }
             Same<FoodKind>(FOOD_KINDS); Same<AnimalKind>(ANIMAL_KINDS); Same<HazardKind>(HAZARD_KINDS);
             Same<PredatorKind>(PREDATOR_KINDS); Same<KidKind>(KID_KINDS); Same<ProjectileKind>(PROJECTILE_KINDS);
-            Same<CreatureKind>(CREATURE_KINDS); Same<MagicId>(MAGIC_IDS);
+            Same<CreatureKind>(CREATURE_KINDS); Same<MagicId>(MAGIC_IDS); Same<VehicleKind>(VEHICLE_KINDS);
+            if (CARRIERS.Length != 2 || (int)Carrier.Eye != 1 || (int)Carrier.Boat != 2) bad += "carriers ";
             foreach (var id in WIRE_UPGRADES)
                 if (!TryUpgrade(Wire(id), out var back) || back != id) bad += "upgrade " + id + " ";
             return bad;
@@ -146,7 +150,11 @@ namespace Telfer.Net
         };
         internal static AnimalRow AnimalRowOf(List<object> r) => new AnimalRow
             { x = F(r, 0), z = F(r, 1), heading = F(r, 2), speed = F(r, 3), travel = F(r, 4), dazed = F(r, 5), born = I(r, 6) };
-        internal static MoverRow MoverRowOf(List<object> r) => new MoverRow { x = F(r, 0), z = F(r, 1), heading = F(r, 2), speed = F(r, 3) };
+        internal static MoverRow MoverRowOf(List<object> r) => new MoverRow { x = F(r, 0), z = F(r, 1), heading = F(r, 2), speed = F(r, 3), state = r != null && r.Count > 4 ? I(r, 4) : 0 };
+        internal static TreasureRow TreasureRowOf(List<object> r) => new TreasureRow { x = F(r, 0), z = F(r, 1), present = I(r, 2) != 0 };
+        internal static SnakeExtra SnakeExtraOf(List<object> r) => new SnakeExtra
+            { jewels = I(r, 0), crowned = I(r, 1) != 0, carrier = r != null && r.Count > 2 ? I(r, 2) : 0, rwb = r != null && r.Count > 3 && I(r, 3) != 0 };
+        internal static ButtonRow ButtonRowOf(List<object> r) => new ButtonRow { x = F(r, 0), z = F(r, 1), born = I(r, 2) };
         internal static CreatureRow CreatureRowOf(List<object> r) => new CreatureRow
             { x = F(r, 0), z = F(r, 1), heading = F(r, 2), speed = F(r, 3), present = I(r, 4) != 0 };
         internal static ProjectileRow ProjectileRowOf(List<object> r) => new ProjectileRow { x = F(r, 0), z = F(r, 1), kind = I(r, 2), t = F(r, 3) };
@@ -204,6 +212,8 @@ namespace Telfer.Net
         public uint body, stripe, head;
         /// <summary>Null when the skin has no pattern.</summary>
         public uint[] pattern;
+        /// <summary>Piccadilly Lights: the pattern chases along the body (drawn only).</summary>
+        public bool shimmer;
 
         public SnakeLook ToSim() => new SnakeLook(name, body, stripe, head);
     }
@@ -237,7 +247,7 @@ namespace Telfer.Net
                     look = new NetLook
                     {
                         name = Json.Str(l, "name", ""), body = (uint)Json.Num(l, "body"), stripe = (uint)Json.Num(l, "stripe"),
-                        head = (uint)Json.Num(l, "head"), pattern = pattern,
+                        head = (uint)Json.Num(l, "head"), pattern = pattern, shimmer = Json.Bool(l, "shimmer"),
                     },
                 };
             }
@@ -258,6 +268,9 @@ namespace Telfer.Net
         public int[] animalKinds, predatorKinds, kidKinds, creatureKinds;
         public FoodRow[] foods;
         public PelletRow[] pellets;
+        /// <summary>London: the buses and cabs (VEHICLE_KINDS indices), how many Crown Jewels lie about, the set pieces' flavour.</summary>
+        public int[] vehicleKinds;
+        public int treasureCount, setPieceSeed;
 
         internal static Welcome From(Dictionary<string, object> d) => new Welcome
         {
@@ -268,6 +281,8 @@ namespace Telfer.Net
             kidKinds = Protocol.Ints(Json.List(d, "kidKinds")), creatureKinds = Protocol.Ints(Json.List(d, "creatureKinds")),
             foods = Protocol.Rows(Json.List(d, "foods"), Protocol.FoodRowOf),
             pellets = Protocol.Rows(Json.List(d, "pellets"), Protocol.PelletRowOf),
+            vehicleKinds = Protocol.Ints(Json.List(d, "vehicleKinds")),
+            treasureCount = (int)Json.Num(d, "treasureCount"), setPieceSeed = (int)Json.Num(d, "setPieceSeed"),
         };
     }
 
@@ -287,6 +302,12 @@ namespace Telfer.Net
         public SnakeRow[] s;
         public AnimalRow[] a;
         public MoverRow[] pd, kd;
+        /// <summary>London: buses and cabs, the Crown Jewels, each snake's extras (in `s` order); null where absent.</summary>
+        public MoverRow[] vh;
+        public TreasureRow[] tr;
+        public SnakeExtra[] sx;
+        /// <summary>London's pearl buttons: the whole list, only when it changed (else null).</summary>
+        public ButtonRow[] pb;
         public CreatureRow[] cr;
         public ProjectileRow[] pj;
         /// <summary>Only the food rows that changed (all of them after a skipped snapshot).</summary>
@@ -313,6 +334,10 @@ namespace Telfer.Net
                 f = Protocol.Rows(Json.List(d, "f"), Protocol.FoodRowOf),
                 p = Json.List(d, "p") != null ? Protocol.Rows(Json.List(d, "p"), Protocol.PelletRowOf) : null,
                 c = Protocol.CooperRowOf(Json.List(d, "c")),
+                vh = Json.List(d, "vh") != null ? Protocol.Rows(Json.List(d, "vh"), Protocol.MoverRowOf) : null,
+                tr = Json.List(d, "tr") != null ? Protocol.Rows(Json.List(d, "tr"), Protocol.TreasureRowOf) : null,
+                sx = Json.List(d, "sx") != null ? Protocol.Rows(Json.List(d, "sx"), Protocol.SnakeExtraOf) : null,
+                pb = Json.List(d, "pb") != null ? Protocol.Rows(Json.List(d, "pb"), Protocol.ButtonRowOf) : null,
             };
             var events = Json.List(d, "e");
             snap.e = new NetEvent[events?.Count ?? 0];
@@ -370,8 +395,12 @@ namespace Telfer.Net
     }
 
     public struct AnimalRow { public float x, z, heading, speed, travel, dazed; public int born; }
-    /// <summary>Predators and kids: position, heading and speed.</summary>
-    public struct MoverRow { public float x, z, heading, speed; }
+    /// <summary>Predators, kids and vehicles: position, heading and speed; London's lions and ravens add their state.</summary>
+    public struct MoverRow { public float x, z, heading, speed; public int state; }
+    public struct TreasureRow { public float x, z; public bool present; }
+    /// <summary>A snake's London extras: jewels, the crown, what carries it (0 none, else CARRIERS index + 1), the Red Arrows' trail.</summary>
+    public struct SnakeExtra { public int jewels, carrier; public bool crowned, rwb; }
+    public struct ButtonRow { public float x, z; public int born; }
     public struct CreatureRow { public float x, z, heading, speed; public bool present; }
     /// <summary>t is flight progress 0..1 (so left = 1 - t of a total of 1).</summary>
     public struct ProjectileRow { public float x, z, t; public int kind; }

@@ -160,8 +160,8 @@ namespace Telfer.UI
             preview.texture = Icons.Skin(P.skin, P.hat);
 
             var items = new List<Item>(Catalogue.Of(tab));
-            // Free first, then cheapest; the forest (gem) looks last, and only once the Common is open.
-            items.RemoveAll(it => it.gem && !P.commonUnlocked);
+            // Free first, then cheapest; the gem looks last; the Common's and London's own only once that place is open.
+            items.RemoveAll(it => it.place == "common" ? !P.commonUnlocked : it.place == "london" && !P.londonUnlocked);
             items.Sort((a, b) => a.gem != b.gem ? (a.gem ? 1 : -1) : a.price.CompareTo(b.price));
             foreach (var it in items) Tile(it);
         }

@@ -73,6 +73,14 @@ namespace Telfer.Net
         readonly List<Pending> pending = new List<Pending>();
         int q;
         float owed, shownX, shownZ, shownHeading;
+        /// <summary>
+        /// What my predicted snake slides off (replica.ts updateBlockers): the rocks, London's buses and cabs as a
+        /// row of circles each, and the parade's marchers (dropped once held against them long enough, as the server does).
+        /// </summary>
+        readonly List<Circle> blockers = new List<Circle>(), plainBlockers = new List<Circle>();
+        float paradeHeld;
+        /// <summary>The tick my prediction runs at (about DELAY_TICKS ahead of the picture).</summary>
+        int predTick;
 
         Replica(Connection net, Mode mode) { Net = net; this.mode = mode; }
 
@@ -134,6 +142,9 @@ namespace Telfer.Net
             // Not heard from the server for a while: do not let my snake slide on alone through a frozen world.
             bool free = mine.alive && cards == null && !Away && !Paused && !Frozen && SilentFor < 2;
 
+            // Riding the Eye or the river bus, the server moves me: nothing to predict.
+            free &= !mine.Carried;
+            UpdateBlockers();
             owed = Math.Min(owed + dt, 0.25f);
             while (owed >= World.STEP)
             {
@@ -143,7 +154,7 @@ namespace Telfer.Net
                 if (!free) continue;
                 pending.Add(new Pending { q = q, input = input });
                 if (pending.Count > 120) pending.RemoveAt(0);
-                ghost.Move(input, World.STEP, !mine.slowed, World.Stage, World.SnakeSolids);
+                Predict(input, true);
             }
 
             if (free)
@@ -165,7 +176,8 @@ namespace Telfer.Net
         {
             Me = w.me;
             Room = w.room;
-            var world = World.Replica(Stage.For(w.stage), mode, w.me);
+            var stage = Stage.For(w.stage);
+            var world = World.Replica(stage, mode, w.me, w.setPieceSeed);
             world.Tick = w.tick;
             renderTick = w.tick;
             foreach (var h in w.hazards)
@@ -173,16 +185,29 @@ namespace Telfer.Net
             world.RefreshHazardCircles();
             foreach (var _ in w.foods) world.Foods.Add(new Food { born = -999 });
             foreach (var row in w.foods) SetFood(world, row);
-            foreach (var k in w.animalKinds) world.Animals.Add(new Animal { kind = (AnimalKind)k, born = -999 });
-            foreach (var k in w.predatorKinds) world.Predators.Add(new Predator { kind = (PredatorKind)k });
+            foreach (var k in w.animalKinds) world.Animals.Add(new Animal { kind = (AnimalKind)Kind(k, Protocol.ANIMAL_KINDS), born = -999 });
+            // London's lions and ravens have fixed homes (a plinth, a perch each, in order): the views lift a lion onto its plinth.
+            var homed = Predators.Make(stage, new Rng(1)).FindAll(p => p.kind == PredatorKind.Lion || p.kind == PredatorKind.Raven);
+            foreach (var k in w.predatorKinds)
+            {
+                var kind = (PredatorKind)Kind(k, Protocol.PREDATOR_KINDS);
+                int at = homed.FindIndex(p => p.kind == kind);
+                if (at >= 0) { world.Predators.Add(homed[at]); homed.RemoveAt(at); }
+                else world.Predators.Add(new Predator { kind = kind });
+            }
+            foreach (var k in w.vehicleKinds) world.Vehicles.Add(new Vehicle { kind = (VehicleKind)Kind(k, Protocol.VEHICLE_KINDS), route = -1 });
+            for (int i = 0; i < w.treasureCount; i++) world.Treasures.Add(new Treasure { spot = i, respawnIn = 1 });
             int n = 0;
-            foreach (var k in w.kidKinds) world.Kids.Add(new Kid { kind = (KidKind)k, look = n++ });
-            foreach (var k in w.creatureKinds) world.Creatures.Add(new Creature { kind = (CreatureKind)k });
+            foreach (var k in w.kidKinds) world.Kids.Add(new Kid { kind = (KidKind)Kind(k, Protocol.KID_KINDS), look = n++ });
+            foreach (var k in w.creatureKinds) world.Creatures.Add(new Creature { kind = (CreatureKind)Kind(k, Protocol.CREATURE_KINDS) });
             SetPellets(world, w.pellets);
             World = world;
             ghost = new Snake(-1, w.seats.Length > 0 ? w.seats[0].look.ToSim() : World.PLAYER_LOOK, false);
             SetSeats(w.seats);
         }
+
+        /// <summary>A kind index from the server, kept inside its table (an unknown kind from a newer server is the first).</summary>
+        static int Kind(int k, string[] table) => k >= 0 && k < table.Length ? k : 0;
 
         void SetSeats(Seat[] seats)
         {
@@ -190,7 +215,7 @@ namespace Telfer.Net
             foreach (var seat in seats)
             {
                 string key = seat.bot + "|" + seat.hat + "|" + seat.trail + "|" + seat.look.name + "|" + seat.look.body + "|" + seat.look.stripe + "|" + seat.look.head
-                    + "|" + (seat.look.pattern == null ? "" : string.Join(",", seat.look.pattern));
+                    + "|" + (seat.look.pattern == null ? "" : string.Join(",", seat.look.pattern)) + "|" + seat.look.shimmer;
                 if (seatKeys.TryGetValue(seat.id, out var old) && old == key) continue;
                 seatKeys[seat.id] = key;
                 ChangedSeats.Add(seat.id);
@@ -245,6 +270,29 @@ namespace Telfer.Net
             if (snaps.Count > KEEP_SNAPSHOTS) snaps.RemoveAt(0);
             foreach (var row in snap.f) SetFood(w, row);
             if (snap.p != null) SetPellets(w, snap.p);
+            // London: the Crown Jewels sit still (taken straight), the buttons come whole when they change.
+            if (snap.tr != null)
+                for (int i = 0; i < snap.tr.Length && i < w.Treasures.Count; i++)
+                {
+                    var t = w.Treasures[i];
+                    t.x = snap.tr[i].x;
+                    t.z = snap.tr[i].z;
+                    t.respawnIn = snap.tr[i].present ? 0 : 1;
+                }
+            if (snap.pb != null)
+            {
+                w.Buttons.Clear();
+                foreach (var b in snap.pb) w.Buttons.Add(new Button { x = b.x, z = b.z, born = b.born, owner = -1 });
+            }
+            // Buses not yet seen anywhere are put straight where they are, so none is drawn at the origin.
+            if (snap.vh != null)
+                for (int i = 0; i < snap.vh.Length && i < w.Vehicles.Count; i++)
+                {
+                    var v = w.Vehicles[i];
+                    if (v.route >= 0) continue;
+                    v.x = snap.vh[i].x; v.z = snap.vh[i].z; v.heading = snap.vh[i].heading; v.speed = snap.vh[i].speed;
+                    v.route = 0;
+                }
             // Pebbles and kisses are brief: take the newest list straight, arc height from the flight progress.
             w.Projectiles.Clear();
             foreach (var pj in snap.pj)
@@ -287,6 +335,18 @@ namespace Telfer.Net
                 }
                 s.helmetReady = row.Has(Protocol.HELMET_READY);
                 s.highestTier = Math.Max(s.highestTier, s.Tier);
+                if (snap.sx != null && id < snap.sx.Length)
+                {
+                    // London: the Crown Jewels held and the crown; what carries it (the server moves a rider) and the Red Arrows' trail.
+                    var x = snap.sx[id];
+                    s.jewels = x.jewels;
+                    s.crowned = x.crowned;
+                    var by = x.carrier == 1 ? Carrier.Eye : x.carrier == 2 ? Carrier.Boat : Carrier.None;
+                    // The ride's clock is not sent: it started about now (the camera's crane shot runs from it).
+                    if (by == Carrier.Eye && s.carried != Carrier.Eye) s.carriedUntil = snap.k + World.EYE_RIDE;
+                    s.carried = by;
+                    s.rwb = x.rwb;
+                }
                 // Popped back out of the tank somewhere new: start a fresh body there.
                 if (s.alive && !wasAlive[id])
                 {
@@ -335,7 +395,10 @@ namespace Telfer.Net
             g.speedMul = World.Me.speedMul;
             // Its wall memory belongs to the previous replay, not to this starting point; Steer must not act on it.
             g.touchingWall = false;
-            foreach (var p in pending) g.Move(p.input, World.STEP, !World.Me.slowed, World.Stage, World.SnakeSolids);
+            // Its spells too: Dragon Wings and River Rider change how Move goes (over walls, down the river).
+            g.SetMagic(row.magic);
+            UpdateBlockers();
+            foreach (var p in pending) Predict(p.input, false);
             if (World.Me.alive && pending.Count > 0)
             {
                 LastPredictionError = Collide.Hypot(g.x - wasX, g.z - wasZ);
@@ -346,6 +409,65 @@ namespace Telfer.Net
                 if (World.Me.alive) HardResets++;
                 ResetPrediction(g.x, g.z, g.heading);
             }
+        }
+
+        /// <summary>
+        /// One tick of my predicted snake, as the server moves it (replica.ts predict): the solids (the parade's
+        /// marchers dropped once I have been held against them long enough), then the wobbly bridge's push.
+        /// `live` steps (not a replay) advance the parade-held clock.
+        /// </summary>
+        void Predict(SnakeInput input, bool live)
+        {
+            var g = ghost;
+            g.Move(input, World.STEP, !World.Me.slowed, World.Stage, paradeHeld > SetPieces.PARADE_LET_THROUGH ? plainBlockers : blockers);
+            var sp = World.Spots;
+            if (sp == null || g.HasMagic(MagicId.Wings)) return;
+            if (live)
+            {
+                float reach = g.Radius + SetPieces.MARCHER_R + 0.05f;
+                bool pressed = false;
+                for (int i = 0; i < World.MarcherCount; i++)
+                {
+                    var m = World.Marchers[i];
+                    if ((g.x - m.x) * (g.x - m.x) + (g.z - m.z) * (g.z - m.z) < reach * reach) pressed = true;
+                }
+                paradeHeld = pressed ? paradeHeld + World.STEP : 0;
+            }
+            if (!g.swimming && sp.millennium.Contains(g.x, g.z)) g.x = SetPieces.Wobbled(sp.millennium, g.x, g.Radius, predTick, World.STEP);
+        }
+
+        /// <summary>
+        /// The solids my predicted snake slides off: the rocks, each bus or cab as circles along its length (so my
+        /// snake stops at a bus here as on the server, not inside it), and the parade; London's set pieces worked
+        /// out from the tick (Tower Bridge's span is river while it is up). My snake runs DELAY_TICKS ahead.
+        /// </summary>
+        void UpdateBlockers()
+        {
+            var w = World;
+            blockers.Clear();
+            foreach (var c in w.SnakeSolids) blockers.Add(c);
+            if (w.Spots != null)
+            {
+                predTick = w.Tick + DELAY_TICKS;
+                w.ReplicaSetPieces(predTick);
+            }
+            foreach (var v in w.Vehicles)
+            {
+                if (v.route < 0) continue; // not placed yet
+                var spec = v.Spec;
+                float r = spec.width / 2;
+                int n = Math.Max(2, (int)Math.Ceiling(spec.length / spec.width));
+                float reach = spec.length / 2 - r;
+                float cx = (float)Math.Cos(v.heading), cz = (float)Math.Sin(v.heading);
+                for (int i = 0; i < n; i++)
+                {
+                    float f = -reach + 2 * reach * i / (n - 1);
+                    blockers.Add(new Circle(v.x + cx * f, v.z + cz * f, r));
+                }
+            }
+            plainBlockers.Clear();
+            plainBlockers.AddRange(blockers);
+            for (int i = 0; i < w.MarcherCount; i++) blockers.Add(new Circle(w.Marchers[i].x, w.Marchers[i].z, SetPieces.MARCHER_R));
         }
 
         // ------------------------------------------------------------------ blending
@@ -418,9 +540,21 @@ namespace Telfer.Net
                 p.z = Lerp(ra.z, rb.z, u);
                 p.heading = LerpAngle(ra.heading, rb.heading, u);
                 p.speed = rb.speed;
+                p.state = rb.state; // London's lions and ravens: statue or awake, perched or out
                 // The gait is not sent: walk it from the distance shown.
                 if (u < 1) p.travel += Collide.Hypot(p.x - px, p.z - pz);
             }
+
+            if (a.vh != null && b.vh != null)
+                for (int i = 0; i < w.Vehicles.Count && i < a.vh.Length && i < b.vh.Length; i++)
+                {
+                    var v = w.Vehicles[i];
+                    v.x = Lerp(a.vh[i].x, b.vh[i].x, t);
+                    v.z = Lerp(a.vh[i].z, b.vh[i].z, t);
+                    v.heading = LerpAngle(a.vh[i].heading, b.vh[i].heading, t);
+                    v.speed = b.vh[i].speed;
+                    v.route = 0; // two rows in: placed, so it may be drawn
+                }
 
             for (int i = 0; i < w.Kids.Count && i < a.kd.Length && i < b.kd.Length; i++)
             {
@@ -508,7 +642,44 @@ namespace Telfer.Net
                 case "breath": ge.type = EventType.Breath; ge.heading = e.Float("heading"); ge.range = e.Float("range"); break;
                 case "sneeze": ge.type = EventType.Sneeze; break;
                 case "howl": ge.type = EventType.Howl; break;
-                case "chomp": ge.type = EventType.Chomp; ge.predator = (PredatorKind)Kind(Protocol.PREDATOR_KINDS); break;
+                case "chomp": ge.type = EventType.Chomp; ge.predator = (PredatorKind)Kind(Protocol.PREDATOR_KINDS); ge.lost = e.Float("lost"); break;
+                // ---- London (A2-A6)
+                case "cry": ge.type = EventType.Cry; ge.animal = (AnimalKind)Kind(Protocol.ANIMAL_KINDS); break;
+                case "steal":
+                    ge.type = EventType.Steal; ge.animal = (AnimalKind)Kind(Protocol.ANIMAL_KINDS);
+                    ge.food = (FoodKind)Math.Max(0, e.Kind("food", Protocol.FOOD_KINDS));
+                    break;
+                case "teatime": ge.type = EventType.TeaTime; break;
+                case "roar": ge.type = EventType.Roar; ge.predator = PredatorKind.Lion; break;
+                case "caw": ge.type = EventType.Caw; ge.predator = PredatorKind.Raven; break;
+                case "ding": ge.type = EventType.Ding; ge.vehicle = (VehicleKind)Kind(Protocol.VEHICLE_KINDS); ge.honk = e.Bool("honk"); break;
+                case "vbonk": ge.type = EventType.VBonk; ge.vehicle = (VehicleKind)Kind(Protocol.VEHICLE_KINDS); ge.lost = e.Float("lost"); break;
+                case "splash": ge.type = EventType.Splash; break;
+                case "whistle": ge.type = EventType.Whistle; break;
+                case "guard": ge.type = EventType.Guard; break;
+                case "guardSmile": ge.type = EventType.GuardSmile; break;
+                case "photo": ge.type = EventType.Photo; break;
+                case "boo": ge.type = EventType.Boo; break;
+                case "rise": ge.type = EventType.Rise; break;
+                case "land": ge.type = EventType.Land; break;
+                case "ring": ge.type = EventType.Ring; ge.range = e.Float("r"); break;
+                case "roared": ge.type = EventType.Roared; break;
+                case "jewel": ge.type = EventType.Jewel; ge.k = e.Int("i", 0); ge.n = e.Int("n", 0); break;
+                case "royal": ge.type = EventType.Royal; break;
+                case "pearly": ge.type = EventType.Pearly; ge.tx = e.Float("tx"); ge.tz = e.Float("tz"); break;
+                case "button": ge.type = EventType.ButtonEat; ge.points = e.Float("points"); break;
+                case "bong": ge.type = EventType.Bong; ge.k = e.Int("k", 1); ge.n = e.Int("n", 1); break;
+                case "launch": ge.type = EventType.Launch; break;
+                case "ride":
+                {
+                    int c = Protocol.IndexOf(Protocol.CARRIERS, e.Str("by"));
+                    ge.type = EventType.Ride; ge.by = -1; ge.carrier = c == 0 ? Carrier.Eye : c == 1 ? Carrier.Boat : Carrier.None; ge.on = e.Bool("on");
+                    break;
+                }
+                case "warp": ge.type = EventType.Warp; ge.from = e.Int("from", 0); ge.to = e.Int("to", 0); break;
+                case "wobble": ge.type = EventType.Wobble; break;
+                case "arrows": ge.type = EventType.Arrows; break;
+                case "treat": ge.type = EventType.Treat; break;
                 case "power":
                     if (!Protocol.TryUpgrade(e.Str("kind"), out var power)) return null;
                     ge.type = EventType.Power; ge.power = power; ge.heading = e.Float("heading"); ge.range = e.Float("range");
@@ -519,10 +690,14 @@ namespace Telfer.Net
                     ge.type = EventType.Say; ge.text = e.Str("text");
                     var g = w.Stage.Greeters;
                     ge.sami = g != null && g.Length >= 2 && Collide.Hypot(ge.x - g[0], ge.z - g[1]) < 1;
+                    // London's talkers (the tour guide, the Beefeater) speak where they stand.
+                    if (w.Stage.Chatters != null)
+                        foreach (var c in w.Stage.Chatters)
+                            if (Collide.Hypot(ge.x - c.x, ge.z - c.z) < 1) ge.speaker = c.id;
                     break;
                 }
                 case "lob": ge.type = EventType.Lob; ge.projectile = (ProjectileKind)Kind(Protocol.PROJECTILE_KINDS); break;
-                case "pelt": ge.type = EventType.Pelt; ge.lost = e.Float("lost"); break;
+                case "pelt": ge.type = EventType.Pelt; ge.lost = e.Float("lost"); ge.projectile = e.Bool("chip") ? ProjectileKind.Chip : ProjectileKind.Pebble; break;
                 case "kiss": ge.type = EventType.Kiss; ge.gem = e.Bool("gem"); break;
                 case "magic":
                     ge.type = EventType.Magic; ge.creature = (CreatureKind)Kind(Protocol.CREATURE_KINDS); ge.gems = e.Int("gems", 0);
@@ -530,7 +705,7 @@ namespace Telfer.Net
                 case "bump":
                 {
                     string what = e.Str("what");
-                    ge.type = what == "cooper" ? EventType.BumpCooper : what == "kid" ? EventType.BumpKid : EventType.BumpWall;
+                    ge.type = what == "cooper" ? EventType.BumpCooper : what == "kid" ? EventType.BumpKid : what == "guard" ? EventType.BumpGuard : EventType.BumpWall;
                     AtSnake();
                     break;
                 }

@@ -666,6 +666,20 @@ namespace Telfer.Sim
         }
 
         /// <summary>The Eye's ride: how far round (0..1) a carried snake is, for the view's crane shot (-1 when not on it).</summary>
+        /// <summary>
+        /// A network replica's set pieces at `tick` (replica.ts updateBlockers): Tower Bridge's road and the
+        /// parade's marchers, worked out from the tick as the server does. No events: the server sends those.
+        /// </summary>
+        public void ReplicaSetPieces(int tick)
+        {
+            if (sp == null) return;
+            Stage.Bridges = Sim.SetPieces.BridgesAt(sp, bridgesDown, tick);
+            marcherCount = Sim.SetPieces.ParadeAt(tick, sp.parade, Marchers);
+        }
+
+        /// <summary>The set pieces' spots (null off London).</summary>
+        public SetPieceSpots Spots => sp;
+
         public float EyeRide(Snake s) => s.carried == Carrier.Eye ? 1 - (s.carriedUntil - Tick) / (float)EYE_RIDE : -1;
     }
 }

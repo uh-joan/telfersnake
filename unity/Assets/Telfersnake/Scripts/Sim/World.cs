@@ -205,11 +205,16 @@ namespace Telfer.Sim
         /// no animals. The replica fills the lists from the server's welcome, writes the snapshots into
         /// them, and never calls Step.
         /// </summary>
-        World(Stage stage, Mode mode, int me)
+        World(Stage stage, Mode mode, int me, int setPieceSeed)
         {
             Rng = new Rng(1);
             Mode = mode;
-            Stage = stage ?? School.Stage;
+            stage = stage ?? School.Stage;
+            // London's set pieces are worked out from the tick here as on the server: its own copy of the stage, the room's flavour.
+            Stage = stage.SetPieces != null ? stage.Copy() : stage;
+            sp = stage.SetPieces;
+            this.setPieceSeed = sp != null ? setPieceSeed : 0;
+            bridgesDown = stage.Bridges;
             ferocity = Rivals.Ferocity(mode);
             Cooper = new Cooper(Stage.Warden);
             Hazards = new List<Hazard>();
@@ -222,7 +227,7 @@ namespace Telfer.Sim
             RefreshHazardCircles();
         }
 
-        public static World Replica(Stage stage, Mode mode, int me) => new World(stage, mode, me);
+        public static World Replica(Stage stage, Mode mode, int me, int setPieceSeed = 0) => new World(stage, mode, me, setPieceSeed);
 
         /// <summary>Call after moving a hazard (a broken rock dropped somewhere new).</summary>
         public void RefreshHazardCircles()

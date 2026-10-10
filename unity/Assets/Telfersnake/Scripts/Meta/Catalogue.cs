@@ -18,6 +18,10 @@ namespace Telfer.Meta
         public uint[] pattern;
         /// <summary>Trails: particle colours.</summary>
         public uint[] palette;
+        /// <summary>Where it is sold: null everywhere, "common" or "london" only once that place is unlocked.</summary>
+        public string place;
+        /// <summary>Skins: the pattern chases along the body like a string of lights (Piccadilly Lights).</summary>
+        public bool shimmer;
     }
 
     /// <summary>
@@ -33,14 +37,20 @@ namespace Telfer.Meta
         {
             var s = Skin(id, name, price, head, pattern);
             s.gem = true;
+            s.place = "common";
             return s;
         }
 
         static Item Hat(string id, string name, int price, bool gem = false) =>
-            new Item { id = id, name = name, kind = ItemKind.Hat, price = price, gem = gem };
+            new Item { id = id, name = name, kind = ItemKind.Hat, price = price, gem = gem, place = gem ? "common" : null };
 
         static Item Trail(string id, string name, int price, bool gem, params uint[] palette) =>
-            new Item { id = id, name = name, kind = ItemKind.Trail, price = price, gem = gem, palette = palette };
+            new Item { id = id, name = name, kind = ItemKind.Trail, price = price, gem = gem, palette = palette, place = gem ? "common" : null };
+
+        /// <summary>London's own (A7, docs/london-catalogue.md): same ids, prices and currencies as the web game.</summary>
+        static Item London(Item it) { it.place = "london"; return it; }
+
+        static Item Shimmer(Item it) { it.shimmer = true; return it; }
 
         public static readonly Item[] Skins =
         {
@@ -73,6 +83,17 @@ namespace Telfer.Meta
             GemSkin("fox", "Sly Fox", 30, 0xd9662a, 0xd9662a, 0xd9662a, 0xf3ead3),
             GemSkin("toadstool", "Toadstool", 25, 0xd23b32, 0xd23b32, 0xffffff, 0xd23b32, 0xd23b32),
             GemSkin("stag", "White Stag", 45, 0xf3efe6, 0xe9e4d8, 0xe6c766, 0xe9e4d8),
+            // London-only (A7): everyday ones in stars, the special ones in blue gems.
+            London(Skin("black-cab", "Black Cab", 150, 0x1d1f24, 0x1d1f24, 0x1d1f24, 0x1d1f24, 0xffc93c)),
+            London(Skin("union-jack", "Union Jack", 200, 0x1f3fa8, 0xc8102e, 0xffffff, 0x1f3fa8, 0xffffff)),
+            London(Skin("royal-guard", "Royal Guard", 180, 0x1c1c1f, 0xd8342c, 0xd8342c, 0xf2c230, 0xd8342c, 0xd8342c, 0x1c1c1f)),
+            London(Skin("postbox", "Postbox Red", 90, 0xd62d20, 0xd62d20, 0xd62d20, 0xd62d20, 0x1c1c1f)),
+            London(Skin("corgi", "Corgi", 120, 0xe39b4c, 0xe39b4c, 0xe39b4c, 0xfff6e8, 0xe39b4c)),
+            London(Skin("tower-blue", "Tower Bridge Blue", 110, 0xd9cdb3, 0x8cc8ec, 0x8cc8ec, 0xffffff, 0x8cc8ec)),
+            London(Skin("thames", "The Thames", 140, 0x1f8a96, 0x1f8a96, 0x2fa6b0, 0x6fd0cf, 0x2fa6b0, 0xffffff)),
+            London(Skin("trafalgar-bronze", "Trafalgar Bronze", 160, 0x9a7444, 0x9a7444, 0xb88a52, 0xd1aa70, 0xb88a52)),
+            London(GemSkin("pearly-king", "Pearly King", 45, 0x1c1c1f, 0x1c1c1f, 0xfffaf0, 0x1c1c1f, 0x1c1c1f, 0xfffaf0)),
+            Shimmer(London(GemSkin("piccadilly-lights", "Piccadilly Lights", 60, 0x2b1d4e, 0xff3fa4, 0xffd23f, 0x3fb6ff, 0x5cff8a, 0xff7a2f, 0xb36bff))),
         };
 
         public static readonly Item[] Hats =
@@ -97,6 +118,16 @@ namespace Telfer.Meta
             Hat("acorn", "Acorn Cap", 20, true),
             Hat("flower-crown", "Flower Crown", 25, true),
             Hat("antlers", "Antlers", 30, true),
+            // London-only (A7).
+            London(Hat("bowler", "Bowler Hat", 90)),
+            London(Hat("deerstalker", "Deerstalker", 110)),
+            London(Hat("bobby", "Bobby Helmet", 120)),
+            London(Hat("pearly-cap", "Pearly King Cap", 130)),
+            London(Hat("beefeater", "Beefeater Hat", 140)),
+            London(Hat("tiara", "Tiara", 150)),
+            London(Hat("union-top-hat", "Union Jack Top Hat", 160)),
+            London(Hat("tiny-bigben", "Tiny Big Ben", 220)),
+            London(Hat("bearskin", "Bearskin", 50, true)),
         };
 
         public static readonly Item[] Trails =
@@ -117,6 +148,14 @@ namespace Telfer.Meta
             Trail("petals", "Petals", 25, true, 0xffc9de, 0xff8fab, 0xffffff),
             Trail("fireflies", "Fireflies", 30, true, 0xfff6a0, 0xc0eb75, 0xffffff),
             Trail("magic-dust", "Magic Dust", 40, true, 0x9775fa, 0xc0ffe6, 0xffd43b, 0xffffff),
+            // London-only (A7).
+            London(Trail("raindrops", "Raindrops", 70, false, 0x74c0fc, 0xa5d8ff, 0xe7f5ff)),
+            London(Trail("pigeon-feathers", "Pigeon Feathers", 70, false, 0x9aa0aa, 0xc9ced6, 0xffffff, 0x7f8f9a)),
+            London(Trail("tea-bubbles", "Tea Bubbles", 80, false, 0xc98a45, 0xf3e3c3, 0xffffff)),
+            London(Trail("bunting", "Bunting", 90, false, 0xc8102e, 0xffffff, 0x1f3fa8)),
+            London(Trail("thames-spray", "Thames Spray", 100, false, 0x1f8a96, 0x6fd0cf, 0xffffff)),
+            London(Trail("red-arrows", "Red Arrows", 140, false, 0xe8303a, 0xffffff, 0x2f5fd0)),
+            London(Trail("fireworks", "Fireworks", 40, true, 0xff3fa4, 0xffd23f, 0x3fb6ff, 0x5cff8a, 0xffffff)),
         };
 
         public static Item[] Of(ItemKind k)

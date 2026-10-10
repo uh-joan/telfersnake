@@ -1,5 +1,6 @@
 using Telfer.Sim;
 using Telfer.View;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -36,11 +37,136 @@ namespace Telfer.UI
             jewelPill.gameObject.SetActive(false);
         }
 
+        // ------------------------------------------------------------------ London's keepsakes: stamps and postcards
+
+        readonly Album album = new Album();
+        RectTransform albumBtn, stampRt;
+        CanvasGroup stampGroup;
+        RawImage stampArt;
+        Text stampName;
+        float stampT = -1;
+        readonly List<Image> mapRings = new List<Image>();
+        /// <summary>The sights stamped this run (a fresh passport every run), inked on the minimap.</summary>
+        public readonly HashSet<string> Stamped = new HashSet<string>();
+        public bool AlbumOpen => album.IsOpen;
+        public void CloseAlbum() => album.Close();
+
+        /// <summary>The Postcard Album, beside the Tuck Shop on the title: once there is a London to collect.</summary>
+        void BuildAlbumButton(RectTransform t)
+        {
+            albumBtn = UiKit.Rect(t, "album", new Vector2(0, 0), new Vector2(0, 0), new Vector2(0.5f, 0.5f), new Vector2(285, 120), new Vector2(150, 150));
+            UiKit.Shadow(albumBtn, 20, 0.3f, null, true);
+            var b = UiKit.Button(albumBtn, "btn", new Color(0.86f, 0.25f, 0.3f), 75, () => { Audio.Synth.I?.Play("pick"); album.Open(rootRt, RefreshTitle); });
+            b.GetComponent<Springy>().Idle = 0.02f;
+            // A little postcard with a red stamp in its corner.
+            var card = UiKit.Rect(b.transform, "card", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 6), new Vector2(96, 68));
+            card.localRotation = Quaternion.Euler(0, 0, -8);
+            UiKit.Panel(card, "bg", new Color(1f, 0.98f, 0.92f), 8);
+            var st = UiKit.Rect(card, "stamp", new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1), new Vector2(-6, -6), new Vector2(26, 30));
+            UiKit.Panel(st, "s", new Color(0.85f, 0.2f, 0.17f), 4);
+            for (int i = 0; i < 3; i++)
+            {
+                var line = UiKit.Rect(card, "line", new Vector2(0, 0), new Vector2(0, 0), new Vector2(0, 0), new Vector2(10, 12 + i * 12), new Vector2(50, 4));
+                UiKit.Panel(line, "l", new Color(0.6f, 0.62f, 0.7f), 2);
+            }
+            var lbl = UiKit.Rect(albumBtn, "lbl", new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(0, -2), new Vector2(200, 40));
+            UiKit.Label(lbl, "t", "Postcards", 28, Color.white, TextAnchor.MiddleCenter, 2);
+        }
+
+        RectTransform pauseAlbum;
+
+        /// <summary>The album from the pause screen too (the cards kept this run are already in it): a little postcard and the word.</summary>
+        Text BuildPauseAlbum(RectTransform box)
+        {
+            var t = Button(box, Vector2.zero, "Postcards", new Color(0.86f, 0.25f, 0.3f), () => { Audio.Synth.I?.Play("pick"); album.Open(rootRt, null); });
+            ((RectTransform)t.transform).offsetMin = new Vector2(62, 0);
+            var card = UiKit.Rect(t.transform.parent, "card", new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(52, 0), new Vector2(54, 38));
+            card.localRotation = Quaternion.Euler(0, 0, -8);
+            UiKit.Panel(card, "bg", new Color(1f, 0.98f, 0.92f), 6);
+            var st = UiKit.Rect(card, "stamp", new Vector2(1, 1), new Vector2(1, 1), new Vector2(1, 1), new Vector2(-4, -4), new Vector2(15, 17));
+            UiKit.Panel(st, "s", new Color(0.85f, 0.2f, 0.17f), 3);
+            for (int i = 0; i < 2; i++)
+            {
+                var line = UiKit.Rect(card, "line", new Vector2(0, 0), new Vector2(0, 0), new Vector2(0, 0), new Vector2(6, 8 + i * 8), new Vector2(26, 3));
+                UiKit.Panel(line, "l", new Color(0.6f, 0.62f, 0.7f), 2);
+            }
+            pauseAlbum = (RectTransform)t.transform.parent.parent;
+            return t;
+        }
+
+        /// <summary>
+        /// A rubber stamp slams down in the middle of the screen: the sight's picture in a frame of red ink and
+        /// its short name (hud.ts stamp). Gone again in a couple of seconds.
+        /// </summary>
+        public void Stamp(string id, string name, Texture art)
+        {
+            Stamped.Add(id);
+            if (!stampRt)
+            {
+                stampRt = UiKit.Rect(game, "stamp", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 90), new Vector2(330, 290));
+                stampGroup = stampRt.gameObject.AddComponent<CanvasGroup>();
+                stampGroup.blocksRaycasts = false;
+                UiKit.Panel(stampRt, "ink", new Color(0.8f, 0.12f, 0.15f, 0.95f), 26);
+                var inner = UiKit.Panel(stampRt, "paper", new Color(1f, 0.97f, 0.9f), 18);
+                ((RectTransform)inner.transform).offsetMin = new Vector2(12, 12); ((RectTransform)inner.transform).offsetMax = new Vector2(-12, -12);
+                var a = UiKit.Rect(stampRt, "art", Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+                a.offsetMin = new Vector2(26, 70); a.offsetMax = new Vector2(-26, -26);
+                stampArt = a.gameObject.AddComponent<RawImage>();
+                stampArt.raycastTarget = false;
+                var n = UiKit.Rect(stampRt, "name", new Vector2(0, 0), new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, 18), new Vector2(-30, 50));
+                stampName = UiKit.Label(n, "t", "", 36, new Color(0.8f, 0.12f, 0.15f));
+            }
+            stampArt.texture = art;
+            stampArt.gameObject.SetActive(art != null);
+            stampName.text = name;
+            stampRt.localRotation = Quaternion.Euler(0, 0, -8 + Random.Range(-3f, 3f));
+            stampRt.SetAsLastSibling();
+            stampRt.gameObject.SetActive(true);
+            stampT = 0;
+        }
+
+        void SyncStamp(float dt)
+        {
+            if (stampT < 0 || !stampRt) return;
+            stampT += dt;
+            // Slam: down from big in a blink, a little bounce, then hold and fade.
+            float s = stampT < 0.14f ? Mathf.Lerp(1.9f, 0.94f, stampT / 0.14f) : stampT < 0.26f ? Mathf.Lerp(0.94f, 1, (stampT - 0.14f) / 0.12f) : 1;
+            stampRt.localScale = Vector3.one * s;
+            stampGroup.alpha = stampT < 0.08f ? stampT / 0.08f : stampT > 1.9f ? Mathf.Clamp01(1 - (stampT - 1.9f) / 0.4f) : 1;
+            if (stampT > 2.3f) { stampT = -1; stampRt.gameObject.SetActive(false); }
+        }
+
+        /// <summary>A ring of red ink over every sight stamped this run, on the minimap.</summary>
+        void SyncStampRings(World w)
+        {
+            int i = 0;
+            if (w.Stage.Id == StageId.London)
+                foreach (var l in London.LANDMARKS)
+                {
+                    if (!Stamped.Contains(l.id)) continue;
+                    while (mapRings.Count <= i)
+                    {
+                        var img = UiKit.Image(minimapImg.transform, "stamp", UiKit.Ring, new Color(0.8f, 0.12f, 0.16f, 0.95f));
+                        var r = (RectTransform)img.transform;
+                        r.anchorMin = r.anchorMax = Vector2.zero;
+                        r.sizeDelta = new Vector2(26, 26);
+                        mapRings.Add(img);
+                    }
+                    var ring = mapRings[i++];
+                    ring.gameObject.SetActive(true);
+                    ring.transform.SetAsLastSibling();
+                    ((RectTransform)ring.transform).anchoredPosition = MapPos(l.x, l.z);
+                }
+            for (; i < mapRings.Count; i++) mapRings[i].gameObject.SetActive(false);
+        }
+
         void BuildLondonOverlays()
         {
-            // The camera flash: a white wash over everything, gone in a blink.
+            // The camera flash: a white glow round the edges of the screen (the middle stays clear), gone in a blink.
             var f = UiKit.Fill(rootRt, "flash");
             flashImg = f.gameObject.AddComponent<Image>();
+            flashImg.sprite = EdgeGlow();
+            flashImg.type = Image.Type.Simple;
             flashImg.color = new Color(1, 1, 1, 0);
             flashImg.raycastTarget = false;
             // The Tube: a dark tunnel whoosh, and the little line map across the middle.
@@ -53,8 +179,32 @@ namespace Telfer.UI
             flashImg.transform.SetAsLastSibling();
         }
 
-        /// <summary>A tourist took your picture: CLICK! A white flash.</summary>
-        public void Flash() => flashT = 0.35f;
+        /// <summary>A tourist took your picture: CLICK! A white flash round the edges.</summary>
+        public void Flash() => flashT = FLASH_FOR;
+        const float FLASH_FOR = 0.28f;
+
+        static Sprite edgeGlow;
+        /// <summary>White at the screen's edges, fading to nothing a third of the way in (a rounded-rectangle falloff).</summary>
+        static Sprite EdgeGlow()
+        {
+            if (edgeGlow) return edgeGlow;
+            const int N = 128;
+            var t = new Texture2D(N, N, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var px = new Color32[N * N];
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                {
+                    float u = Mathf.Abs(x / (N - 1f) * 2 - 1), v = Mathf.Abs(y / (N - 1f) * 2 - 1);
+                    // Distance to the edge as a soft superellipse: 1 at the rim, 0 inside.
+                    float d = Mathf.Pow(Mathf.Pow(u, 6) + Mathf.Pow(v, 6), 1 / 6f);
+                    float a = Mathf.Clamp01((d - 0.62f) / 0.38f);
+                    a = a * a * (3 - 2 * a);
+                    px[y * N + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                }
+            t.SetPixels32(px);
+            t.Apply();
+            return edgeGlow = Sprite.Create(t, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f));
+        }
 
         /// <summary>Down the Tube at `from`, up at `to`: the whoosh, and the line with the two stations lit.</summary>
         public void Tube(string[] names, int from, int to)
@@ -96,14 +246,19 @@ namespace Telfer.UI
             }
             jewelPill.localScale = Vector3.Lerp(jewelPill.localScale, Vector3.one, 1 - Mathf.Exp(-dt * 10));
 
+            SyncStamp(dt);
+            SyncStampRings(w);
             flashT = Mathf.Max(0, flashT - dt);
-            flashImg.color = new Color(1, 1, 1, Mathf.Clamp01(flashT / 0.35f) * 0.6f);
+            float fl = Mathf.Clamp01(flashT / FLASH_FOR);
+            flashImg.color = new Color(1, 1, 1, fl * fl * 0.95f);
             tubeT = Mathf.Max(0, tubeT - dt);
             tubeRt.gameObject.SetActive(tubeT > 0);
             float u = 1 - tubeT / TUBE_FOR;
             // In: the tunnel closes over you; out: daylight again, the map lingering a little longer.
             whooshImg.color = new Color(0.05f, 0.06f, 0.12f, tubeT > 0 ? Mathf.Clamp01(Mathf.Sin(Mathf.Min(1, u * 2.2f) * Mathf.PI)) * 0.8f : 0);
-            if (tubeT > 0) tubeRt.localScale = Vector3.one * (0.9f + 0.1f * Mathf.Min(1, u * 6));
+            // The map is 1000 wide: on a phone held upright it shrinks to fit the screen with a margin.
+            float fitW = Mathf.Min(1, (rootRt.rect.width - 60) / 1000);
+            if (tubeT > 0) tubeRt.localScale = Vector3.one * fitW * (0.9f + 0.1f * Mathf.Min(1, u * 6));
         }
     }
 }
