@@ -187,7 +187,52 @@ export class Sfx {
         this.tone(1900, 0.04, { type: 'square', gain: 0.06 });
         this.tone(2300, 0.04, { type: 'square', gain: 0.06, delay: 0.06 });
         break;
+      // ---- London's zoo
+      case 'corgi': // yip yip!
+        this.tone(900, 0.07, { type: 'square', gain: 0.09, slideTo: 1350 });
+        this.tone(950, 0.08, { type: 'square', gain: 0.09, slideTo: 1450, delay: 0.11 });
+        break;
+      case 'swan': // HONK
+        this.tone(250, 0.32, { type: 'sawtooth', gain: 0.14, slideTo: 210, vibrato: [18, 30] });
+        this.tone(500, 0.28, { type: 'square', gain: 0.05, slideTo: 420 });
+        break;
+      case 'gull': // a seaside cry
+        this.tone(1250, 0.2, { type: 'sawtooth', gain: 0.07, slideTo: 800 });
+        this.tone(1150, 0.24, { type: 'sawtooth', gain: 0.06, slideTo: 760, delay: 0.24 });
+        break;
+      case 'pelican': // a beak clack
+        this.hiss(0.04, 2500, 1800, 0.18, 0, 6);
+        this.hiss(0.04, 2300, 1600, 0.16, 0.09, 6);
+        break;
+      case 'horse': // a whinny
+        this.tone(700, 0.45, { type: 'sawtooth', gain: 0.08, slideTo: 420, vibrato: [60, 16] });
+        break;
+      case 'dino': // a clatter of bones
+        for (let i = 0; i < 5; i++) this.hiss(0.05, 3200 - i * 300, 1400, 0.14, i * 0.06, 8);
+        this.tone(110, 0.3, { type: 'square', gain: 0.08, slideTo: 70 });
+        break;
+      case 'pigeon': // the flutter of a whole flock taking off
+        for (let i = 0; i < 6; i++) this.hiss(0.08, 900 + i * 120, 500, 0.08, i * 0.05, 2);
+        break;
     }
+  }
+
+  /** A gull or a pelican made off with a snack: a cheeky snatch. */
+  snatch(): void {
+    this.hiss(0.12, 1500, 5000, 0.1, 0, 1.5);
+    this.tone(880, 0.12, { type: 'square', gain: 0.07, slideTo: 1500, delay: 0.04 });
+  }
+
+  /** A cuppa: a quick warm-up whoosh, up the scale. */
+  zoom(): void {
+    this.tone(520, 0.25, { type: 'triangle', gain: 0.12, slideTo: 1040 });
+    this.hiss(0.3, 1200, 4000, 0.06, 0.02, 1);
+  }
+
+  /** TEA TIME! A teacup chime and a little fanfare. */
+  teaTime(): void {
+    [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.24, { type: 'triangle', gain: 0.14, delay: i * 0.1 }));
+    [2093, 2637].forEach((f, i) => this.tone(f, 0.5, { type: 'sine', gain: 0.07, delay: 0.45 + i * 0.12, vibrato: [8, 12] }));
   }
 
   // ---------------------------------------------------------------- bumps

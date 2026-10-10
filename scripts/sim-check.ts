@@ -14,7 +14,10 @@
  * entity counts, and check every kind the stage can spawn turned up. On a stage with a river they
  * also count food or walkers (animals, the warden…) in the water, flood-fill the map twice (no
  * sealed pocket with swimming allowed; both banks still joined when only the bridges cross), check
- * the arrival spot is free, and time a scripted swim (×0.5 of land speed, ± 0.05). `--baseline` records what
+ * the arrival spot is free, and time a scripted swim (×0.5 of land speed, ± 0.05). With London's zoo
+ * they count swan gulps (must be none), gull/pelican raids (must happen, and land on the map), the
+ * animals' cries and the cuppas, and script a Dragon nosing a swan, a Tea Time combo, and a huge
+ * mouth that must get exactly one Tea Time (never a chain off its own cake stand). `--baseline` records what
  * `main` already does (the school's bots do sometimes nose a wall for a few seconds), so a later
  * run fails only when a count gets worse; a stage with no record must be spotless.
  *
@@ -344,6 +347,96 @@ function swimRatio(stage: Stage): number {
   return n ? sum / n : NaN;
 }
 
+interface Zoo {
+  swanGulps: number;
+  steals: number;
+  stealsOut: number;
+  cries: number;
+  teatimes: number;
+  teas: number;
+}
+
+function tallyZoo(w: World, zoo: Zoo, outside: (x: number, z: number) => boolean, note: (m: string) => void, where: string): void {
+  for (const e of w.events) {
+    if (e.type === 'gulp' && e.kind === 'swan') {
+      zoo.swanGulps++;
+      note(`${where}: a swan was gulped`);
+    } else if (e.type === 'steal') {
+      zoo.steals++;
+      if (outside(e.x, e.z)) {
+        zoo.stealsOut++;
+        note(`${where}: ${e.kind} stole off the map at (${e.x.toFixed(2)}, ${e.z.toFixed(2)})`);
+      }
+    } else if (e.type === 'cry') {
+      zoo.cries++;
+    } else if (e.type === 'teatime') {
+      zoo.teatimes++;
+    } else if (e.type === 'eat' && e.kind === 'tea') {
+      zoo.teas++;
+    }
+  }
+}
+
+/**
+ * Two scripted London moments: a Dragon-sized snake nosing a swan (a boop, never a gulp), and a
+ * snake fed a sandwich, a scone and a sponge in a row (TEA TIME, with a cake stand of treats).
+ */
+function londonScripted(stage: Stage): { swan: string; tea: string; bigMouth: number } {
+  const w = new World(3, undefined, rulesFor('normal'), stage);
+  const s = w.snake;
+  s.mass = 800; // the Dragon
+  const swan = w.animals.find((a) => a.kind === 'swan');
+  let gulps = 0;
+  let boops = 0;
+  if (swan) {
+    for (let tick = 0; tick < 120; tick++) {
+      if (w.cards) w.choose(0);
+      s.placeAt(swan.x - 0.6, swan.z, 0);
+      swan.boopCooldown = 0;
+      w.step({ x: 1, z: 0, active: true, dash: false });
+      for (const e of w.events) {
+        if (e.type === 'gulp' && e.kind === 'swan') gulps++;
+        if (e.type === 'boop' && e.kind === 'swan') boops++;
+      }
+      w.events.length = 0;
+    }
+  }
+  const t = new World(4, undefined, rulesFor('normal'), stage);
+  const me = t.snake;
+  let tea = 'no tea time';
+  for (const kind of ['sandwich', 'biscuit', 'scone', 'sponge'] as const) {
+    if (t.cards) t.choose(0);
+    const f = t.foods[0];
+    f.kind = kind;
+    f.x = me.x + Math.cos(me.heading) * 0.3;
+    f.z = me.z + Math.sin(me.heading) * 0.3;
+    t.step({ x: Math.cos(me.heading), z: Math.sin(me.heading), active: true, dash: false });
+    for (const e of t.events) if (e.type === 'teatime') tea = 'TEA TIME';
+    t.events.length = 0;
+  }
+  // A huge mouth (reach 3.85) must not swallow its own cake stand into Tea Time after Tea Time.
+  const b = new World(5, undefined, rulesFor('normal'), stage);
+  const big = b.snake;
+  big.mass = 600;
+  let teaTimes = 0;
+  for (let tick = 0; tick < 300; tick++) {
+    if (b.cards) b.choose(0);
+    big.reachBonus = 0;
+    big.reachBonus = 3.85 - big.biteReach;
+    big.immune = 10;
+    if (tick < 3) {
+      const f = b.foods[0];
+      f.kind = (['sandwich', 'scone', 'sponge'] as const)[tick];
+      f.x = big.x + Math.cos(big.heading) * 0.3;
+      f.z = big.z + Math.sin(big.heading) * 0.3;
+    }
+    b.step({ x: Math.cos(big.heading), z: Math.sin(big.heading), active: true, dash: false });
+    for (const e of b.events) if (e.type === 'teatime') teaTimes++;
+    b.events.length = 0;
+  }
+  return { swan: gulps ? `${gulps} gulps!` : boops ? 'boop, no gulp' : 'never met', tea, bigMouth: teaTimes };
+}
+
 function invariants(id: StageId, seeds: number, baseline: boolean): number {
   const stage = stageFor(id);
   const ticks = 200 * 60;
@@ -352,6 +445,8 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
   const solids = dry(stage);
   const river = stage.water !== undefined;
   let longest = 0;
+  // London's zoo and menu: swans never gulped, raids land on the map, the combos fire.
+  const zoo: Zoo | null = stage.animals.includes('swan') ? { swanGulps: 0, steals: 0, stealsOut: 0, cries: 0, teatimes: 0, teas: 0 } : null;
   const notes: string[] = [];
   const note = (msg: string) => {
     if (notes.length < 12) notes.push(msg);
@@ -369,6 +464,7 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
       t.runs++;
       for (let tick = 0; tick < ticks; tick++) {
         stepSolo(w, thumb);
+        if (zoo) tallyZoo(w, zoo, outside, note, `${id}/${mode}/seed ${seed}/t ${tick}`);
         w.events.length = 0;
         t.ticks++;
         const where = `${id}/${mode}/seed ${seed}/t ${tick}`;
@@ -404,7 +500,13 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
         }
         for (const f of w.foods) {
           t.seen.add('food:' + f.kind);
-          if (river && inWater(stage, f.x, f.z)) {
+          if (outside(f.x, f.z)) {
+            t.outOfBounds++;
+            note(`${where}: ${f.kind} out of bounds at (${f.x.toFixed(2)}, ${f.z.toFixed(2)})`);
+          }
+          // Only where it is put down counts: a swimmer's magnet may drag bank food out to it, by design.
+          const placed = tick === 0 || f.born >= w.tick - 1;
+          if (river && placed && inWater(stage, f.x, f.z)) {
             t.wet++;
             note(`${where}: ${f.kind} spawned in the water at (${f.x.toFixed(2)}, ${f.z.toFixed(2)})`);
           }
@@ -473,6 +575,18 @@ function invariants(id: StageId, seeds: number, baseline: boolean): number {
     row('arrival spot free', isFree(stage, sp.x, sp.z, 2.5) ? 'yes' : 'NO', isFree(stage, sp.x, sp.z, 2.5));
     const ratio = swimRatio(stage);
     row('swim speed (× land)', ratio.toFixed(3), Math.abs(ratio - 0.5) <= 0.05);
+  }
+  if (zoo) {
+    row('swans gulped', zoo.swanGulps, zoo.swanGulps === 0);
+    row('food stolen', zoo.steals, zoo.steals > 0);
+    row('steals off the map', zoo.stealsOut, zoo.stealsOut === 0);
+    row('honks, yips, flocks', zoo.cries, zoo.cries > 0);
+    row('cuppas (zoom)', zoo.teas, zoo.teas > 0);
+    console.log(`  ${'tea times (thumb)'.padEnd(22)} ${String(zoo.teatimes).padStart(8)}`);
+    const scripted = londonScripted(stage);
+    row('swan vs a Dragon', scripted.swan, scripted.swan === 'boop, no gulp');
+    row('scripted tea time', scripted.tea, scripted.tea === 'TEA TIME');
+    row('tea times, reach 3.85', scripted.bigMouth, scripted.bigMouth === 1);
   }
   console.log(`  ${'longest stall'.padEnd(22)} ${(longest / 60).toFixed(1).padStart(7)}s`);
   row('kinds seen', `${want.size - missing.length}/${want.size}`, missing.length === 0);

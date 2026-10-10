@@ -1,4 +1,4 @@
-import type { AnimalKind } from './animals';
+import type { AnimalKind, Home } from './animals';
 import type { WardenConfig } from './cooper';
 import type { CreatureKind } from './creatures';
 import type { FoodKind } from './food';
@@ -87,6 +87,10 @@ export interface Stage extends Terrain {
   fallbackSpot: Spot;
   /** Which animal kinds live here (and how many, via each kind's `count`). */
   animals: readonly AnimalKind[];
+  /** How many of a kind live here, where it differs from the kind's own `count` (London's big pigeon flock). */
+  animalCounts?: Partial<Record<AnimalKind, number>>;
+  /** Where a kind lives here, where it differs from the kind's own `home` (London's pigeons in Trafalgar Square). */
+  animalHomes?: Partial<Record<AnimalKind, Home>>;
   /** The HUD's "what the next size can gulp" hint, one emoji string per size tier (stage-specific). */
   gulpHints: readonly string[];
   /** Which food grows where. */
