@@ -169,6 +169,8 @@ export type GameEvent =
   | { type: 'whistle'; who: number; x: number; z: number }
   /** London: three laps round the Royal Guard. The tiniest smile, and a gem from his bearskin for `who`. */
   | { type: 'guard'; who: number; x: number; z: number }
+  /** London: the same moment for the whole room: his smile, his eyes on `who`, the sparkle. */
+  | { type: 'guardSmile'; who: number; x: number; z: number }
   /** London: a tourist took `who`'s photo. CLICK! (a flash on that player's screen) */
   | { type: 'photo'; who: number; x: number; z: number }
   /** London: the living statue moved. BOO! */
@@ -1337,7 +1339,8 @@ export class World {
     reset();
     this.guardCool[id] = GUARD_COOL;
     s.score += 100;
-    this.events.push({ type: 'guard', who: id, x: g.x, z: g.z });
+    this.events.push({ type: 'guardSmile', who: id, x: g.x, z: g.z }); // the whole room sees him smile
+    this.events.push({ type: 'guard', who: id, x: g.x, z: g.z }); // only `who` gets the gem
   }
 
   /** London's chatters (the tour guide, the Beefeater): a line now and then, when someone is near to hear it. */

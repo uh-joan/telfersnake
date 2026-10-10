@@ -105,6 +105,7 @@ function mountPeople(): void {
   const want = world.stage.id === 'london';
   if (want && !people) people = new LondonPeople();
   if (people) {
+    people.reset(); // nothing carried over from the last world (who he was looking at)
     if (want) stage.scene.add(people.group);
     else stage.scene.remove(people.group);
   }
@@ -797,10 +798,13 @@ function handleEvents(): void {
         hud.popup('👮 PHWEEE!', e.x, e.z, e.who === world.me ? 'bad' : 'fun');
         sfx?.whistle();
         break;
-      case 'guard':
-        // Three laps round the Royal Guard: the tiniest smile, and a gem from his bearskin.
+      case 'guardSmile':
+        // Three laps round the Royal Guard: everyone sees the tiniest smile.
         people?.smile(world.snakes[e.who]);
         sparkles.burst(e.x, e.z, GOLD, 14, 1);
+        break;
+      case 'guard':
+        // ...and a gem from his bearskin, for the one who did the laps.
         if (!mine) break;
         earnGem();
         hud.popup('🙂 💎', world.snake.x, world.snake.z, 'fun'); // at you, so his face stays in view
@@ -966,7 +970,7 @@ function frame(now: number): void {
   upgradeFx.update(world, playing ? dt : 0, time);
   scenery?.reveal(s.x, s.z, dt);
   cooperView.update(world.cooper, playing ? dt : 0, time);
-  people?.update(world, playing ? dt : 0);
+  if (people && world.stage.id === 'london') people.update(world, playing ? dt : 0);
   stage.follow(s.x, s.z, s.heading, s.radius, dt);
   weather.update(dt, s.x, s.z);
   hud.update(world, stage, dt);

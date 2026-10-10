@@ -335,6 +335,14 @@ export class LondonPeople {
     this.gemFrom.set(GUARD.x, 2.4 * SCALE, GUARD.z);
   }
 
+  /** Forget the last world: no smile, no snake to look at, no gem in flight. */
+  reset(): void {
+    this.smileFor = 0;
+    this.lookAt = null;
+    this.gemT = -1;
+    this.guard.gem.visible = false;
+  }
+
   /** The living statue moves: a little jump, arms up. Then still again. */
   boo(): void {
     this.booAge = 0;
