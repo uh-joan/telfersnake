@@ -32,6 +32,25 @@ namespace Telfer.View
         readonly Vector2[] uvs = new Vector2[MAX_RINGS * RING_VERTS + 2];
         readonly Color[] cols = new Color[MAX_RINGS * RING_VERTS + 2];
         readonly Vector3[] ringPos = new Vector3[MAX_RINGS];
+        readonly float[] ringSink = new float[MAX_RINGS];
+        float rippleIn;
+
+        /// <summary>The place being played when it has rivers (London), so swimmers sink to the water; else null.</summary>
+        public static Stage WaterStage;
+
+        /// <summary>How far into the river (x, z) is, 0 on dry land or a bridge, easing to 1 a metre past the bank.</summary>
+        static float Wet(float x, float z)
+        {
+            var st = WaterStage;
+            if (st == null || st.Water == null || Water.OnBridge(st, x, z)) return 0;
+            float wet = 0;
+            foreach (var w in st.Water)
+            {
+                float d = London.DistanceToPath(w.path, x, z), half = w.width / 2;
+                wet = Mathf.Max(wet, Mathf.SmoothStep(0, 1, Mathf.InverseLerp(half + 0.3f, half - 0.9f, d)));
+            }
+            return wet;
+        }
 
         readonly List<Vector2> bumps = new List<Vector2>(); // x: metres behind head, y: amplitude
         float tongueT, tongueNext = 1, blinkT, blinkNext = 2, punch, lastHeading, roll, spawnPop = 1, deadFor;
@@ -313,6 +332,7 @@ namespace Telfer.View
             {
                 s.SampleAt(i * ds, out float x, out float z);
                 ringPos[i] = W.P(x, z) + offset;
+                ringSink[i] = WaterStage != null ? Wet(x, z) : 0;
             }
 
             for (int i = 0; i < MAX_RINGS; i++)
@@ -343,6 +363,8 @@ namespace Telfer.View
                 if (i >= rings) r = 0.0001f;
                 float rv = r * 0.86f;
                 var centre = c + Vector3.up * (rv + 0.012f);
+                // A swimmer floats: its back just out of the Thames, which sits 0.3 m below the paper.
+                if (ringSink[ri] > 0) centre.y -= ringSink[ri] * (0.312f + rv * 0.9f);
 
                 int baseV = i * RING_VERTS;
                 for (int j = 0; j <= SIDES; j++)
@@ -393,6 +415,18 @@ namespace Telfer.View
             float headR = Mathf.Max(R, 0.14f) * 1.28f;
             float bob = Mathf.Sin(time * 9) * 0.03f * headR;
             HeadPos = shown + Vector3.up * (headR * 0.86f + bob);
+            if (WaterStage != null)
+            {
+                float wet = Wet(s.x, s.z);
+                HeadPos -= Vector3.up * (wet * (0.3f + headR * 0.3f));
+                // Ripples spread from a swimming head.
+                rippleIn -= dt;
+                if (wet > 0.5f && rippleIn <= 0)
+                {
+                    rippleIn = 0.32f;
+                    Fx.I?.Ring(new Vector3(HeadPos.x, -0.27f, HeadPos.z), new Color(0.88f, 0.97f, 1f, 0.85f), headR * 2.6f, 0.9f);
+                }
+            }
             head.position = HeadPos;
             head.rotation = W.Face(s.heading) * Quaternion.Euler(0, 0, -roll);
             head.localScale = new Vector3(headR * chomp, headR / chomp, headR * chomp);

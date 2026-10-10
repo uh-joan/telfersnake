@@ -23,6 +23,7 @@ Shader "Telfer/Toon"
         _Flash ("Flash", Range(0,1)) = 0
         _Fade ("Fade (dither)", Range(0,1)) = 1
         _ChainLink ("Chain Link Cells (0 off)", Float) = 0
+        _Cutoff ("Alpha Cutoff (0 off)", Range(0,1)) = 0
         _Cull ("Cull", Float) = 2
     }
 
@@ -52,6 +53,7 @@ Shader "Telfer/Toon"
             float _Flash;
             float _Fade;
             float _ChainLink;
+            float _Cutoff;
             float _Cull;
         CBUFFER_END
 
@@ -80,6 +82,12 @@ Shader "Telfer/Toon"
                 float b = abs(frac(g.x - g.y) - 0.5);
                 clip(0.09 - min(a, b));
             }
+        }
+
+        // Cut-out from the base map's alpha (London's paper map has the Thames cut out of it).
+        void AlphaClip(float2 uv)
+        {
+            if (_Cutoff > 0) clip(SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uv).a - _Cutoff);
         }
 
         float3 DeformWS(float3 positionOS, float3 positionWS)
@@ -153,6 +161,7 @@ Shader "Telfer/Toon"
                 FadeClip(i.positionCS);
                 ChainClip(i.uv);
                 half4 tex = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, i.uv);
+                if (_Cutoff > 0) clip(tex.a - _Cutoff);
                 half3 vcol = lerp(half3(1,1,1), i.color.rgb, _UseVertexColor);
                 half3 albedo = tex.rgb * _BaseColor.rgb * vcol;
 
@@ -231,7 +240,7 @@ Shader "Telfer/Toon"
                 return o;
             }
 
-            half4 frag(Varyings i) : SV_Target { ChainClip(i.uv); return 0; }
+            half4 frag(Varyings i) : SV_Target { ChainClip(i.uv); AlphaClip(i.uv); return 0; }
             ENDHLSL
         }
 
@@ -261,7 +270,7 @@ Shader "Telfer/Toon"
                 return o;
             }
 
-            half4 frag(Varyings i) : SV_Target { FadeClip(i.positionCS); ChainClip(i.uv); return 0; }
+            half4 frag(Varyings i) : SV_Target { FadeClip(i.positionCS); ChainClip(i.uv); AlphaClip(i.uv); return 0; }
             ENDHLSL
         }
 
@@ -292,7 +301,7 @@ Shader "Telfer/Toon"
                 return o;
             }
 
-            half4 frag(Varyings i) : SV_Target { FadeClip(i.positionCS); ChainClip(i.uv); return half4(NormalizeNormalPerPixel(i.normalWS), 0.0); }
+            half4 frag(Varyings i) : SV_Target { FadeClip(i.positionCS); ChainClip(i.uv); AlphaClip(i.uv); return half4(NormalizeNormalPerPixel(i.normalWS), 0.0); }
             ENDHLSL
         }
     }

@@ -40,6 +40,7 @@ namespace Telfer.Game
         readonly List<SnakeView> snakeViews = new List<SnakeView>();
         Scenery scenery;
         CommonEnv common;
+        LondonEnv london;
         Atmosphere atmo;
         CameraRig rig;
         Hud hud;
@@ -117,7 +118,7 @@ namespace Telfer.Game
             controls = new Controls();
             headOf = i => snakeViews[i].HeadPos;
             block = new MaterialPropertyBlock();
-            Shots.BeforeRender = () => { rig.Refit(); if (state != State.Title) hud.Sync(world, rig.Cam, headOf, 0); };
+            Shots.BeforeRender = () => { rig.Refit(); if (state != State.Title) hud.Sync(world, rig.Cam, headOf, 0); SyncLondon(0); };
             NewWorld(P.Mode, P.Stage, true);
             rig.TitleOrbit(0);
             hud.RefreshTitle();
@@ -156,15 +157,25 @@ namespace Telfer.Game
                 life.Build(School.Stage);
             }
             if (id == StageId.Common && common == null) common = new CommonEnv(envRoot, !mobile);
+            if (id == StageId.London && london == null) london = new LondonEnv(envRoot, !mobile);
             if (schoolRoot) schoolRoot.gameObject.SetActive(id == StageId.School);
             if (common != null) common.root.gameObject.SetActive(id == StageId.Common);
+            if (london != null) london.root.gameObject.SetActive(id == StageId.London);
             synth.SetPlace(id != StageId.School);
             atmo.SetPlace(id);
         }
 
-        static readonly List<Occluder> noOccluders = new List<Occluder>();
+        /// <summary>London's own life: landmark animations, props, ribbons and the see-through fade toward the snake.</summary>
+        void SyncLondon(float dt)
+        {
+            if (shownStage != StageId.London || london == null) return;
+            var me = world.Me;
+            bool looking = LookAt.HasValue;
+            var focus = looking ? W.P(LookAt.Value.x, LookAt.Value.y) : snakeViews[MeIx].HeadPos;
+            london.Sync(rig.Cam, focus, looking || state != State.Title && me.alive, looking || state != State.Title, Time.time, dt);
+        }
 
-        List<Occluder> Occluders => shownStage == StageId.Common ? common.Occluders : shownStage == StageId.London ? noOccluders : scenery.Occluders;
+        List<Occluder> Occluders => shownStage == StageId.Common ? common.Occluders : shownStage == StageId.London ? london.Occluders : scenery.Occluders;
 
         /// <summary>How close the chase camera sits in each place.</summary>
         static float ZoomFor(StageId id) => id == StageId.Common ? CameraRig.COMMON_ZOOM : id == StageId.London ? CameraRig.LONDON_ZOOM : 1;
@@ -212,6 +223,7 @@ namespace Telfer.Game
             world = new World((uint)System.Environment.TickCount, mode, Stage.For(stageId), look, !attractMode && !Autopilot && P.gems >= Upgrades.POWER_GEM_COST);
             bubbleFromSami = false;
             hud.ClearBubble();
+            SnakeView.WaterStage = world.Stage.Water != null ? world.Stage : null;
             views = new Views(world, runRoot);
             wild = new WildViews(world, runRoot);
             var skin = Catalogue.FindSkin(P.skin);
@@ -391,6 +403,7 @@ namespace Telfer.Game
             runRoot.SetParent(transform, false);
             net = r;
             world = r.World;
+            SnakeView.WaterStage = world.Stage.Water != null ? world.Stage : null;
             bubbleFromSami = false;
             hud.ClearBubble();
             views = new Views(world, runRoot);
@@ -655,6 +668,7 @@ namespace Telfer.Game
             }
 
             Occlusion(realDt);
+            SyncLondon(realDt);
             Pushers();
 
             hud.ShowStick(controls.StickOn && state == State.Play, controls.StickBase, controls.StickKnob);
