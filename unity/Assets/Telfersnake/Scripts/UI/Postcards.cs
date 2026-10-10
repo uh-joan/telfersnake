@@ -92,8 +92,7 @@ namespace Telfer.UI
                 var dir = new Vector3(0.38f, 0.55f, -1f).normalized;
                 c.transform.position = target + dir * dist;
                 c.transform.LookAt(target);
-                var rt = RenderTexture.GetTemporary(W, H, 24, RenderTextureFormat.ARGB32);
-                rt.antiAliasing = 4;
+                var rt = RenderTexture.GetTemporary(new RenderTextureDescriptor(W, H, RenderTextureFormat.ARGB32, 24) { msaaSamples = 4 });
                 var req = new UniversalRenderPipeline.SingleCameraRequest { destination = rt };
                 if (RenderPipeline.SupportsRenderRequest(c, req)) RenderPipeline.SubmitRenderRequest(c, req);
                 else { c.targetTexture = rt; c.Render(); c.targetTexture = null; }

@@ -235,7 +235,9 @@ namespace Telfer.UI
             float u = 1 - tubeT / TUBE_FOR;
             // In: the tunnel closes over you; out: daylight again, the map lingering a little longer.
             whooshImg.color = new Color(0.05f, 0.06f, 0.12f, tubeT > 0 ? Mathf.Clamp01(Mathf.Sin(Mathf.Min(1, u * 2.2f) * Mathf.PI)) * 0.8f : 0);
-            if (tubeT > 0) tubeRt.localScale = Vector3.one * (0.9f + 0.1f * Mathf.Min(1, u * 6));
+            // The map is 1000 wide: on a phone held upright it shrinks to fit the screen with a margin.
+            float fitW = Mathf.Min(1, (rootRt.rect.width - 60) / 1000);
+            if (tubeT > 0) tubeRt.localScale = Vector3.one * fitW * (0.9f + 0.1f * Mathf.Min(1, u * 6));
         }
     }
 }

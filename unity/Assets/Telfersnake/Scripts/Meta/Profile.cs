@@ -94,58 +94,59 @@ namespace Telfer.Meta
         /// </summary>
         public void Save()
         {
+            // Merge into locals first (save.ts writeSave): nothing of ours changes until both keys are safely
+            // stored, so a failed write leaves the deltas to apply once, on the next save that succeeds.
             var now = Read() ?? new Profile();
             var added = owned.FindAll(id => !syncedOwned.Contains(id));
             var removed = syncedOwned.FindAll(id => !owned.Contains(id));
-            var merged = new List<string>(now.owned);
-            foreach (var id in added) if (!merged.Contains(id)) merged.Add(id);
-            merged.RemoveAll(id => removed.Contains(id));
+            var mOwned = new List<string>(now.owned);
+            foreach (var id in added) if (!mOwned.Contains(id)) mOwned.Add(id);
+            mOwned.RemoveAll(id => removed.Contains(id));
 
-            stars = Mathf.Max(0, now.stars + (stars - syncedStars));
-            gems = Mathf.Max(0, now.gems + (gems - syncedGems));
-            owned = merged;
-            bestScore = Mathf.Max(bestScore, now.bestScore);
-            bestLength = Mathf.Max(bestLength, now.bestLength);
-            runs = Mathf.Max(runs, now.runs);
-            mega |= now.mega;
-            commonUnlocked |= now.commonUnlocked;
-            godRevealed |= now.godRevealed;
-            commonSeen |= now.commonSeen;
-            londonUnlocked |= now.londonUnlocked;
-            londonSeen |= now.londonSeen;
+            int mStars = Mathf.Max(0, now.stars + (stars - syncedStars));
+            int mGems = Mathf.Max(0, now.gems + (gems - syncedGems));
+            int mBestScore = Mathf.Max(bestScore, now.bestScore);
+            float mBestLength = Mathf.Max(bestLength, now.bestLength);
+            int mRuns = Mathf.Max(runs, now.runs);
+            bool mMega = mega | now.mega, mCommon = commonUnlocked | now.commonUnlocked, mGod = godRevealed | now.godRevealed;
+            bool mCommonSeen = commonSeen | now.commonSeen;
 
             // The stored object as it is, with ours written over it: fields only the web game knows stay.
             var d = new Dictionary<string, object>(now.disk);
-            d["stars"] = stars;
-            d["owned"] = owned;
+            d["stars"] = mStars;
+            d["owned"] = mOwned;
             d["skin"] = skin;
             d["hat"] = hat;
             d["trail"] = trail;
             d["name"] = name;
-            d["bestScore"] = bestScore;
-            d["bestLength"] = bestLength;
-            d["runs"] = runs;
-            d["gems"] = gems;
+            d["bestScore"] = mBestScore;
+            d["bestLength"] = mBestLength;
+            d["runs"] = mRuns;
+            d["gems"] = mGems;
             d["mode"] = mode.ToLowerInvariant();
             d["stage"] = stage.ToLowerInvariant();
-            d["commonUnlocked"] = commonUnlocked;
-            d["mega"] = mega;
-            d["godRevealed"] = godRevealed;
-            d["commonSeen"] = commonSeen;
+            d["commonUnlocked"] = mCommon;
+            d["mega"] = mMega;
+            d["godRevealed"] = mGod;
+            d["commonSeen"] = mCommonSeen;
             // London's key goes first, as save.ts does: it only ever grows, so writing it again is harmless,
             // and the ticket is never paid for (the stars below) without being kept.
             var london = Json.TryParseObject(Store.Get(LONDON_KEY) ?? "") ?? new Dictionary<string, object>();
-            londonUnlocked |= Flag(london, "unlocked");
-            londonSeen |= Flag(london, "seen");
-            london["unlocked"] = londonUnlocked;
-            london["seen"] = londonSeen;
-            stamps = Union(stamps, Strings(london, "stamps"));
-            postcards = Union(postcards, Strings(london, "postcards"));
-            london["stamps"] = new List<string>(stamps);
-            london["postcards"] = new List<string>(postcards);
+            bool mLondon = londonUnlocked | now.londonUnlocked | Flag(london, "unlocked");
+            bool mLondonSeen = londonSeen | now.londonSeen | Flag(london, "seen");
+            var mStamps = Union(stamps, Strings(london, "stamps"));
+            var mPostcards = Union(postcards, Strings(london, "postcards"));
+            london["unlocked"] = mLondon;
+            london["seen"] = mLondonSeen;
+            london["stamps"] = new List<string>(mStamps);
+            london["postcards"] = new List<string>(mPostcards);
             if (!Store.Set(LONDON_KEY, Json.Write(london))) return;
-            // Only once it is safely stored does this game adopt the merged picture.
             if (!Store.Set(KEY, Json.Write(d))) return;
+            // Only once both are safely stored does this game adopt the merged picture.
+            stars = mStars; gems = mGems; owned = mOwned;
+            bestScore = mBestScore; bestLength = mBestLength; runs = mRuns;
+            mega = mMega; commonUnlocked = mCommon; godRevealed = mGod; commonSeen = mCommonSeen;
+            londonUnlocked = mLondon; londonSeen = mLondonSeen; stamps = mStamps; postcards = mPostcards;
             disk = d;
             Adopt();
         }
@@ -178,7 +179,7 @@ namespace Telfer.Meta
         static List<string> Strings(Dictionary<string, object> d, string key)
         {
             var list = new List<string>();
-            foreach (var o in Json.List(d, key) ?? new List<object>()) if (o is string s && s.Length > 0 && s.Length < 40) list.Add(s);
+            foreach (var o in Json.List(d, key) ?? new List<object>()) if (o is string s) list.Add(s); // every string id, as save.ts ids() keeps them
             return list;
         }
 
@@ -277,12 +278,16 @@ namespace Telfer.Meta
             public static string Get(string key) => PlayerPrefs.GetString(key, "");
             public static bool Set(string key, string value)
             {
+                if (FailWrite != null && FailWrite(key)) return false;
                 PlayerPrefs.SetString(key, value);
                 PlayerPrefs.Save();
                 return true;
             }
 #endif
         }
+
+        /// <summary>Editor tests: make a write to this key fail (true), as a full or blocked localStorage would.</summary>
+        public static System.Func<string, bool> FailWrite;
 
         public bool Owns(string id) => owned.Contains(id);
 

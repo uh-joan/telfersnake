@@ -67,6 +67,8 @@ namespace Telfer.View
         int shimmerStep = -1;
         Transform hat, halo;
         bool hatSpins;
+        /// <summary>Tiny Big Ben's hands, ticking once a second.</summary>
+        Transform clockHands;
         float trailIn;
 
         public SnakeView(Snake s, Transform parent, bool player, uint[] pattern = null, string hatId = null, uint[] trailPalette = null, string trailId = null, bool shimmers = false)
@@ -133,6 +135,18 @@ namespace Telfer.View
                 go.GetComponent<MeshRenderer>().sharedMaterial = Mats.VertexGlossy;
                 hat = go.transform;
                 hatSpins = Hats.Spins(hatId);
+                clockHands = null;
+                if (hatId == "tiny-bigben")
+                {
+                    var hg = new GameObject("hands", typeof(MeshFilter), typeof(MeshRenderer));
+                    hg.transform.SetParent(hat, false);
+                    var face = Hats.BigBenFace;
+                    hg.transform.localPosition = face.GetColumn(3);
+                    hg.transform.localRotation = face.rotation;
+                    hg.GetComponent<MeshFilter>().sharedMesh = Hats.BigBenHands();
+                    hg.GetComponent<MeshRenderer>().sharedMaterial = Mats.VertexGlossy;
+                    clockHands = hg.transform;
+                }
             }
             trail = trailPalette != null && trailPalette.Length > 0 ? trailPalette : null;
         }
@@ -542,6 +556,7 @@ namespace Telfer.View
                 else if (s.rwb) { Color[] rwb = { new Color(0.91f, 0.19f, 0.23f), Color.white, new Color(0.18f, 0.37f, 0.82f) }; Fx.I.Trail(at, rwb[Random.Range(0, 3)]); }
             }
             if (hat) { hat.gameObject.SetActive(!s.helmetReady); if (hatSpins) hat.localRotation = Quaternion.Euler(0, time * 240, 0); }
+            if (clockHands) clockHands.localRotation = Hats.BigBenFace.rotation * Quaternion.Euler(0, 0, -6 * Mathf.Floor(time));
 
             // Magic: a halo after the Stag's Blessing, sparkles pulled in by Pixie Dust.
             bool haloOn = s.HasMagic(MagicId.Halo);

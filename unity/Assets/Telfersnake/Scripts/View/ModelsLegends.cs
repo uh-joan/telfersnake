@@ -424,19 +424,26 @@ namespace Telfer.View
                 k.Tint(helm).Cylinder(new Vector3(x, 0.86f, 0.01f), new Vector3(x, 0.84f, 0.01f), 0.14f, 0.14f, 12);
                 k.Tint(gog ? 0xc8102eu : 0x2f5fd0u).Box(new Vector3(x, 0.96f, 0.0f), new Vector3(0.025f, 0.08f, 0.16f));
             }
-            // Gog's spear and round gold shield; Magog's knobbly club.
-            k.Tint(0x8a6a40).Cylinder(new Vector3(-0.47f, 0.05f, 0.08f), new Vector3(-0.47f, 1.0f, 0.08f), 0.018f, 0.018f, 6);
-            k.Tint(0xc8ccd6).Cylinder(new Vector3(-0.47f, 1.0f, 0.08f), new Vector3(-0.47f, 1.14f, 0.08f), 0.04f, 0, 4);
+            // Gog's pennant staff (blunt, a round knob and a little flag, no taller than he is) and round gold shield;
+            // Magog's walking stick with a lantern swinging from its crook.
+            k.Tint(0x8a6a40).Cylinder(new Vector3(-0.47f, 0.05f, 0.08f), new Vector3(-0.47f, 0.88f, 0.08f), 0.02f, 0.02f, 6);
+            k.Tint(0xd8b030).Sphere(new Vector3(-0.47f, 0.9f, 0.08f), 0.035f, 8, 6);
+            k.Tint(0xc8102e).Triangle(new Vector3(-0.47f, 0.86f, 0.08f), new Vector3(-0.47f, 0.7f, 0.08f), new Vector3(-0.66f, 0.79f, 0.1f));
             k.M = Matrix4x4.TRS(new Vector3(-0.3f, 0.44f, 0.17f), Quaternion.Euler(90, 0, 0), Vector3.one);
             k.Tint(0xd8b030).Cylinder(new Vector3(0, -0.015f, 0), new Vector3(0, 0.015f, 0), 0.14f, 0.14f, 16);
             k.Tint(0xb08a20).Torus(new Vector3(0, 0.018f, 0), 0.12f, 0.012f, 16, 4);
             k.Tint(0xffe27a).Sphere(new Vector3(0, 0.025f, 0), 0.035f, 8, 6);
             k.M = Matrix4x4.identity;
-            k.Tint(0x6b4a2a).Cylinder(new Vector3(0.46f, 0.4f, 0.08f), new Vector3(0.58f, 0.78f, 0.04f), 0.025f, 0.065f, 8);
-            for (int i = 0; i < 4; i++) k.Tint(0x5a3a1a).Sphere(new Vector3(0.52f + i * 0.02f, 0.58f + i * 0.06f, 0.08f - i * 0.01f), 0.03f, 6, 4);
-            // Its magic: a giant's golden glow round the shield's boss and the spear tip.
-            g.Tint(0xffd860, 0.7f).Sphere(new Vector3(-0.3f, 0.44f, 0.2f), 0.05f, 8, 6);
-            g.Tint(0xe0eaff, 0.6f).Cylinder(new Vector3(-0.47f, 0.99f, 0.08f), new Vector3(-0.47f, 1.17f, 0.08f), 0.06f, 0, 5);
+            k.Tint(0x6b4a2a).Cylinder(new Vector3(0.47f, 0.03f, 0.1f), new Vector3(0.47f, 0.7f, 0.1f), 0.018f, 0.018f, 6);
+            k.Tint(0x6b4a2a).Torus(new Vector3(0.52f, 0.7f, 0.1f), 0.05f, 0.016f, 10, 4, 180);
+            k.Tint(0x3a3a40).Cylinder(new Vector3(0.57f, 0.69f, 0.1f), new Vector3(0.57f, 0.63f, 0.1f), 0.006f, 0.006f, 4);
+            k.Tint(0x3a3a40).Box(new Vector3(0.57f, 0.6f, 0.1f), new Vector3(0.07f, 0.015f, 0.07f));
+            k.Tint(0xffe9a0).Box(new Vector3(0.57f, 0.55f, 0.1f), new Vector3(0.055f, 0.08f, 0.055f));
+            k.Tint(0x3a3a40).Box(new Vector3(0.57f, 0.505f, 0.1f), new Vector3(0.07f, 0.015f, 0.07f));
+            // Its magic: a giant's golden glow on the shield's boss, and the lantern's warm light.
+            g.Tint(0xffd860, 0.75f).Sphere(new Vector3(-0.3f, 0.44f, 0.2f), 0.06f, 8, 6);
+            g.Tint(0xffd860, 0.3f).Sphere(new Vector3(-0.3f, 0.44f, 0.19f), 0.16f, 10, 8);
+            g.Tint(0xffc860, 0.8f).Sphere(new Vector3(0.57f, 0.55f, 0.1f), 0.05f, 8, 6);
             Sparkles(g, new Vector3(0, 0.7f, 0), 0.62f, 8, 0xffe080, 23, 0.03f);
         }
 

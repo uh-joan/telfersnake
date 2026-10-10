@@ -615,6 +615,21 @@ namespace Telfer.View
             k.M = Matrix4x4.identity;
         }
 
+        /// <summary>Tiny Big Ben's front clock face, in the head's space: where its ticking hands turn (facing +z).</summary>
+        public static Matrix4x4 BigBenFace => Matrix4x4.TRS(V3(0, 0.88f, -0.3f), Quaternion.Euler(-6, 0, 0), Vector3.one) * Matrix4x4.Translate(V3(0, 1.85f, 0.475f));
+
+        static UnityEngine.Mesh hands;
+        /// <summary>The clock's two hands, in the XY plane about their pivot: the long one up, the short one right.</summary>
+        public static UnityEngine.Mesh BigBenHands()
+        {
+            if (hands) return hands;
+            var m = new MeshKit();
+            m.Tint(0x1c1c1f).Box(V3(0, 0.1f, 0), V3(0.04f, 0.24f, 0.02f));
+            m.Tint(0x1c1c1f).Box(V3(0.07f, 0, 0), V3(0.16f, 0.04f, 0.02f));
+            m.Tint(0xf2c230).Sphere(Vector3.zero, 0.03f, 6, 4);
+            return hands = m.ToMesh("bigben-hands");
+        }
+
         /// <summary>The Pearly King's flat cap, sewn all over with pearl buttons.</summary>
         static void PearlyCap()
         {
@@ -649,6 +664,7 @@ namespace Telfer.View
                 var face = Quaternion.Euler(0, i * 90, 0);
                 k.M = root * Matrix4x4.TRS(face * V3(0, 1.85f, 0.43f), face * Quaternion.Euler(90, 0, 0), Vector3.one);
                 k.Tint(0xfffbea).Cylinder(Vector3.zero, V3(0, 0.03f, 0), 0.3f, 0.3f, 18);
+                if (i == 0) continue; // the front face's hands tick (BigBenHands), the others stand still
                 k.Tint(0x1c1c1f).Box(V3(0, 0.04f, -0.1f), V3(0.04f, 0.02f, 0.24f));
                 k.Tint(0x1c1c1f).Box(V3(0.07f, 0.04f, 0), V3(0.16f, 0.02f, 0.04f));
             }

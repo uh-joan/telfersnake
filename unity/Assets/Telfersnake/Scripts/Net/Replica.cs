@@ -185,26 +185,29 @@ namespace Telfer.Net
             world.RefreshHazardCircles();
             foreach (var _ in w.foods) world.Foods.Add(new Food { born = -999 });
             foreach (var row in w.foods) SetFood(world, row);
-            foreach (var k in w.animalKinds) world.Animals.Add(new Animal { kind = (AnimalKind)k, born = -999 });
+            foreach (var k in w.animalKinds) world.Animals.Add(new Animal { kind = (AnimalKind)Kind(k, Protocol.ANIMAL_KINDS), born = -999 });
             // London's lions and ravens have fixed homes (a plinth, a perch each, in order): the views lift a lion onto its plinth.
             var homed = Predators.Make(stage, new Rng(1)).FindAll(p => p.kind == PredatorKind.Lion || p.kind == PredatorKind.Raven);
             foreach (var k in w.predatorKinds)
             {
-                var kind = (PredatorKind)k;
+                var kind = (PredatorKind)Kind(k, Protocol.PREDATOR_KINDS);
                 int at = homed.FindIndex(p => p.kind == kind);
                 if (at >= 0) { world.Predators.Add(homed[at]); homed.RemoveAt(at); }
                 else world.Predators.Add(new Predator { kind = kind });
             }
-            foreach (var k in w.vehicleKinds) world.Vehicles.Add(new Vehicle { kind = (VehicleKind)k, route = -1 });
+            foreach (var k in w.vehicleKinds) world.Vehicles.Add(new Vehicle { kind = (VehicleKind)Kind(k, Protocol.VEHICLE_KINDS), route = -1 });
             for (int i = 0; i < w.treasureCount; i++) world.Treasures.Add(new Treasure { spot = i, respawnIn = 1 });
             int n = 0;
-            foreach (var k in w.kidKinds) world.Kids.Add(new Kid { kind = (KidKind)k, look = n++ });
-            foreach (var k in w.creatureKinds) world.Creatures.Add(new Creature { kind = (CreatureKind)k });
+            foreach (var k in w.kidKinds) world.Kids.Add(new Kid { kind = (KidKind)Kind(k, Protocol.KID_KINDS), look = n++ });
+            foreach (var k in w.creatureKinds) world.Creatures.Add(new Creature { kind = (CreatureKind)Kind(k, Protocol.CREATURE_KINDS) });
             SetPellets(world, w.pellets);
             World = world;
             ghost = new Snake(-1, w.seats.Length > 0 ? w.seats[0].look.ToSim() : World.PLAYER_LOOK, false);
             SetSeats(w.seats);
         }
+
+        /// <summary>A kind index from the server, kept inside its table (an unknown kind from a newer server is the first).</summary>
+        static int Kind(int k, string[] table) => k >= 0 && k < table.Length ? k : 0;
 
         void SetSeats(Seat[] seats)
         {
