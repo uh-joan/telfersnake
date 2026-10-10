@@ -188,7 +188,64 @@ namespace Telfer.Audio
             { var b = new Buf(0.4f); Tone(b, 0, 900, 0.08, Wave.Sine, 0.12f, 1400); Tone(b, 0.1, 1200, 0.18, Wave.Sine, 0.1f, 1600); Clip("kiss", b); }
             { var b = new Buf(1.4f); double[] fs = { 523, 659, 784, 1047, 1319, 1568, 2093 }; for (int i = 0; i < fs.Length; i++) Tone(b, i * 0.07, fs[i], 0.5, Wave.Sine, 0.1f, 0, 8, 6); Hiss(b, 0.2, 1.0, 5000, 10000, 0.05f, 0.5); Clip("magic", b); }
 
+            // London (sfx.ts): a snatched snack, a cuppa's zoom, TEA TIME!, a lion's yawn, a raven's CAW, the bus bell,
+            // a bus's parp and a cab's beep-beep, a puddle.
+            { var b = new Buf(0.3f); Hiss(b, 0, 0.12, 1500, 5000, 0.1f, 1.5); Tone(b, 0.04, 880, 0.12, Wave.Square, 0.07f, 1500); Clip("snatch", b); }
+            { var b = new Buf(0.4f); Tone(b, 0, 520, 0.25, Wave.Triangle, 0.12f, 1040); Hiss(b, 0.02, 0.3, 1200, 4000, 0.06f, 1); Clip("zoom", b); }
+            {
+                var b = new Buf(1.2f);
+                double[] fs = { 784, 988, 1175, 1568 };
+                for (int i = 0; i < 4; i++) Tone(b, i * 0.1, fs[i], 0.24, Wave.Triangle, 0.14f);
+                Tone(b, 0.45, 2093, 0.5, Wave.Sine, 0.07f, 0, 8, 12); Tone(b, 0.57, 2637, 0.5, Wave.Sine, 0.07f, 0, 8, 12);
+                Clip("teaTime", b);
+            }
+            { var b = new Buf(1.15f); Tone(b, 0, 95, 0.55, Wave.Saw, 0.09f, 140, 8, 18); Tone(b, 0.35, 330, 0.7, Wave.Triangle, 0.08f, 160); Hiss(b, 0.3, 0.6, 700, 250, 0.06f, 1.2); Clip("yawn", b); }
+            { var b = new Buf(0.5f); foreach (var d in new[] { 0, 0.22 }) { Tone(b, d, 720, 0.16, Wave.Saw, 0.08f, 480, 60, 70); Hiss(b, d, 0.14, 2200, 1200, 0.07f, 3); } Clip("caw", b); }
+            { var b = new Buf(0.8f); foreach (var d in new[] { 0, 0.2 }) { Tone(b, d, 1568, 0.5, Wave.Sine, 0.12f); Tone(b, d, 3136, 0.25, Wave.Sine, 0.04f); } Clip("dingDing", b); }
+            { var b = new Buf(0.55f); Tone(b, 0, 196, 0.45, Wave.Saw, 0.08f); Tone(b, 0, 247, 0.45, Wave.Square, 0.04f); Clip("honkBus", b); }
+            { var b = new Buf(0.35f); foreach (var d in new[] { 0, 0.16 }) Tone(b, d, 440, 0.11, Wave.Square, 0.07f); Clip("honkCab", b); }
+            { var b = new Buf(0.4f); Hiss(b, 0, 0.25, 2500, 700, 0.18f, 1.5); Tone(b, 0.05, 600, 0.25, Wave.Sine, 0.08f, 1200); Clip("splash", b); }
+
+            // London's people and set pieces (sfx.ts): the whistle, a camera, BOO, a busker, the Quarters, BONG, the bridge's
+            // bells and grind, the ship's horn, WHEE, a drum, Mind the gap, up the Eye, the boat, a firework, the jets, the wobble.
+            { var b = new Buf(0.6f); Tone(b, 0, 2700, 0.5, Wave.Sine, 0.07f, 3000, 140, 32); Hiss(b, 0, 0.4, 3500, 3000, 0.03f, 4); Clip("whistle", b); }
+            { var b = new Buf(0.4f); Hiss(b, 0, 0.05, 4000, 2500, 0.2f, 2); Tone(b, 0.04, 1800, 0.25, Wave.Sine, 0.04f, 3600); Clip("click", b); }
+            { var b = new Buf(0.45f); Tone(b, 0, 160, 0.35, Wave.Saw, 0.07f, 320, 12, 9); Clip("boo", b); }
+            { var b = new Buf(1.2f); double[] fs = { 392, 494, 587, 494, 659, 587 }; for (int i = 0; i < 6; i++) Tone(b, i * 0.16, fs[i], 0.22, Wave.Triangle, 0.06f); Clip("busk", b); }
+            {
+                var b = new Buf(8.4f);
+                double E4 = 329.63, FS4 = 369.99, GS4 = 415.3, B3 = 246.94;
+                double[][] phrases = { new[] { E4, GS4, FS4, B3 }, new[] { E4, FS4, GS4, E4 }, new[] { GS4, E4, FS4, B3 }, new[] { B3, FS4, GS4, E4 } };
+                double t = 0;
+                foreach (var notes in phrases)
+                {
+                    for (int i = 0; i < 4; i++) { BellNote(b, notes[i], t, 1.8); t += i == 3 ? 0.8 : 0.42; }
+                    t += 0.22;
+                }
+                Clip("quarters", b);
+            }
+            { var b = new Buf(3.4f); foreach (var (f, g) in new[] { (164.8, 0.26f), (82.4, 0.1f), (329.6, 0.07f), (494.0, 0.04f), (659.0, 0.025f) }) Tone(b, 0, f, 3.2, Wave.Sine, g); Hiss(b, 0, 0.08, 1500, 600, 0.06f, 2); Clip("bong", b); }
+            { var b = new Buf(2.3f); for (int i = 0; i < 10; i++) Tone(b, i * 0.2, i % 2 == 1 ? 1760 : 1480, 0.25, Wave.Sine, 0.05f); Clip("bridgeBells", b); }
+            { var b = new Buf(3.7f); Tone(b, 0, 70, 3.6, Wave.Saw, 0.035f, 92); Hiss(b, 0, 3.6, 300, 520, 0.035f, 0.6); Clip("grind", b); }
+            { var b = new Buf(1.4f); Tone(b, 0, 146.8, 1.3, Wave.Saw, 0.05f); Tone(b, 0, 220, 1.3, Wave.Square, 0.02f); Clip("shipHorn", b); }
+            { var b = new Buf(0.7f); Tone(b, 0, 400, 0.6, Wave.Sine, 0.12f, 1600); Hiss(b, 0, 0.5, 1000, 4000, 0.08f, 1); Clip("whee", b); }
+            foreach (bool accent in new[] { true, false }) { var b = new Buf(0.25f); Tone(b, 0, accent ? 110 : 150, 0.18, Wave.Sine, accent ? 0.2f : 0.12f, 60); Hiss(b, 0, 0.07, 2600, 1200, accent ? 0.1f : 0.06f, 1.2); Clip(accent ? "drumAccent" : "drum", b); }
+            { var b = new Buf(2.1f); Tone(b, 0, 988, 0.22, Wave.Square, 0.05f); Tone(b, 0.24, 784, 0.3, Wave.Square, 0.05f); Hiss(b, 0.5, 0.8, 300, 3200, 0.22f, 0.7); Hiss(b, 1.25, 0.7, 3200, 400, 0.16f, 0.7); Clip("mindTheGap", b); }
+            { var b = new Buf(1.4f); double[] fs = { 523, 659, 784, 1047, 1319 }; for (int i = 0; i < 5; i++) Tone(b, i * 0.16, fs[i], 0.6, Wave.Sine, 0.07f); Clip("rideUp", b); }
+            { var b = new Buf(0.6f); foreach (var d in new[] { 0, 0.3 }) Tone(b, d, 392, 0.22, Wave.Square, 0.045f); Clip("toot", b); }
+            { var b = new Buf(1.3f); Tone(b, 0, 900, 0.45, Wave.Sine, 0.025f, 2600); Hiss(b, 0.45, 0.7, 3000, 200, 0.22f, 0.5); Tone(b, 0.45, 60, 0.5, Wave.Sine, 0.18f, 30); Clip("firework", b); }
+            { var b = new Buf(3.7f); Hiss(b, 0, 2.6, 200, 1800, 0.22f, 0.5); Hiss(b, 1.2, 2.4, 1800, 300, 0.18f, 0.5); Clip("jets", b); }
+            { var b = new Buf(0.8f); Tone(b, 0, 300, 0.7, Wave.Sine, 0.1f, 0, 60, 6); Clip("wobble", b); }
+
             BuildMusic();
+        }
+
+        /// <summary>One soft bell note: a sine with a couple of quiet overtones, ringing on.</summary>
+        static void BellNote(Buf b, double f, double at, double length, float gain = 0.1f)
+        {
+            Tone(b, at, f, length, Wave.Sine, gain);
+            Tone(b, at, f * 2.01, length * 0.6, Wave.Sine, gain * 0.3f);
+            Tone(b, at, f * 3.02, length * 0.3, Wave.Triangle, gain * 0.12f);
         }
 
         static void Voice(Buf b, AnimalKind k)
@@ -203,6 +260,14 @@ namespace Telfer.Audio
                 case AnimalKind.Rabbit: Tone(b, 0, 1500, 0.09, Wave.Sine, 0.1f, 2300); break;
                 case AnimalKind.Snail: Tone(b, 0, 260, 0.16, Wave.Sine, 0.14f, 520); break;
                 case AnimalKind.Ladybird: Tone(b, 0, 1900, 0.04, Wave.Square, 0.06f); Tone(b, 0.06, 2300, 0.04, Wave.Square, 0.06f); break;
+                // London's zoo (sfx.ts voice).
+                case AnimalKind.Corgi: Tone(b, 0, 900, 0.07, Wave.Square, 0.09f, 1350); Tone(b, 0.11, 950, 0.08, Wave.Square, 0.09f, 1450); break; // yip yip!
+                case AnimalKind.Swan: Tone(b, 0, 250, 0.32, Wave.Saw, 0.14f, 210, 18, 30); Tone(b, 0, 500, 0.28, Wave.Square, 0.05f, 420); break; // HONK
+                case AnimalKind.Gull: Tone(b, 0, 1250, 0.2, Wave.Saw, 0.07f, 800); Tone(b, 0.24, 1150, 0.24, Wave.Saw, 0.06f, 760); break;
+                case AnimalKind.Pelican: Hiss(b, 0, 0.04, 2500, 1800, 0.18f, 6); Hiss(b, 0.09, 0.04, 2300, 1600, 0.16f, 6); break; // a beak clack
+                case AnimalKind.Horse: Tone(b, 0, 700, 0.45, Wave.Saw, 0.08f, 420, 60, 16); break; // a whinny
+                case AnimalKind.Dino: for (int i = 0; i < 5; i++) Hiss(b, i * 0.06, 0.05, 3200 - i * 300, 1400, 0.14f, 8); Tone(b, 0, 110, 0.3, Wave.Square, 0.08f, 70); break;
+                case AnimalKind.Pigeon: for (int i = 0; i < 6; i++) Hiss(b, i * 0.05, 0.08, 900 + i * 120, 500, 0.08f, 2); break; // a flock taking off
             }
         }
 

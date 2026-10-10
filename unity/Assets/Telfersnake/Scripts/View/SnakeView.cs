@@ -102,6 +102,7 @@ namespace Telfer.View
             tongue = BuildTongue();
             helmet = BuildHelmet();
             dragon = BuildDragon();
+            BuildLegends();
             Dress(pattern, hatId, trailPalette);
         }
 
@@ -246,6 +247,53 @@ namespace Telfer.View
             return t;
         }
 
+        // ------------------------------------------------------------------ London's legends (snakeView.ts)
+
+        /// <summary>Dragon Wings fly this high; Gog &amp; Magog draw the body this much wider and taller.</summary>
+        const float FLY_Y = 2.6f, GIANT_WIDE = 2, GIANT_TALL = 1.5f;
+        Transform wings, wingL, wingR, royalCrown;
+        float fly, giant, legendFx;
+
+        /// <summary>Silver-and-red dragon wings hinged at the neck, and the ROYAL crown (both in head units).</summary>
+        void BuildLegends()
+        {
+            wings = new GameObject("wings").transform;
+            wings.SetParent(head, false);
+            wings.localPosition = new Vector3(0, 0.5f, -0.5f);
+            foreach (int side in new[] { -1, 1 })
+            {
+                var w = new GameObject(side < 0 ? "wingL" : "wingR").transform;
+                w.SetParent(wings, false);
+                w.localPosition = new Vector3(side * 0.7f, 0, 0);
+                var k = new MeshKit();
+                k.Tint(0xc8ccd6).Cylinder(Vector3.zero, new Vector3(side * 2.2f, 0, 0), 0.07f, 0.05f, 6);
+                k.Tint(0xc8102e);
+                var pts = new[] { new Vector3(0, 0, 0), new Vector3(side * 2.2f, 0, 0), new Vector3(side * 1.6f, 0, -0.9f), new Vector3(side * 0.9f, 0, -0.6f), new Vector3(side * 0.4f, 0, -1.1f) };
+                for (int i = 1; i + 1 < pts.Length; i++) k.Triangle(pts[0], pts[i], pts[i + 1]);
+                Attach(w, "wing", k, Mats.VertexTwoSided);
+                if (side < 0) wingL = w; else wingR = w;
+            }
+            wings.gameObject.SetActive(false);
+
+            royalCrown = new GameObject("royal-crown").transform;
+            royalCrown.SetParent(head, false);
+            royalCrown.localPosition = new Vector3(0, 0.95f, -0.05f);
+            var c = new MeshKit();
+            c.Tint(0xffd23f).Cylinder(Vector3.zero, new Vector3(0, 0.32f, 0), 0.55f, 0.6f, 18, false, false);
+            for (int i = 0; i < 5; i++)
+            {
+                float a = i / 5f * Mathf.PI * 2;
+                var b = new Vector3(Mathf.Cos(a) * 0.55f, 0.3f, Mathf.Sin(a) * 0.55f);
+                c.Tint(0xffd23f).Cylinder(b, b + new Vector3(0, 0.36f, 0), 0.12f, 0, 6);
+                c.Tint(0xffffff).Sphere(b + new Vector3(0, 0.4f, 0), 0.07f, 8, 6);
+            }
+            c.Tint(0xe0115f).Sphere(new Vector3(0, 0.16f, 0.58f), 0.12f, 10, 8);
+            c.Tint(0x1f6feb).Sphere(new Vector3(0.58f, 0.16f, 0), 0.1f, 10, 8);
+            c.Tint(0x1f6feb).Sphere(new Vector3(-0.58f, 0.16f, 0), 0.1f, 10, 8);
+            Attach(royalCrown, "crown", c, Mats.Cached("royalGold", () => { var m = Mats.Toon(Color.white, 1.6f, 0.9f, 0.9f); m.SetColor("_EmissionColor", new Color(0.35f, 0.25f, 0.03f)); return m; }));
+            royalCrown.gameObject.SetActive(false);
+        }
+
         Transform BuildDragon()
         {
             var t = new GameObject("dragon").transform;
@@ -307,7 +355,15 @@ namespace Telfer.View
             }
             if (!wasAlive) { spawnPop = 0; bumps.Clear(); prevHead = curHead = W.P(s.x, s.z); }
             wasAlive = true;
-            root.gameObject.SetActive(true);
+            // Up on the London Eye: out of sight in its capsule (LondonViews draws the ride, the camera cranes out).
+            bool onEye = s.carried == Carrier.Eye;
+            root.gameObject.SetActive(!onEye);
+            if (onEye) return;
+            // London's legends: flying (eased up and down), and drawn giant.
+            fly += ((s.HasMagic(MagicId.Wings) ? 1 : 0) - fly) * Mathf.Min(1, dt * 3);
+            giant += ((s.HasMagic(MagicId.Giant) ? 1 : 0) - giant) * Mathf.Min(1, dt * 4);
+            float lift = fly * (FLY_Y + Mathf.Sin(time * 2.4f) * 0.2f);
+            float wide = 1 + (GIANT_WIDE - 1) * giant, tall = 1 + (GIANT_TALL - 1) * giant;
             spawnPop = Mathf.Min(1, spawnPop + dt * 2.2f);
             float pop = spawnPop >= 1 ? 1 : Ease.OutBack(spawnPop);
 
@@ -361,10 +417,11 @@ namespace Telfer.View
                 }
                 r *= 1 + 0.025f * Mathf.Sin(time * 3.2f - d * 1.7f);
                 if (i >= rings) r = 0.0001f;
-                float rv = r * 0.86f;
-                var centre = c + Vector3.up * (rv + 0.012f);
+                float rv = r * 0.86f * tall;
+                r *= wide;
+                var centre = c + Vector3.up * (rv + 0.012f + lift);
                 // A swimmer floats: its back just out of the Thames, which sits 0.3 m below the paper.
-                if (ringSink[ri] > 0) centre.y -= ringSink[ri] * (0.312f + rv * 0.9f);
+                if (ringSink[ri] > 0 && fly < 0.5f) centre.y -= ringSink[ri] * (0.312f + rv * 0.9f);
 
                 int baseV = i * RING_VERTS;
                 for (int j = 0; j <= SIDES; j++)
@@ -412,10 +469,10 @@ namespace Telfer.View
             roll = Mathf.Lerp(roll, Mathf.Clamp(turn * 0.05f, -16, 16), 1 - Mathf.Exp(-dt * 8));
             punch = Mathf.Max(0, punch - dt * 5);
             float chomp = 1 + Mathf.Sin(punch * Mathf.PI) * 0.18f;
-            float headR = Mathf.Max(R, 0.14f) * 1.28f;
+            float headR = Mathf.Max(R, 0.14f) * 1.28f * (1 + (GIANT_WIDE * 0.85f - 1) * giant);
             float bob = Mathf.Sin(time * 9) * 0.03f * headR;
-            HeadPos = shown + Vector3.up * (headR * 0.86f + bob);
-            if (WaterStage != null)
+            HeadPos = shown + Vector3.up * (headR * 0.86f + bob + lift);
+            if (WaterStage != null && fly < 0.5f)
             {
                 float wet = Wet(s.x, s.z);
                 HeadPos -= Vector3.up * (wet * (0.3f + headR * 0.3f));
@@ -457,6 +514,26 @@ namespace Telfer.View
             tongue.localRotation = Quaternion.Euler(0, Mathf.Sin(time * 40) * 6 * flick, 0);
 
             helmet.gameObject.SetActive(s.helmetReady);
+            // Flying: the wings flap. ROYAL!: the crown, perched on whatever they wear.
+            wings.gameObject.SetActive(fly > 0.05f);
+            if (fly > 0.05f)
+            {
+                float flap = Mathf.Sin(time * 9) * 0.6f * Mathf.Rad2Deg;
+                wingL.localRotation = Quaternion.Euler(0, 0, -flap);
+                wingR.localRotation = Quaternion.Euler(0, 0, flap);
+                wings.localScale = Vector3.one * fly;
+            }
+            royalCrown.gameObject.SetActive(s.crowned);
+            // The Red Arrows' red-white-and-blue trail, the phoenix's flame feathers, River Rider's splash.
+            legendFx -= dt;
+            if (legendFx <= 0 && (s.rwb || s.HasMagic(MagicId.Phoenix) || (s.HasMagic(MagicId.River) && s.swimming)) && s.speedFactor > 0.2f)
+            {
+                legendFx = 0.05f;
+                var at = BodyPoint(s.Length * 0.9f) + Random.insideUnitSphere * s.Radius * 0.6f;
+                if (s.HasMagic(MagicId.Phoenix) && Random.value < 0.5f) Fx.I.Trail(at, Color.Lerp(new Color(1, 0.3f, 0), new Color(1, 0.85f, 0.2f), Random.value));
+                else if (s.HasMagic(MagicId.River) && s.swimming) Fx.I.Trail(at, new Color(0.5f, 0.9f, 0.85f));
+                else if (s.rwb) { Color[] rwb = { new Color(0.91f, 0.19f, 0.23f), Color.white, new Color(0.18f, 0.37f, 0.82f) }; Fx.I.Trail(at, rwb[Random.Range(0, 3)]); }
+            }
             if (hat) { hat.gameObject.SetActive(!s.helmetReady); if (hatSpins) hat.localRotation = Quaternion.Euler(0, time * 240, 0); }
 
             // Magic: a halo after the Stag's Blessing, sparkles pulled in by Pixie Dust.

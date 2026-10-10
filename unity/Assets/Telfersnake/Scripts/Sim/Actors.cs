@@ -166,8 +166,17 @@ namespace Telfer.Sim
                 float px = me.x + (float)Math.Cos(angle) * reach, pz = me.z + (float)Math.Sin(angle) * reach;
                 foreach (var h in w.Hazards)
                 {
+                    if (!h.Solid) continue; // London's puddles are for sliding through
                     float r = h.r + me.Radius + 0.4f;
                     if ((h.x - px) * (h.x - px) + (h.z - pz) * (h.z - pz) < r * r) return true;
+                }
+                // London's buses and cabs: a moving wall, with a margin for where it will have got to.
+                foreach (var v in w.Vehicles)
+                {
+                    var spec = v.Spec;
+                    Vehicles.Local(v.x, v.z, v.heading, px, pz, out float f, out float l);
+                    float lead = v.speed * 0.8f; // it is coming this way
+                    if (f > -spec.length / 2 - me.Radius - 0.8f && f < spec.length / 2 + me.Radius + 0.8f + lead && Math.Abs(l) < spec.width / 2 + me.Radius + 0.8f) return true;
                 }
                 foreach (var o in w.Snakes)
                 {
@@ -193,7 +202,9 @@ namespace Telfer.Sim
 
         public readonly WardenConfig config;
         public float x, z, heading = Collide.PI / 2, speed, talking, travel;
-        float tx, tz, pause = 1, sayIn = 2, bumpCooldown, checkIn = 1, checkX, checkZ;
+        float tx, tz, pause = 1, sayIn = 2, bumpCooldown, checkIn = 1, checkX, checkZ, whistleIn;
+        /// <summary>London's Bobby: a dashing snake inside this many metres gets a PHWEEE!, at most this often.</summary>
+        const float WHISTLE_REACH = 9, WHISTLE_EVERY = 4;
 
         public Cooper(WardenConfig c)
         {
@@ -214,6 +225,8 @@ namespace Telfer.Sim
             }
             else Run(w, dt);
 
+            if (config.persona == "bobby") Whistle(w, dt);
+
             sayIn -= dt;
             if (sayIn <= 0)
             {
@@ -232,6 +245,21 @@ namespace Telfer.Sim
             sayIn = w.Rng.Range(3.5f, 6.5f);
             Say(w, w.Rng.Pick(config.bump));
             return true;
+        }
+
+        /// <summary>The Bobby blows his whistle at a speeding (dashing) snake nearby. No RNG drawn.</summary>
+        void Whistle(World w, float dt)
+        {
+            whistleIn = Math.Max(0, whistleIn - dt);
+            if (whistleIn > 0) return;
+            foreach (var s in w.Snakes)
+            {
+                if (!s.alive || !s.dashing || Collide.Hypot(s.x - x, s.z - z) > WHISTLE_REACH) continue;
+                whistleIn = WHISTLE_EVERY;
+                talking = Math.Max(talking, 1.2f); // a hand up: stop!
+                w.Events.Add(new GameEvent { type = EventType.Whistle, who = s.id, x = x, z = z });
+                return;
+            }
         }
 
         void Say(World w, string text)

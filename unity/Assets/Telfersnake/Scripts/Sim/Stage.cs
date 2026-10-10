@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Telfer.Sim
 {
@@ -18,6 +19,14 @@ namespace Telfer.Sim
     /// A place to play (port of stage.ts): its fence and fixed solids, where things spawn and live, and
     /// who patrols it. The sim never reads a layout as a global: everything takes the stage it runs on.
     /// </summary>
+    /// <summary>Someone standing about with a few things to say (stage.ts Chatter).</summary>
+    public sealed class Chatter
+    {
+        public string id;
+        public float x, z;
+        public string[] lines;
+    }
+
     public abstract class Stage : ITerrain
     {
         public abstract StageId Id { get; }
@@ -52,6 +61,39 @@ namespace Telfer.Sim
         public Box[] Bridges;
         /// <summary>How close the chase camera sits here, as a share of the usual (stage.ts cameraZoom).</summary>
         public float CameraZoom = 1;
+        /// <summary>Which hazards this stage scatters, drawn from in this order (stage.ts hazardKinds). The school's three by default.</summary>
+        public HazardKind[] HazardKinds = { HazardKind.Rock, HazardKind.Stones, HazardKind.Sticks };
+        /// <summary>How many of a kind live here, and where, where it differs from the kind's own spec (London's big pigeon flock). Null: none.</summary>
+        public Dictionary<AnimalKind, int> AnimalCounts;
+        public Dictionary<AnimalKind, Home> AnimalHomes;
+        /// <summary>London's roads the buses and cabs drive (lane loops), who drives them, and the zebras they stop at. Null elsewhere.</summary>
+        public Route[] Routes;
+        public Traffic[] Traffic;
+        public Zebra[] Zebras;
+        /// <summary>Where the stone lions sleep, and where the raven pair roost (x, z pairs). Null elsewhere.</summary>
+        public float[] Plinths, Perches;
+
+        /// <summary>London's people (A4): each tourist's sight and the buskers' pitches (x, z pairs, in Kids order), the school trip's closed walk, the living statue, the Royal Guard. Null elsewhere.</summary>
+        public float[] TouristSpots, BuskerSpots, TripPath, Statue, Guard;
+        /// <summary>Grown-ups standing about with things to say (the tour guide, the Beefeater). Null elsewhere.</summary>
+        public Chatter[] Chatters;
+        /// <summary>Which creatures may be picked, in draw order. Null: the Common's eight.</summary>
+        public CreatureKind[] CreatureKinds;
+        /// <summary>London's Crown Jewels: where they may lie (x, z pairs; the first is always used). Null: none.</summary>
+        public float[] JewelSpots;
+        /// <summary>The Tube stations (x, z pairs): step in at one, out at the next. Null elsewhere.</summary>
+        public float[] Portals;
+        /// <summary>London's set pieces (A6): Big Ben, Tower Bridge, the Eye, the parade, the boat. Null elsewhere.</summary>
+        public SetPieceSpots SetPieces;
+
+        /// <summary>Does the stage name a home per creature kind (London's legends)? Then CreatureHome is used.</summary>
+        public virtual bool HasCreatureHomes => false;
+        public virtual void CreatureHome(Rng rng, CreatureKind kind, out float x, out float z) { HomePoint(rng, Home.Anywhere, out x, out z); }
+
+        /// <summary>A copy for one world: a stage with set pieces changes under the snakes (Tower Bridge lifts).</summary>
+        public Stage Copy() => (Stage)MemberwiseClone();
+
+        public int AnimalCount(AnimalKind k) => AnimalCounts != null && AnimalCounts.TryGetValue(k, out int n) ? n : Animals.SPECS[(int)k].count;
 
         public abstract FoodKind FoodKindAt(Rng rng, float x, float z);
         public abstract void HomePoint(Rng rng, Home home, out float x, out float z);

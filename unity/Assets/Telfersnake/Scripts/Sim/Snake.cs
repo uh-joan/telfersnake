@@ -34,7 +34,15 @@ namespace Telfer.Sim
     }
 
     /// <summary>The timed magic buffs a fantastic creature grants (rainbow, hidden, magnet, owl, halo).</summary>
-    public enum MagicId { Rainbow, Hidden, Magnet, Owl, Halo }
+    public enum MagicId
+    {
+        Rainbow, Hidden, Magnet, Owl, Halo,
+        // London's legends (A5), appended so the bitmask only grows: flight, River Rider, the giant, Rise Again, the roar's ring.
+        Wings, River, Giant, Phoenix, Roar,
+    }
+
+    /// <summary>What can carry a snake about London (A6): the London Eye, the river bus.</summary>
+    public enum Carrier { None, Eye, Boat }
 
     /// <summary>Level-up cards, Megabonk style. The four offensive powers cost a blue gem each (port of upgrades.ts).</summary>
     public static class Upgrades
@@ -181,6 +189,8 @@ namespace Telfer.Sim
         };
 
         const float TRAIL_STEP = 0.1f;
+        /// <summary>River Rider: how hard the current pushes a swimmer along, as a multiple of its drift.</summary>
+        const float RIVER_PUSH = 2;
         const int TRAIL_CAP = 4096;
         const float DASH_BOOST = 1.6f, DASH_COST = 0.8f, DASH_MIN_MASS = 2;
         const float MAX_RADIUS = 1.1f, MAX_LENGTH = 60, MAX_SPEED = 10, WALL_DEFLECT = 6;
@@ -214,7 +224,7 @@ namespace Telfer.Sim
         public bool helmetReady;
 
         /// <summary>Seconds left of each magic buff, indexed by MagicId. All 0 on the school.</summary>
-        public readonly float[] magic = new float[5];
+        public readonly float[] magic = new float[10];
         /// <summary>Lucky card draws owed (the Wise Owl): the next rolls are epic-or-better.</summary>
         public int luckyCards;
         /// <summary>Whether power cards may be offered (the player has a gem, or it is a God bot).</summary>
@@ -222,9 +232,22 @@ namespace Telfer.Sim
         public float laserIn, stinkIn, zapIn, freezeIn;
         /// <summary>Seconds frozen solid by a rival's Freeze Puff: it cannot steer or move.</summary>
         public float frozenFor;
+        /// <summary>London: a cuppa's zoom (s left), the Tea Time combo (next bite wanted, the tick it began) and its cooldown.</summary>
+        public float teaFor, teaCool;
+        public int teaStep, teaFrom;
+        /// <summary>London: Crown Jewels held (five is ROYAL, a crown for the run); the Red Arrows' trail.</summary>
+        public int jewels;
+        public bool crowned, rwb;
+        /// <summary>London: on a ride (the Eye till `carriedUntil`, a tick; the boat till it docks at `carriedPier`).</summary>
+        public Carrier carried;
+        public int carriedUntil, carriedPier;
+        /// <summary>London: seconds left of Tower Bridge's ramp launch (a burst of speed).</summary>
+        public float launchFor;
+        public bool Carried => carried != Carrier.None;
 
         public bool HasMagic(MagicId id) => magic[(int)id] > 0;
         public void GiveMagic(MagicId id, float secs) => magic[(int)id] = Math.Max(magic[(int)id], secs);
+        public void ClearMagic(MagicId id) => magic[(int)id] = 0;
         public void TickMagic(float dt) { for (int i = 0; i < magic.Length; i++) if (magic[i] > 0) magic[i] = Math.Max(0, magic[i] - dt); }
 
         public readonly float[] body = new float[BODY_POINTS * 2];
@@ -248,6 +271,8 @@ namespace Telfer.Sim
             laserIn = stinkIn = zapIn = freezeIn = frozenFor = 0;
             Array.Clear(magic, 0, magic.Length);
             luckyCards = 0;
+            teaFor = teaCool = 0; teaStep = teaFrom = 0;
+            jewels = 0; crowned = rwb = false; carried = Carrier.None; launchFor = 0;
             Upgrades.Refresh(this);
         }
 
@@ -361,18 +386,28 @@ namespace Telfer.Sim
             // London: the current carries a swimmer downstream. Keyed off position alone, so a client
             // replaying its own inputs drifts exactly as the server does (snake.ts move). The ×0.5
             // paddle is the world's speedFactor. No rivers: no branch.
+            // Dragon Wings (London): up in the air, over the river, the buildings and the rocks alike; only the
+            // edge of the map holds a flyer. Keyed off the magic, so a replay of the inputs flies the same way.
+            bool flying = magic[(int)MagicId.Wings] > 0;
             if (terrain is Stage st && st.Water != null)
             {
-                var river = Water.At(st, x, z);
+                var river = flying ? null : Water.At(st, x, z);
                 swimming = river != null;
-                if (river != null)
+                if (river != null && magic[(int)MagicId.River] > 0)
+                {
+                    // River Rider: the current is on your side, whichever way you swim.
+                    float push = (float)Math.Sqrt(river.driftX * river.driftX + river.driftZ * river.driftZ) * RIVER_PUSH;
+                    nx += (float)Math.Cos(heading) * push * dt; nz += (float)Math.Sin(heading) * push * dt;
+                }
+                else if (river != null)
                 {
                     Water.Flow(river, x, z, out float fx, out float fz);
                     nx += fx * dt; nz += fz * dt;
                 }
             }
 
-            Collide.ResolveCircle(terrain, nx, nz, Radius, hit, rocks);
+            if (flying) Fence(terrain, nx, nz);
+            else Collide.ResolveCircle(terrain, nx, nz, Radius, hit, rocks);
             x = hit.x; z = hit.z;
             wasTouchingWall = touchingWall;
             touchingWall = hit.hit;
@@ -381,6 +416,19 @@ namespace Telfer.Sim
                 wallNx = hit.nx; wallNz = hit.nz;
                 Deflect(hit.nx, hit.nz, dt);
             }
+        }
+
+        /// <summary>A flyer meets only the edge of the map.</summary>
+        void Fence(ITerrain t, float px, float pz)
+        {
+            float r = Radius;
+            var B = t.Bounds;
+            hit.hit = false; hit.nx = hit.nz = 0;
+            if (px < B.minX + r) { px = B.minX + r; hit.hit = true; hit.nx = 1; }
+            if (px > B.maxX - r) { px = B.maxX - r; hit.hit = true; hit.nx = -1; }
+            if (pz < B.minZ + r) { pz = B.minZ + r; hit.hit = true; hit.nz = 1; }
+            if (pz > B.maxZ - r) { pz = B.maxZ - r; hit.hit = true; hit.nz = -1; }
+            hit.x = px; hit.z = pz;
         }
 
         void Steer(float want, float step)
@@ -399,6 +447,13 @@ namespace Telfer.Sim
                 }
             }
             heading = Collide.TurnToward(heading, want, step);
+        }
+
+        /// <summary>Something outside Move (London's buses) is in the way: steer next tick as if against a wall.</summary>
+        public void LeanOn(float nx, float nz)
+        {
+            touchingWall = true;
+            wallNx = nx; wallNz = nz;
         }
 
         public void Deflect(float nx, float nz, float dt)

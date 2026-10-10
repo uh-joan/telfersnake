@@ -22,6 +22,7 @@ namespace Telfer.View
         public static Mesh ForestAnimal(AnimalKind k)
         {
             if (k < AnimalKind.Squirrel) return Models.Animal(k);
+            if (k >= AnimalKind.Corgi) return ModelsLondonZoo.Animal(k);
             int i = (int)k;
             if (forest[i] == null) forest[i] = BuildForestAnimal(k);
             return forest[i];
@@ -30,6 +31,7 @@ namespace Telfer.View
         public static Mesh ForestFood(FoodKind k)
         {
             if (k < FoodKind.Mushroom) return Models.Food(k);
+            if (k >= FoodKind.FishChips) return ModelsLondonZoo.Food(k);
             int i = (int)k;
             if (food[i] == null) food[i] = BuildForestFood(k);
             return food[i];
@@ -44,6 +46,7 @@ namespace Telfer.View
 
         public static Mesh Creature(CreatureKind k)
         {
+            if (k >= CreatureKind.Dragon) return ModelsLondonZoo.Legend(k);
             int i = (int)k;
             if (creatures[i] == null) creatures[i] = BuildCreature(k);
             return creatures[i];
@@ -52,6 +55,7 @@ namespace Telfer.View
         public static Mesh Projectile(ProjectileKind k)
         {
             int i = (int)k;
+            if (k == ProjectileKind.Chip) return ModelsLondonZoo.Chip();
             if (projectiles[i] == null) projectiles[i] = k == ProjectileKind.Pebble ? BuildPebble() : BuildKiss();
             return projectiles[i];
         }

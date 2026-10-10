@@ -221,12 +221,41 @@ namespace Telfer.View
         {
             focus = target;
             orbiting = false;
+            pitchAdd = yawAdd = pitchVel = yawVel = 0;
             this.length = length;
             dist = DistanceFor(length);
             Apply(0, 0);
         }
 
-        float DistanceFor(float length) => Mathf.Min(52, 21 + length * 0.45f) * Pull * Zoom;
+        float DistanceFor(float length) => Mathf.Min(52, 21 + length * 0.45f) * Pull * Zoom * (1 + 0.55f * Altitude);
+
+        /// <summary>
+        /// Dragon Wings (London): 0 on the ground, 1 up in the air. The camera rises with the snake: further
+        /// back and a touch flatter, so the whole sky and the map below are in the frame.
+        /// </summary>
+        public float Altitude;
+        /// <summary>Extra pitch and yaw (degrees) on top of the chase angle: the flight's lift and the Eye's crane shot, eased.</summary>
+        float pitchAdd, yawAdd, pitchVel, yawVel;
+        bool craning;
+
+        /// <summary>
+        /// The London Eye's crane shot: as your capsule climbs (`t` 0..1 of the ride) the camera lifts off the
+        /// snake, cranes up and back to a bird's-eye view of the whole map, sweeps slowly across it, and comes
+        /// back down to the capsule as the wheel brings you round. Everything eases, in and out.
+        /// </summary>
+        public void Crane(Vector3 capsule, Vector3 overview, float t, float dt)
+        {
+            orbiting = false;
+            craning = true;
+            float b = Mathf.SmoothStep(0, 1, Mathf.Clamp01(Mathf.Min(t / 0.18f, (1 - t) / 0.16f)));
+            var target = Vector3.Lerp(capsule, overview, b * 0.9f);
+            focus = Vector3.SmoothDamp(focus, target, ref focusVel, 0.45f, Mathf.Infinity, dt);
+            dist = Mathf.SmoothDamp(dist, Mathf.Lerp(DistanceFor(length) * 0.85f, 118 * Pull, b), ref distVel, 0.9f, Mathf.Infinity, dt);
+            pitchAdd = Mathf.SmoothDamp(pitchAdd, Mathf.Lerp(-14, 20, b), ref pitchVel, 0.7f, Mathf.Infinity, dt);
+            yawAdd = Mathf.SmoothDamp(yawAdd, b * (-22 + 44 * t), ref yawVel, 0.9f, Mathf.Infinity, dt);
+            fovKick = Mathf.Lerp(fovKick, -2 * b, 1 - Mathf.Exp(-dt * 3));
+            Apply(dt, Time.time);
+        }
 
         /// <summary>
         /// How far the place sits the camera, as a share of the usual. The Common is a wide open meadow
@@ -253,7 +282,8 @@ namespace Telfer.View
         /// <summary>The screen changed shape (or a capture is about to be taken): jump to the distance for it.</summary>
         public void Refit()
         {
-            dist = orbiting ? orbitDist * Pull : DistanceFor(length);
+            // Mid crane shot (the Eye) the shot keeps its own distance: only the chase distance depends on the screen.
+            if (!craning) dist = orbiting ? orbitDist * Pull : DistanceFor(length);
             if (orbiting) TitleOrbit(0, focus, orbitDist);
             else Apply(0, Time.time);
         }
@@ -261,11 +291,14 @@ namespace Telfer.View
         public void Follow(Vector3 head, Vector3 velocity, float length, bool dashing, float dt)
         {
             orbiting = false;
+            craning = false;
             this.length = length;
             var target = head + velocity * 0.35f;
             focus = Vector3.SmoothDamp(focus, target, ref focusVel, 0.22f, Mathf.Infinity, dt);
             dist = Mathf.SmoothDamp(dist, DistanceFor(length), ref distVel, 0.8f, Mathf.Infinity, dt);
             fovKick = Mathf.Lerp(fovKick, dashing ? 6 : 0, 1 - Mathf.Exp(-dt * 6));
+            pitchAdd = Mathf.SmoothDamp(pitchAdd, -7 * Altitude, ref pitchVel, 0.6f, Mathf.Infinity, dt);
+            yawAdd = Mathf.SmoothDamp(yawAdd, 0, ref yawVel, 0.6f, Mathf.Infinity, dt);
             Apply(dt, Time.time);
         }
 
@@ -289,7 +322,7 @@ namespace Telfer.View
             trauma = Mathf.Max(0, trauma - dt * 1.6f);
             punch = Mathf.Max(0, punch - dt * 2.2f);
             float shake = trauma * trauma;
-            var rot = Quaternion.Euler(56 + shake * (Mathf.PerlinNoise(time * 22, 1) - 0.5f) * 6, shake * (Mathf.PerlinNoise(time * 22, 7) - 0.5f) * 6, shake * (Mathf.PerlinNoise(time * 22, 13) - 0.5f) * 8);
+            var rot = Quaternion.Euler(56 + pitchAdd + shake * (Mathf.PerlinNoise(time * 22, 1) - 0.5f) * 6, yawAdd + shake * (Mathf.PerlinNoise(time * 22, 7) - 0.5f) * 6, shake * (Mathf.PerlinNoise(time * 22, 13) - 0.5f) * 8);
             float d = dist * (1 - Mathf.Sin(punch * Mathf.PI) * 0.12f);
             transform.position = focus + rot * new Vector3(0, 0, -d);
             transform.rotation = rot;

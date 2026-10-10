@@ -24,6 +24,7 @@ namespace Telfer.Sim
         /// <summary>Shrink a rival like a rock bonk and puff pellets; `by` is credited (for gems).</summary>
         void Scorch(Snake target, Snake by, float share, float cap)
         {
+            if (Rise(target)) return; // the phoenix takes it: your next hit, whatever it is
             target.immune = OUCH_GRACE;
             float lost = target.mass < 1 ? 0 : Math.Min(cap, Math.Max(2, target.mass * share));
             if (lost > 0) Shed(target, lost, PELLET_RETURN, 3);
@@ -40,7 +41,7 @@ namespace Telfer.Sim
             float bestD = float.MaxValue;
             foreach (var o in Snakes)
             {
-                if (o == s || !o.alive || o.immune > 0) continue;
+                if (o == s || !o.alive || o.immune > 0 || o.HasMagic(MagicId.Wings)) continue;
                 float d = Collide.Hypot(o.x - s.x, o.z - s.z);
                 if (d > range || d >= bestD) continue;
                 if (Math.Abs(Collide.WrapAngle((float)Math.Atan2(o.z - s.z, o.x - s.x) - s.heading)) > LASER_HALF_ANGLE) continue;
@@ -67,7 +68,7 @@ namespace Telfer.Sim
             if (scares) Power(s, UpgradeId.Stink, bx, bz, radius);
             foreach (var o in Snakes)
             {
-                if (o == s || !o.alive || o.immune > 0 || Collide.Hypot(o.x - bx, o.z - bz) > radius) continue;
+                if (o == s || !o.alive || o.immune > 0 || o.HasMagic(MagicId.Wings) || Collide.Hypot(o.x - bx, o.z - bz) > radius) continue;
                 if (!fired) { fired = true; Power(s, UpgradeId.Stink, bx, bz, radius); }
                 Scorch(o, s, 0.08f, 6);
             }
@@ -86,7 +87,7 @@ namespace Telfer.Sim
             if (scares) Power(s, UpgradeId.Zap, s.x, s.z, radius);
             foreach (var o in Snakes)
             {
-                if (o == s || !o.alive || o.immune > 0 || Collide.Hypot(o.x - s.x, o.z - s.z) > radius) continue;
+                if (o == s || !o.alive || o.immune > 0 || o.HasMagic(MagicId.Wings) || Collide.Hypot(o.x - s.x, o.z - s.z) > radius) continue;
                 if (!fired) { fired = true; Power(s, UpgradeId.Zap, s.x, s.z, radius); }
                 Scorch(o, s, 0.08f, 6);
             }
@@ -104,7 +105,7 @@ namespace Telfer.Sim
             float bestD = float.MaxValue;
             foreach (var o in Snakes)
             {
-                if (o == s || !o.alive || o.immune > 0 || o.frozenFor > 0) continue;
+                if (o == s || !o.alive || o.immune > 0 || o.frozenFor > 0 || o.HasMagic(MagicId.Wings)) continue;
                 float d = Collide.Hypot(o.x - s.x, o.z - s.z);
                 if (d <= radius && d < bestD) { bestD = d; best = o; }
             }
@@ -128,6 +129,8 @@ namespace Telfer.Sim
         {
             foreach (var p in Predators)
             {
+                if (p.kind == PredatorKind.Lion) { UpdateLion(p, dt); continue; }
+                if (p.kind == PredatorKind.Raven) { UpdateRaven(p, dt); continue; }
                 var spec = p.Spec;
                 if (p.frozenFor > 0) { p.frozenFor -= dt; p.speed = 0; continue; }
                 p.biteIn -= dt;
@@ -137,7 +140,7 @@ namespace Telfer.Sim
                 float bestD = spec.sight;
                 foreach (var s in Snakes)
                 {
-                    if (!s.alive || s.HasMagic(MagicId.Hidden)) continue;
+                    if (!s.alive || Unseen(s)) continue;
                     float d = Collide.Hypot(s.x - p.x, s.z - p.z);
                     if (d < bestD) { bestD = d; target = s; }
                 }
@@ -187,11 +190,14 @@ namespace Telfer.Sim
                 {
                     foreach (var s in Snakes)
                     {
-                        if (!s.alive || s.immune > 0 || s.HasMagic(MagicId.Hidden) || Collide.Hypot(s.x - p.x, s.z - p.z) > spec.biteReach + s.Radius) continue;
-                        s.immune = OUCH_GRACE;
-                        float lost = s.mass < 1 ? 0 : Math.Min(spec.biteCap, Math.Max(2, s.mass * spec.biteShare * ferocity));
-                        if (lost > 0) Shed(s, lost, PELLET_RETURN, 4);
-                        Events.Add(new GameEvent { type = EventType.Chomp, predator = p.kind, who = s.id, x = s.x, z = s.z, lost = lost });
+                        if (!s.alive || s.immune > 0 || Unseen(s) || Collide.Hypot(s.x - p.x, s.z - p.z) > spec.biteReach + s.Radius) continue;
+                        if (!Rise(s))
+                        {
+                            s.immune = OUCH_GRACE;
+                            float lost = s.mass < 1 ? 0 : Math.Min(spec.biteCap, Math.Max(2, s.mass * spec.biteShare * ferocity));
+                            if (lost > 0) Shed(s, lost, PELLET_RETURN, 4);
+                            Events.Add(new GameEvent { type = EventType.Chomp, predator = p.kind, who = s.id, x = s.x, z = s.z, lost = lost });
+                        }
                         p.biteIn = spec.biteEvery;
                         if (p.kind == PredatorKind.Wolf)
                         {
@@ -243,9 +249,10 @@ namespace Telfer.Sim
             return best;
         }
 
+        /// <summary>Is any predator that is up and about within this circle? Always false on the school.</summary>
         bool PredatorsNear(float x, float z, float radius)
         {
-            foreach (var p in Predators) if (Collide.Hypot(p.x - x, p.z - z) <= radius + p.Spec.radius) return true;
+            foreach (var p in Predators) if (p.Awake && Collide.Hypot(p.x - x, p.z - z) <= radius + p.Spec.radius) return true;
             return false;
         }
 
@@ -253,18 +260,60 @@ namespace Telfer.Sim
         {
             foreach (var p in Predators)
             {
-                if (Collide.Hypot(p.x - x, p.z - z) > radius + p.Spec.radius) continue;
-                if (freeze) p.frozenFor = Math.Max(p.frozenFor, 1.4f);
-                else { p.scaredFor = Math.Max(p.scaredFor, 2.5f); p.chargeFor = 0; p.biteIn = Math.Max(p.biteIn, 1); }
+                if (!p.Awake || Collide.Hypot(p.x - x, p.z - z) > radius + p.Spec.radius) continue;
+                Spook(p, freeze);
             }
+        }
+
+        /// <summary>
+        /// One beast caught by a power. Freeze roots a bear, wolf or raven and turns a lion to stone; fire, zaps
+        /// and lasers send a bear or wolf fleeing, a lion hurrying home, a raven back to the Tower.
+        /// </summary>
+        void Spook(Predator p, bool freeze)
+        {
+            if (p.kind == PredatorKind.Lion)
+            {
+                if (p.state == Lion.Stone) return;
+                if (freeze) { p.state = Lion.Stone; p.stateFor = Lion.STONE_TIME; p.speed = 0; }
+                else
+                {
+                    if (p.state != Lion.Home) p.stateFor = Lion.HOME_GIVE_UP; // a second scare must not restart its way home
+                    p.state = Lion.Home;
+                    p.scaredFor = Math.Max(p.scaredFor, 2.5f);
+                    p.biteIn = Math.Max(p.biteIn, 1);
+                }
+                return;
+            }
+            if (p.kind == PredatorKind.Raven && !freeze)
+            {
+                p.state = Raven.Back;
+                p.biteIn = Math.Max(p.biteIn, 1);
+                return;
+            }
+            if (freeze) p.frozenFor = Math.Max(p.frozenFor, 1.4f);
+            else { p.scaredFor = Math.Max(p.scaredFor, 2.5f); p.chargeFor = 0; p.biteIn = Math.Max(p.biteIn, 1); }
         }
 
         // ---------------------------------------------------------------- the kids
 
         void UpdateKids(float dt)
         {
+            int trip = 0;
+            Kid leader = null;
             foreach (var k in Kids)
             {
+                if (k.kind == KidKind.Tourist || k.kind == KidKind.Trip || k.kind == KidKind.Busker)
+                {
+                    k.throwIn -= dt;
+                    if (k.kind == KidKind.Tourist) UpdateTourist(k, dt);
+                    else if (k.kind == KidKind.Busker) k.speed = 0; // stands and plays
+                    else
+                    {
+                        if (leader == null) leader = k;
+                        WalkTrip(k, leader, trip++, dt);
+                    }
+                    continue;
+                }
                 k.wanderIn -= dt;
                 k.throwIn -= dt;
                 if (k.pauseFor > 0) { k.pauseFor -= dt; k.speed = 0; }
@@ -309,7 +358,7 @@ namespace Telfer.Sim
 
         void Lob(Kid k, Snake target, ProjectileKind kind)
         {
-            float speed = kind == ProjectileKind.Pebble ? 11 : 7;
+            float speed = kind == ProjectileKind.Pebble ? 11 : kind == ProjectileKind.Chip ? 9 : 7;
             float flight = Collide.Hypot(target.x - k.x, target.z - k.z) / speed;
             float vel = target.BaseSpeed * target.speedFactor;
             float aimX = target.x + (float)Math.Cos(target.heading) * vel * flight * 0.7f;
@@ -329,7 +378,7 @@ namespace Telfer.Sim
                 var pj = Projectiles[i];
                 float step = pj.speed * dt;
                 pj.x += pj.dx * step; pj.z += pj.dz * step; pj.left -= step;
-                float hitR = pj.kind == ProjectileKind.Pebble ? 1.2f : 1.5f;
+                float hitR = pj.kind == ProjectileKind.Kiss ? 1.5f : 1.2f;
                 var best = NearestSnake(pj.x, pj.z);
                 if (best != null && Collide.Hypot(best.x - pj.x, best.z - pj.z) <= hitR)
                 {
@@ -344,13 +393,15 @@ namespace Telfer.Sim
 
         void Strike(Projectile pj, Snake best)
         {
-            if (pj.kind == ProjectileKind.Pebble)
+            if (pj.kind == ProjectileKind.Pebble || pj.kind == ProjectileKind.Chip)
             {
-                if (best.immune > 0) return;
+                if (best.immune > 0 || best.HasMagic(MagicId.Wings)) return; // a graze while already blinking (or up in the air)
+                if (Rise(best)) return;
                 best.immune = OUCH_GRACE * 0.5f;
                 float lost = best.mass < 1 ? 0 : Math.Min(6, Math.Max(1, best.mass * 0.05f)) * (1 - best.rockGuard);
                 if (lost > 0) Shed(best, lost, PELLET_RETURN, 2);
-                Events.Add(new GameEvent { type = EventType.Pelt, who = best.id, x = best.x, z = best.z, lost = lost });
+                // A soggy chip says so (London's school trip).
+                Events.Add(new GameEvent { type = EventType.Pelt, who = best.id, x = best.x, z = best.z, lost = lost, projectile = pj.kind });
             }
             else
             {
@@ -362,20 +413,34 @@ namespace Telfer.Sim
 
         void MeetKids(Snake s, float dt)
         {
+            bool trip = false;
+            tripHeld.TryGetValue(s.id, out float heldFor);
             foreach (var k in Kids)
             {
                 float reach = s.Radius + Sim.Kids.RADIUS;
                 if ((s.x - k.x) * (s.x - k.x) + (s.z - k.z) * (s.z - k.z) >= reach * reach) continue;
+                if (k.kind == KidKind.Trip)
+                {
+                    // The crocodile is a moving wall, but never a trap: held against it a while, you are let through.
+                    trip = true;
+                    if (heldFor > TRIP_LET_THROUGH) continue;
+                }
                 Shove(s, k.x, k.z, reach, dt);
-                k.tx = k.x + (k.x - s.x);
-                k.tz = k.z + (k.z - s.z);
-                k.pauseFor = 0;
+                // Send the child scampering out of the way (London's trip, buskers and tourists hold their ground).
+                if (k.kind == KidKind.Naughty || k.kind == KidKind.Nice || k.kind == KidKind.Runner)
+                {
+                    k.tx = k.x + (k.x - s.x);
+                    k.tz = k.z + (k.z - s.z);
+                    k.pauseFor = 0;
+                }
                 if (s.bumpQuiet <= 0)
                 {
                     s.bumpQuiet = BUMP_QUIET;
                     Events.Add(new GameEvent { type = EventType.BumpKid, who = s.id, x = s.x, z = s.z });
                 }
             }
+            if (trip) tripHeld[s.id] = heldFor + dt;
+            else if (heldFor != 0) tripHeld[s.id] = 0;
         }
 
         void ChatterSami(float dt)
@@ -400,7 +465,7 @@ namespace Telfer.Sim
                     c.speed = 0;
                     if (c.respawnIn <= 0)
                     {
-                        Sim.Creatures.Spot(Stage, Rng, out float x, out float z);
+                        Sim.Creatures.Spot(Stage, Rng, c.kind, out float x, out float z); // somewhere new (or its London home)
                         c.x = c.wx = x; c.z = c.wz = z;
                     }
                     continue;
@@ -486,6 +551,15 @@ namespace Telfer.Sim
                     break;
                 }
                 case CreatureKind.Wisp: WispCache(s); gems = 2; break;
+                // London's legends.
+                case CreatureKind.Dragon: s.GiveMagic(MagicId.Wings, WINGS_FOR); s.score += 300; gems = 2; break;
+                case CreatureKind.LionRoyal: Roar(s); s.score += 150; gems = 1; break;
+                case CreatureKind.Phoenix: s.GiveMagic(MagicId.Phoenix, PHOENIX_FOR); s.score += 150; gems = 1; break;
+                case CreatureKind.Mermaid: s.GiveMagic(MagicId.River, RIVER_FOR); s.score += 120; gems = 1; break;
+                case CreatureKind.Ghost: s.GiveMagic(MagicId.Hidden, 15); s.score += 120; gems = 1; break;
+                case CreatureKind.Gog: s.GiveMagic(MagicId.Giant, GIANT_FOR); s.score += 150; gems = 1; break;
+                case CreatureKind.Fairy: s.GiveMagic(MagicId.Magnet, 20); s.score += 100; gems = 1; break;
+                case CreatureKind.Pearly: PearlyTrail(s); s.score += 100; gems = 1; break;
             }
             Events.Add(new GameEvent { type = EventType.Magic, creature = kind, who = s.id, x = s.x, z = s.z, gems = gems });
         }
