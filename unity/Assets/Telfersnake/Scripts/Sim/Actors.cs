@@ -52,6 +52,7 @@ namespace Telfer.Sim
     /// <summary>Rival snakes: same Snake, same input as the player. Beatable by a seven-year-old. Port of bot.ts.</summary>
     public sealed class Bot
     {
+        const float ACROSS_WATER = 0.3f;
         const float RETHINK = 0.4f, SWERVE = 0.5f, SIGHT = 18, THREAT_RANGE = 9, HUNT_RANGE = 12, PROBE_ANGLE = 0.9f;
 
         public readonly Personality who;
@@ -142,6 +143,12 @@ namespace Telfer.Sim
                 if (d > SIGHT) return;
                 float appeal = value / (d + 2);
                 if (appeal <= best) return;
+                // London: swimming is slow, so a bot keeps to its own bank unless the prize is worth a dash.
+                if (w.Stage.Water != null && !chase && Water.Crosses(w.Stage, me.x, me.z, x, z))
+                {
+                    appeal *= ACROSS_WATER;
+                    if (appeal <= best) return;
+                }
                 best = appeal; tx = x; tz = z; chasing = chase;
             }
             foreach (var f in w.Foods) Consider(f.x, f.z, Foods.VALUE[(int)f.kind] * (f.golden ? Foods.GOLDEN_MULTIPLIER : 1), f.golden);
@@ -239,7 +246,7 @@ namespace Telfer.Sim
             if (dx * dx + dz * dz < 0.64f) { pause = w.Rng.Range(0.6f, 1.8f); return; }
             heading = Collide.TurnToward(heading, (float)Math.Atan2(dz, dx), TURN_RATE * dt);
             speed = RUN_SPEED;
-            var hit = Collide.ResolveCircle(w.Stage, x + (float)Math.Cos(heading) * speed * dt, z + (float)Math.Sin(heading) * speed * dt, RADIUS, w.ScratchHit, w.HazardCircles);
+            var hit = Collide.ResolveAshore(w.Stage, x, z, x + (float)Math.Cos(heading) * speed * dt, z + (float)Math.Sin(heading) * speed * dt, RADIUS, w.ScratchHit, w.HazardCircles);
             travel += Collide.Hypot(hit.x - x, hit.z - z);
             x = hit.x; z = hit.z;
             if (hit.hit) heading = Collide.SlideAlong(heading, hit.nx, hit.nz);

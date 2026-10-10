@@ -24,6 +24,8 @@ namespace Telfer.Meta
         public string mode = "Easy";
         public string stage = "School";
         public bool commonUnlocked;
+        /// <summary>London's Golden Ticket, and its first-visit fanfare: kept under London's own key (save.ts LONDON_KEY).</summary>
+        public bool londonUnlocked, londonSeen;
         /// <summary>Reached MEGA in a Normal game: half of God mode's key.</summary>
         public bool mega;
         public bool godRevealed, commonSeen;
@@ -32,7 +34,14 @@ namespace Telfer.Meta
 
         /// <summary>The one-off star ticket to the Common.</summary>
         public const int COMMON_COST = 300;
+        /// <summary>The Golden Ticket to London (the Common must be unlocked first).</summary>
+        public const int LONDON_COST = 600;
         const string KEY = "telfersnake.save.v1";
+        /// <summary>
+        /// London's progress lives in its own key ({unlocked, seen, stamps, postcards}), which a pre-London
+        /// bundle never touches (save.ts). This game only knows the two flags; the rest is written back as read.
+        /// </summary>
+        const string LONDON_KEY = "telfersnake.london.v1";
         /// <summary>Where this remaster kept its own save before it shared the web game's.</summary>
         const string OLD_KEY = "telfersnake-profile";
         static readonly string[] FREE = { "telfer", "no-hat", "no-trail" };
@@ -97,6 +106,8 @@ namespace Telfer.Meta
             commonUnlocked |= now.commonUnlocked;
             godRevealed |= now.godRevealed;
             commonSeen |= now.commonSeen;
+            londonUnlocked |= now.londonUnlocked;
+            londonSeen |= now.londonSeen;
 
             // The stored object as it is, with ours written over it: fields only the web game knows stay.
             var d = new Dictionary<string, object>(now.disk);
@@ -116,10 +127,32 @@ namespace Telfer.Meta
             d["mega"] = mega;
             d["godRevealed"] = godRevealed;
             d["commonSeen"] = commonSeen;
+            // London's key goes first, as save.ts does: it only ever grows, so writing it again is harmless,
+            // and the ticket is never paid for (the stars below) without being kept.
+            var london = Json.TryParseObject(Store.Get(LONDON_KEY) ?? "") ?? new Dictionary<string, object>();
+            londonUnlocked |= Flag(london, "unlocked");
+            londonSeen |= Flag(london, "seen");
+            london["unlocked"] = londonUnlocked;
+            london["seen"] = londonSeen;
+            if (!Store.Set(LONDON_KEY, Json.Write(london))) return;
             // Only once it is safely stored does this game adopt the merged picture.
             if (!Store.Set(KEY, Json.Write(d))) return;
             disk = d;
             Adopt();
+        }
+
+        /// <summary>
+        /// Catch up on the tickets another tab (the web game) has bought since this loaded: the sticky flags
+        /// only (save.ts refreshSave), so a stale screen never sells a child a ticket they already hold.
+        /// </summary>
+        public void Refresh()
+        {
+            var now = Read();
+            if (now == null) return;
+            commonUnlocked |= now.commonUnlocked;
+            commonSeen |= now.commonSeen;
+            londonUnlocked |= now.londonUnlocked;
+            londonSeen |= now.londonSeen;
         }
 
         /// <summary>The stored save, trusting none of it (save.ts readDisk), or null when there is none.</summary>
@@ -147,10 +180,12 @@ namespace Telfer.Meta
             p.commonUnlocked = Flag(d, "commonUnlocked");
             p.godRevealed = Flag(d, "godRevealed");
             p.commonSeen = Flag(d, "commonSeen");
+            var london = Json.TryParseObject(Store.Get(LONDON_KEY) ?? "");
+            p.londonUnlocked = london != null && Flag(london, "unlocked");
+            p.londonSeen = london != null && Flag(london, "seen");
             // The web game spells these in lower case; Mode and Stage below gate God and the Common.
             p.mode = Json.Str(d, "mode") switch { "easy" => "Easy", "god" => "God", null => "Easy", _ => "Normal" };
-            // London (classic only, until HD's phase B) is kept as it is, so playing HD never resets a
-            // child's chosen place; the Stage getter below still plays the school for it.
+            // A locked place is kept as chosen (so HD never resets a child's pick); the Stage getter below plays the school for it.
             p.stage = Json.Str(d, "stage") switch { "common" => "Common", "london" => "London", _ => "School" };
             return p;
         }
@@ -225,8 +260,8 @@ namespace Telfer.Meta
 
         public StageId Stage
         {
-            // "London" has no HD stage yet: it plays the school, but the saved choice stays "london".
-            get => stage == "Common" && commonUnlocked ? StageId.Common : StageId.School;
+            // A place whose ticket is not bought plays the school, but the saved choice stays as it was.
+            get => stage == "Common" && commonUnlocked ? StageId.Common : stage == "London" && londonUnlocked ? StageId.London : StageId.School;
             set => stage = value.ToString();
         }
 

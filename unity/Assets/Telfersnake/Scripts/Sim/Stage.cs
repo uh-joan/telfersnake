@@ -2,7 +2,7 @@ using System;
 
 namespace Telfer.Sim
 {
-    public enum StageId { School, Common }
+    public enum StageId { School, Common, London }
 
     /// <summary>What a stage needs to place its warden: Mr Cooper at school, the park keeper on the Common.</summary>
     public sealed class WardenConfig
@@ -10,7 +10,7 @@ namespace Telfer.Sim
         public float spawnX, spawnZ;
         public Bounds2 beat;
         public string[] general, near, big, bump;
-        /// <summary>Which figure the views draw: "cooper" (the head teacher) or "keeper".</summary>
+        /// <summary>Which figure the views draw: "cooper" (the head teacher), "keeper" or "bobby" (London's policeman).</summary>
         public string persona = "cooper";
     }
 
@@ -46,10 +46,16 @@ namespace Telfer.Sim
         /// <summary>Miss Sami and a mum by the road mouth (the Common), or null.</summary>
         public float[] Greeters;
         public WardenConfig Warden;
+        /// <summary>London's Thames (null elsewhere): swum at half speed, the current carrying you downstream.</summary>
+        public WaterZone[] Water;
+        /// <summary>Decks over the water that count as dry land (null without water).</summary>
+        public Box[] Bridges;
+        /// <summary>How close the chase camera sits here, as a share of the usual (stage.ts cameraZoom).</summary>
+        public float CameraZoom = 1;
 
         public abstract FoodKind FoodKindAt(Rng rng, float x, float z);
         public abstract void HomePoint(Rng rng, Home home, out float x, out float z);
 
-        public static Stage For(StageId id) => id == StageId.Common ? (Stage)Common.Stage : School.Stage;
+        public static Stage For(StageId id) => id == StageId.Common ? Common.Stage : id == StageId.London ? London.Stage : (Stage)School.Stage;
     }
 }

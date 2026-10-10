@@ -38,6 +38,8 @@ namespace Telfer.Sim
     public sealed partial class World
     {
         public const float STEP = 1f / 60f;
+        /// <summary>London: in the river a snake paddles at half speed (world.ts SWIM_FACTOR).</summary>
+        const float SWIM_FACTOR = 0.5f;
         const float SLOW_FACTOR = 0.6f, BUMP_QUIET = 0.4f, GULP_REACH = 0.75f, RESPAWN_CLEARANCE = 15;
         const float BOOP_SLOWDOWN = 0.35f, BOOP_COOLDOWN = 1.2f, GOAT_COOLDOWN = 3;
         const float OUCH_SHARE = 0.12f, OUCH_MAX = 15, OUCH_GRACE = 1.5f, PELLET_RETURN = 0.7f;
@@ -241,7 +243,9 @@ namespace Telfer.Sim
                 var inp = bot != null ? bot.Think(s, this, dt) : playerInput;
 
                 s.slowed = Collide.Hypot(s.x - Cooper.x, s.z - Cooper.z) < Cooper.AURA;
-                s.speedFactor += ((s.slowed ? SLOW_FACTOR : 1) - s.speedFactor) * Math.Min(1, dt * 4);
+                float pace = s.slowed ? SLOW_FACTOR : 1;
+                if (Stage.Water != null && Water.In(Stage, s.x, s.z)) pace *= SWIM_FACTOR;
+                s.speedFactor += (pace - s.speedFactor) * Math.Min(1, dt * 4);
                 s.Update(inp, dt, !s.slowed, Stage, snakeSolids);
 
                 bool ouch = BonkRock(s);
