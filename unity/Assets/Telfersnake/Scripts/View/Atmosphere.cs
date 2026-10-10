@@ -19,7 +19,10 @@ namespace Telfer.View
         LensDistortion lens;
         Vignette vignette;
         ColorAdjustments grade;
+        WhiteBalance wb;
+        ShadowsMidtonesHighlights smh;
         Material sky;
+        public static Atmosphere I { get; private set; }
         float hitPulse, tierPulse, dayTime;
         public bool Mobile;
 
@@ -32,6 +35,7 @@ namespace Telfer.View
         public void Build(bool mobile)
         {
             Mobile = mobile;
+            I = this;
             var sunGo = new GameObject("Sun");
             sunGo.transform.SetParent(transform, false);
             Sun = sunGo.AddComponent<Light>();
@@ -78,10 +82,10 @@ namespace Telfer.View
             grade.postExposure.Override(0.18f);
             grade.contrast.Override(14f);
             grade.saturation.Override(16f);
-            var wb = p.Add<WhiteBalance>(true);
+            wb = p.Add<WhiteBalance>(true);
             wb.temperature.Override(7f);
             wb.tint.Override(2f);
-            var smh = p.Add<ShadowsMidtonesHighlights>(true);
+            smh = p.Add<ShadowsMidtonesHighlights>(true);
             smh.shadows.Override(new Vector4(0.92f, 0.95f, 1.12f, 0f));
             smh.highlights.Override(new Vector4(1.06f, 1.02f, 0.94f, 0f));
             bloom = p.Add<Bloom>(true);
@@ -116,6 +120,7 @@ namespace Telfer.View
             var fg = p.Add<FilmGrain>(true);
             fg.type.Override(FilmGrainLookup.Thin1);
             fg.intensity.Override(mobile ? 0 : 0.12f);
+            BuildWeather();
         }
 
         /// <summary>
@@ -134,6 +139,21 @@ namespace Telfer.View
             sunWarm = london ? new Color(1f, 0.97f, 0.9f) : new Color(1f, 0.95f, 0.85f);
             sunLow = london ? new Color(1f, 0.9f, 0.76f) : new Color(1f, 0.86f, 0.68f);
             Sun.intensity = london ? 1.3f : 1.25f;
+            // London's paper is the classic's cool cream (#f8f1df), not the school's warm afternoon: a neutral
+            // white balance and untinted highlights there; the school and the Common keep their grade.
+            wb.temperature.Override(london ? -6f : 7f);
+            wb.tint.Override(london ? 0f : 2f);
+            smh.highlights.Override(london ? new Vector4(1f, 1f, 1.03f, -0.06f) : new Vector4(1.06f, 1.02f, 0.94f, 0f));
+            this.london = london;
+            baseFog = RenderSettings.fogColor;
+            baseFogStart = RenderSettings.fogStartDistance;
+            baseFogEnd = RenderSettings.fogEndDistance;
+            weather = Sky.Clear;
+            forced = false;
+            skyHold = Random.Range(40f, 70f);
+            fogAmt = rainAmt = goldAmt = fireworksAmt = fireworksWant = 0;
+            sunBase = Sun.intensity;
+            ApplyWeather(0);
         }
 
         Color sunWarm = new Color(1f, 0.95f, 0.85f), sunLow = new Color(1f, 0.86f, 0.68f);
@@ -161,8 +181,8 @@ namespace Telfer.View
             tierPulse = Mathf.Max(0, tierPulse - dt * 1.4f);
             chroma.intensity.Override(hitPulse * 0.8f + tierPulse * 0.5f);
             lens.intensity.Override(-Mathf.Sin(tierPulse * Mathf.PI) * 0.28f - hitPulse * 0.12f);
-            vignette.intensity.Override(0.24f + hitPulse * 0.18f);
-            bloom.intensity.Override(0.55f + tierPulse * 1.2f);
+            vignette.intensity.Override(0.24f + hitPulse * 0.18f + fireworksAmt * 0.14f);
+            bloom.intensity.Override(0.55f + tierPulse * 1.2f + fireworksAmt * 0.9f + goldAmt * 0.25f);
 
             // The sun drifts slowly across the afternoon, and back.
             dayTime += dt / 360f;
@@ -171,6 +191,148 @@ namespace Telfer.View
             float pitch = Mathf.Lerp(50, 38, swing);
             Sun.transform.rotation = Quaternion.Euler(pitch, yaw, 0);
             Sun.color = Color.Lerp(sunWarm, sunLow, swing);
+            if (london) Weather(dt, pitch, yaw);
+        }
+
+        // ================================================================== London's skies (view only, as classic weather.ts)
+
+        /// <summary>London's moods: bright, golden hour over the river, a pea-souper, and drizzle on the paper.</summary>
+        public enum Sky { Clear, Golden, Fog, Rain }
+        static readonly Sky[] POOL = { Sky.Clear, Sky.Clear, Sky.Clear, Sky.Golden, Sky.Golden, Sky.Fog, Sky.Rain };
+        Sky weather;
+        bool london, forced;
+        float sunBase = 1.25f, skyHold, fogAmt, rainAmt, goldAmt, fireworksAmt, fireworksWant;
+        Color baseFog;
+        float baseFogStart, baseFogEnd;
+        /// <summary>Where the weather happens: the camera's focus (set every frame by the game).</summary>
+        public Vector3 Around;
+        /// <summary>How wet the paper is (0..1): LondonEnv gives it a puddle sheen.</summary>
+        public static System.Action<float> Wet;
+        ParticleSystem rain;
+        readonly System.Collections.Generic.List<Transform> mist = new System.Collections.Generic.List<Transform>();
+        Material mistMat;
+        static readonly Color PEA_SOUP = new Color(0.79f, 0.77f, 0.64f), DRIZZLE = new Color(0.7f, 0.74f, 0.8f);
+
+        public Sky Now => weather;
+        /// <summary>Dev (and the fireworks): pick London's sky now.</summary>
+        public void SetSky(Sky s, bool hold = true) { weather = s; forced = hold; skyHold = Random.Range(40f, 70f); }
+        /// <summary>The fireworks are on: the evening dims a little and the bloom opens up so the bursts pop.</summary>
+        public void FireworksOn(bool on) => fireworksWant = on ? 1 : 0;
+
+        void BuildWeather()
+        {
+            // Rain: stretched streaks falling round the camera's focus.
+            var go = new GameObject("rain");
+            go.transform.SetParent(transform, false);
+            rain = go.AddComponent<ParticleSystem>();
+            rain.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            var main = rain.main;
+            main.loop = true;
+            main.playOnAwake = false;
+            main.maxParticles = Mobile ? 500 : 1400;
+            main.startLifetime = 1.1f;
+            main.startSpeed = 0;
+            main.startSize = 0.08f;
+            main.startColor = new Color(0.75f, 0.85f, 1f, 0.8f);
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            var vel = rain.velocityOverLifetime;
+            vel.enabled = true;
+            vel.space = ParticleSystemSimulationSpace.World;
+            vel.x = new ParticleSystem.MinMaxCurve(-2f, -1.4f);
+            vel.y = new ParticleSystem.MinMaxCurve(-19f, -16f);
+            vel.z = new ParticleSystem.MinMaxCurve(0f, 0f);
+            var shape = rain.shape;
+            shape.enabled = true;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(56, 1, 44);
+            var em = rain.emission;
+            em.rateOverTime = 0;
+            var r = go.GetComponent<ParticleSystemRenderer>();
+            r.renderMode = ParticleSystemRenderMode.Stretch;
+            r.velocityScale = 0.045f;
+            r.lengthScale = 1;
+            r.sharedMaterial = Mats.Glow(Color.white, 0, false, 1.1f);
+            r.shadowCastingMode = ShadowCastingMode.Off;
+            rain.Play();
+
+            // The pea-souper: soft sheets of yellow-grey mist stacked low over the map, drifting (volumetric-ish, and cheap).
+            mistMat = Mats.Glow(new Color(PEA_SOUP.r * 1.08f, PEA_SOUP.g * 1.08f, PEA_SOUP.b * 1.08f, 0), 0, false, 1);
+            var quad = new Mesh { name = "mist" };
+            quad.vertices = new[] { new Vector3(-0.5f, 0, -0.5f), new Vector3(0.5f, 0, -0.5f), new Vector3(-0.5f, 0, 0.5f), new Vector3(0.5f, 0, 0.5f) };
+            quad.uv = new[] { new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 1), new Vector2(1, 1) };
+            quad.colors = new[] { Color.white, Color.white, Color.white, Color.white };
+            quad.triangles = new[] { 0, 2, 1, 1, 2, 3 };
+            quad.bounds = new Bounds(Vector3.zero, new Vector3(1, 1, 1));
+            for (int i = 0; i < 7; i++)
+            {
+                var m = new GameObject("mist", typeof(MeshFilter), typeof(MeshRenderer));
+                m.transform.SetParent(transform, false);
+                m.GetComponent<MeshFilter>().sharedMesh = quad;
+                var mr = m.GetComponent<MeshRenderer>();
+                mr.sharedMaterial = mistMat;
+                mr.shadowCastingMode = ShadowCastingMode.Off;
+                mr.receiveShadows = false;
+                m.SetActive(false);
+                mist.Add(m.transform);
+            }
+        }
+
+        void Weather(float dt, float pitch, float yaw)
+        {
+            if (!forced && (skyHold -= dt) <= 0)
+            {
+                weather = POOL[Random.Range(0, POOL.Length)];
+                skyHold = Random.Range(weather == Sky.Clear ? 50f : 35f, weather == Sky.Clear ? 90f : 60f);
+            }
+            float k = 1 - Mathf.Exp(-dt / 5f);
+            fogAmt = Mathf.Lerp(fogAmt, weather == Sky.Fog ? 1 : 0, k);
+            rainAmt = Mathf.Lerp(rainAmt, weather == Sky.Rain ? 1 : 0, k);
+            goldAmt = Mathf.Lerp(goldAmt, weather == Sky.Golden ? 1 : 0, k);
+            fireworksAmt = Mathf.MoveTowards(fireworksAmt, fireworksWant, dt * 0.6f);
+
+            // Golden hour: the sun sinks low over the river and turns honey-orange.
+            if (goldAmt > 0.001f)
+            {
+                Sun.transform.rotation = Quaternion.Euler(Mathf.Lerp(pitch, 21, goldAmt), Mathf.Lerp(yaw, 112, goldAmt), 0);
+                Sun.color = Color.Lerp(Sun.color, new Color(1f, 0.74f, 0.48f), goldAmt * 0.6f);
+            }
+            ApplyWeather(dt);
+        }
+
+        void ApplyWeather(float dt)
+        {
+            float murk = Mathf.Max(fogAmt, rainAmt * 0.6f);
+            Sun.intensity = sunBase * (1 - 0.3f * murk) * (1 - 0.3f * fireworksAmt) * (1 + 0.08f * goldAmt);
+            RenderSettings.fogStartDistance = Mathf.Lerp(Mathf.Lerp(baseFogStart, 50, rainAmt), 24, fogAmt);
+            RenderSettings.fogEndDistance = Mathf.Lerp(Mathf.Lerp(baseFogEnd, 190, rainAmt), 125, fogAmt);
+            var fc = Color.Lerp(Color.Lerp(baseFog, DRIZZLE, rainAmt), PEA_SOUP, fogAmt);
+            fc = Color.Lerp(fc, new Color(1f, 0.83f, 0.66f), goldAmt * 0.5f);
+            RenderSettings.fogColor = Color.Lerp(fc, new Color(0.25f, 0.24f, 0.36f), fireworksAmt * 0.5f);
+            grade.colorFilter.Override(Color.Lerp(Color.white, new Color(1f, 0.92f, 0.8f), goldAmt * 0.45f));
+            grade.postExposure.Override(0.18f - 0.32f * fireworksAmt - 0.05f * murk);
+            grade.saturation.Override(16f - 14f * fogAmt);
+            bloom.threshold.Override(0.95f - 0.15f * fireworksAmt - 0.1f * goldAmt);
+            bloom.tint.Override(Color.Lerp(new Color(1f, 0.93f, 0.82f), new Color(1f, 0.78f, 0.55f), goldAmt));
+
+            var em = rain.emission;
+            em.rateOverTime = rainAmt * (Mobile ? 420 : 1200);
+            rain.transform.position = Around + new Vector3(4, 15, -2);
+            Wet?.Invoke(rainAmt);
+
+            float t = Time.time;
+            for (int i = 0; i < mist.Count; i++)
+            {
+                var m = mist[i];
+                bool on = fogAmt > 0.02f;
+                if (m.gameObject.activeSelf != on) m.gameObject.SetActive(on);
+                if (!on) continue;
+                float a = i * 2.4f + t * 0.03f;
+                m.position = Around + new Vector3(Mathf.Cos(a) * 14 + Mathf.Sin(t * 0.05f + i) * 6, 0.6f + i * 0.7f, Mathf.Sin(a) * 10);
+                m.localScale = new Vector3(60 + i * 6, 1, 46 + i * 5);
+            }
+            var mc = mistMat.GetColor("_Color");
+            mc.a = fogAmt * 0.14f;
+            mistMat.SetColor("_Color", mc);
         }
 
         /// <summary>Feed the grass the positions of everything that should part it.</summary>

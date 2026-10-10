@@ -174,7 +174,7 @@ namespace Telfer.Game
             var focus = looking ? W.P(LookAt.Value.x, LookAt.Value.y) : snakeViews[MeIx].HeadPos;
             // Up on the London Eye the camera sees the whole map: nothing stands between it and you, so nothing fades.
             bool craned = me.alive && me.carried == Carrier.Eye;
-            london.Sync(rig.Cam, focus, !craned && (looking || state != State.Title && me.alive), looking || state != State.Title, Time.time, dt);
+            london.Sync(rig.Cam, focus, !craned && (looking || state != State.Title && me.alive), looking || state != State.Title, Time.time, dt, craned);
         }
 
         List<Occluder> Occluders => shownStage == StageId.Common ? common.Occluders : shownStage == StageId.London ? london.Occluders : scenery.Occluders;
@@ -669,6 +669,7 @@ namespace Telfer.Game
                 rig.Follow(me.alive ? meView.HeadPos : rig.transform.position + rig.transform.forward * 20, vel, me.Length, me.dashing, realDt);
             }
             atmo.Focus(state == State.Title ? 70 : rig.FocusDistance);
+            atmo.Around = rig.transform.position + rig.transform.forward * rig.FocusDistance;
 
             if (attract == null && me.dashing && !wasDashing) synth.Play("zip", 0.8f);
             wasDashing = me.dashing;

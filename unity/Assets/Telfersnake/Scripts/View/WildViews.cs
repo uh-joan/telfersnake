@@ -72,6 +72,17 @@ namespace Telfer.View
                 body.GetComponent<MeshFilter>().sharedMesh = ModelsWild.Creature(c.kind);
                 var br = body.GetComponent<MeshRenderer>();
                 br.sharedMaterial = Mats.Cached("creature", () => { var m = Mats.Toon(Color.white, 1.2f, 0.85f, 1.0f); m.SetColor("_RimColor", new Color(1f, 0.95f, 1f)); m.SetColor("_EmissionColor", new Color(0.18f, 0.18f, 0.22f)); return m; });
+                var lit = c.kind >= CreatureKind.Dragon ? ModelsLegends.Glow(c.kind) : null;
+                if (lit)
+                {
+                    // London's legends: their magic bits drawn again as light, for the bloom.
+                    var gl = new GameObject("magic", typeof(MeshFilter), typeof(MeshRenderer));
+                    gl.transform.SetParent(body.transform, false);
+                    gl.GetComponent<MeshFilter>().sharedMesh = lit;
+                    var glr = gl.GetComponent<MeshRenderer>();
+                    glr.sharedMaterial = Mats.Cached("legendGlow", () => Mats.Glow(Color.white, 3, true, 1.8f));
+                    glr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                }
                 var glow = MeshKit.Hex(c.Spec.glow);
                 var rm = RunAssets.Track(Mats.Glow(new Color(glow.r, glow.g, glow.b, 0.85f), 2, true, 2.4f));
                 var ring = Flat(t, rm, c.Spec.radius * 4.5f);
@@ -252,11 +263,17 @@ namespace Telfer.View
                 var pos = Vector3.Lerp(v.prev, v.cur, alpha);
                 v.yaw = Mathf.LerpAngle(v.yaw, W.Yaw(c.heading), 1 - Mathf.Exp(-dt * 6));
                 bool flies = c.kind == CreatureKind.Owl || c.kind == CreatureKind.Pixie || c.kind == CreatureKind.Wisp;
-                float hover = flies ? 0.6f + Mathf.Sin(time * 2.2f + i) * 0.25f : Mathf.Abs(Mathf.Sin(time * 5 + i)) * 0.06f * Mathf.Clamp01(c.speed);
+                bool floats = c.kind >= CreatureKind.Dragon && ModelsLegends.Hovers(c.kind);
+                float hover = flies ? 0.6f + Mathf.Sin(time * 2.2f + i) * 0.25f
+                    : floats ? 0.25f + Mathf.Sin(time * 2 + i) * 0.12f
+                    : Mathf.Abs(Mathf.Sin(time * 5 + i)) * 0.06f * Mathf.Clamp01(c.speed);
                 v.t.position = pos;
                 v.t.rotation = Quaternion.Euler(0, v.yaw, 0);
                 v.body.localPosition = Vector3.up * hover;
                 v.body.localScale = Vector3.one * Ease.OutBack(Mathf.Clamp01(v.show));
+                // The Pearly Lights turn their ring of buttons; the ghost sways.
+                if (c.kind == CreatureKind.Pearly) v.body.localRotation = Quaternion.Euler(0, time * 50, 0);
+                else if (c.kind == CreatureKind.Ghost) v.body.localRotation = Quaternion.Euler(0, 0, Mathf.Sin(time * 1.6f + i) * 7);
                 float pulse = 0.85f + Mathf.Sin(time * 3 + i) * 0.15f;
                 v.ring.localScale = new Vector3(c.Spec.radius * 4.5f * pulse, 1, c.Spec.radius * 4.5f * pulse);
                 v.ring.localRotation = Quaternion.Euler(0, time * 40, 0);

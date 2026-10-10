@@ -267,7 +267,19 @@ namespace Telfer.View
             p.StrokeRect(B.maxX - 24, B.maxZ + 2.6f, B.maxX - 4, B.maxZ + 3.4f, 0.12f, INK_C);
 
             // Printed colours under a bright sun: the sheet is toned down so the cream, its fibres and the white streets survive the grade.
-            var mat = Mats.Toon(new Color(0.9f, 0.89f, 0.87f), gloss: 0.04f, smooth: 0.2f, rim: 0, tex: p.ToTexture("london-paper"), vertexColor: false);
+            // Cooled as well (the sheet is #f3e6c6 and the sun is warm), so it lands on the classic's cream, about #f8f1df.
+            var paperTint = new Color(0.8f, 0.83f, 0.92f);
+            var mat = Mats.Toon(paperTint, gloss: 0.04f, smooth: 0.2f, rim: 0, tex: p.ToTexture("london-paper"), vertexColor: false);
+            // Rain on the paper: it darkens a touch and takes a wet, puddly sheen (just the gloss: cheap everywhere).
+            float wetNow = -1;
+            Atmosphere.Wet = w =>
+            {
+                if (Mathf.Abs(w - wetNow) < 0.01f) return;
+                wetNow = w;
+                mat.SetFloat("_Gloss", Mathf.Lerp(0.04f, 0.75f, w));
+                mat.SetFloat("_Smoothness", Mathf.Lerp(0.2f, 0.82f, w));
+                mat.SetColor("_BaseColor", Color.Lerp(paperTint, paperTint * 0.95f, w));
+            };
             mat.SetFloat("_Cutoff", 0.5f);
             // The paper's own tooth, very faint, so it reads as paper up close.
             mat.SetTexture("_DetailMap", Tex.Grit());
@@ -1097,7 +1109,7 @@ namespace Telfer.View
         /// <summary>Labels start to fade this far from the snake, and are gone by FAR; never above TOP_NDC (the HUD lives up there).</summary>
         const float NEAR = 42, FAR = 58, TOP_NDC = 0.66f, TOP_NDC_PORTRAIT = 0.32f, MIN_Y = 2;
 
-        void SyncLabels(Camera cam, Vector3 focus, float dt, bool show)
+        void SyncLabels(Camera cam, Vector3 focus, float dt, bool show, bool craned)
         {
             var cv = (RectTransform)labelCanvas.transform;
             var size = cv.rect.size;
@@ -1108,6 +1120,8 @@ namespace Telfer.View
                 var at = l.at;
                 float d = Vector2.Distance(new Vector2(at.x, at.z), new Vector2(focus.x, focus.z));
                 float want = show ? Mathf.Clamp01((FAR - d) / (FAR - NEAR)) : 0;
+                // Riding the Eye, the camera cranes out past the wheel: its ribbon would sit right over it.
+                if (craned && l.v.id == "eye") want = 0;
                 var sp = cam.WorldToViewportPoint(at);
                 // Pull a ribbon down its building so it never rides into the HUD, but keep it over the roof.
                 if (sp.z > 0 && sp.y * 2 - 1 > topNdc)
@@ -1131,7 +1145,7 @@ namespace Telfer.View
         /// Run London's life: the landmarks' animations, the props, the ribbons, and the see-through fade
         /// of any landmark between the camera and the snake's head (or that the camera is inside).
         /// </summary>
-        public void Sync(Camera cam, Vector3 head, bool watching, bool labelsOn, float time, float dt)
+        public void Sync(Camera cam, Vector3 head, bool watching, bool labelsOn, float time, float dt, bool craned = false)
         {
             foreach (var v in landmarks) v.Animate?.Invoke(time);
             DrawProps();
@@ -1162,7 +1176,7 @@ namespace Telfer.View
                     if (faded != was) r.shadowCastingMode = faded || !f.casts[i] ? ShadowCastingMode.Off : ShadowCastingMode.On;
                 }
             }
-            SyncLabels(cam, head, dt, labelsOn);
+            SyncLabels(cam, head, dt, labelsOn, craned);
         }
 
         public void SetLabelsActive(bool on) { if (labelCanvas) labelCanvas.gameObject.SetActive(on); }

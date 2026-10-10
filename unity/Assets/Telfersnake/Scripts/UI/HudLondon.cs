@@ -38,9 +38,11 @@ namespace Telfer.UI
 
         void BuildLondonOverlays()
         {
-            // The camera flash: a white wash over everything, gone in a blink.
+            // The camera flash: a white glow round the edges of the screen (the middle stays clear), gone in a blink.
             var f = UiKit.Fill(rootRt, "flash");
             flashImg = f.gameObject.AddComponent<Image>();
+            flashImg.sprite = EdgeGlow();
+            flashImg.type = Image.Type.Simple;
             flashImg.color = new Color(1, 1, 1, 0);
             flashImg.raycastTarget = false;
             // The Tube: a dark tunnel whoosh, and the little line map across the middle.
@@ -53,8 +55,32 @@ namespace Telfer.UI
             flashImg.transform.SetAsLastSibling();
         }
 
-        /// <summary>A tourist took your picture: CLICK! A white flash.</summary>
-        public void Flash() => flashT = 0.35f;
+        /// <summary>A tourist took your picture: CLICK! A white flash round the edges.</summary>
+        public void Flash() => flashT = FLASH_FOR;
+        const float FLASH_FOR = 0.28f;
+
+        static Sprite edgeGlow;
+        /// <summary>White at the screen's edges, fading to nothing a third of the way in (a rounded-rectangle falloff).</summary>
+        static Sprite EdgeGlow()
+        {
+            if (edgeGlow) return edgeGlow;
+            const int N = 128;
+            var t = new Texture2D(N, N, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var px = new Color32[N * N];
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                {
+                    float u = Mathf.Abs(x / (N - 1f) * 2 - 1), v = Mathf.Abs(y / (N - 1f) * 2 - 1);
+                    // Distance to the edge as a soft superellipse: 1 at the rim, 0 inside.
+                    float d = Mathf.Pow(Mathf.Pow(u, 6) + Mathf.Pow(v, 6), 1 / 6f);
+                    float a = Mathf.Clamp01((d - 0.62f) / 0.38f);
+                    a = a * a * (3 - 2 * a);
+                    px[y * N + x] = new Color32(255, 255, 255, (byte)(a * 255));
+                }
+            t.SetPixels32(px);
+            t.Apply();
+            return edgeGlow = Sprite.Create(t, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f));
+        }
 
         /// <summary>Down the Tube at `from`, up at `to`: the whoosh, and the line with the two stations lit.</summary>
         public void Tube(string[] names, int from, int to)
@@ -97,7 +123,8 @@ namespace Telfer.UI
             jewelPill.localScale = Vector3.Lerp(jewelPill.localScale, Vector3.one, 1 - Mathf.Exp(-dt * 10));
 
             flashT = Mathf.Max(0, flashT - dt);
-            flashImg.color = new Color(1, 1, 1, Mathf.Clamp01(flashT / 0.35f) * 0.6f);
+            float fl = Mathf.Clamp01(flashT / FLASH_FOR);
+            flashImg.color = new Color(1, 1, 1, fl * fl * 0.95f);
             tubeT = Mathf.Max(0, tubeT - dt);
             tubeRt.gameObject.SetActive(tubeT > 0);
             float u = 1 - tubeT / TUBE_FOR;
