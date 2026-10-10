@@ -10,6 +10,7 @@ import type { StageId } from '../sim/stage';
 import type { Snake, SnakeLook } from '../sim/snake';
 import { type CardId, UPGRADE_IDS, type UpgradeId } from '../sim/upgrades';
 import { VEHICLE_KINDS, type Vehicle } from '../sim/vehicles';
+import type { Button, Treasure } from '../sim/treasures';
 import type { GameEvent } from '../sim/world';
 
 /**
@@ -65,6 +66,12 @@ export type VehicleRow = [number, number, number, number];
 export type KidRow = [number, number, number, number];
 /** x, z, kind, t (flight progress 0..1, for the client's arc) */
 export type ProjectileRow = [number, number, number, number];
+/** London's Crown Jewels: x, z, present (0 while it is away). The gem is fixed per index (JEWEL_KINDS). */
+export type TreasureRow = [number, number, 0 | 1];
+/** London's per-snake extras, one per snake row: Crown Jewels picked up, and the crown (1) for all five. */
+export type SnakeExtra = [number, 0 | 1];
+/** London's pearl buttons (the Pearly Lights' trail): x, z, born. */
+export type ButtonRow = [number, number, number];
 /** x, z, heading, speed, present (0 while faded after a gulp). Kind is fixed per index (welcome). */
 export type CreatureRow = [number, number, number, number, 0 | 1];
 /** index, kind, golden, x, z, born */
@@ -97,6 +104,14 @@ export interface Snapshot {
   cr: CreatureRow[];
   /** London's traffic. Absent where there is none (the HD client ignores it either way). */
   vh?: VehicleRow[];
+  /**
+   * London's Crown Jewels, every snapshot; each snake's jewels and crown (`sx`, in `s` order); the
+   * pearl buttons (the whole list, only when it changed). All absent elsewhere: the HD client
+   * reads snapshots by key, so it never sees them.
+   */
+  tr?: TreasureRow[];
+  sx?: SnakeExtra[];
+  pb?: ButtonRow[];
   /** Pebbles and kisses in flight: the whole (usually short) list, every snapshot. */
   pj: ProjectileRow[];
   /** Only the foods that changed since the last snapshot. */
@@ -114,6 +129,8 @@ export type ServerMessage =
       hazards: HazardRow[]; animalKinds: number[]; predatorKinds: number[]; kidKinds: number[]; creatureKinds: number[]; foods: FoodRow[]; pellets: PelletRow[];
       /** London's buses and cabs, by VEHICLE_KINDS index. Absent where there is no traffic. */
       vehicleKinds?: number[];
+      /** London's Crown Jewels: how many lie about (rows come in `tr`). Absent: none. */
+      treasureCount?: number;
     }
   | { t: 'seats'; seats: Seat[] }
   | Snapshot
@@ -169,6 +186,9 @@ export const foodRow = (f: Food, i: number): FoodRow => [i, FOOD_KINDS.indexOf(f
 export const pelletRow = (p: Pellet): PelletRow => [r2(p.x), r2(p.z), r2(p.value), p.born];
 export const hazardRow = (h: Hazard): HazardRow => [HAZARD_KINDS.indexOf(h.kind), r2(h.x), r2(h.z), h.r, r3(h.turn)];
 export const cooperRow = (c: CooperState): CooperRow => [r2(c.x), r2(c.z), r3(c.heading), r2(c.speed), r2(c.talking)];
+export const treasureRow = (t: Treasure): TreasureRow => [r2(t.x), r2(t.z), t.respawnIn > 0 ? 0 : 1];
+export const snakeExtra = (s: Snake): SnakeExtra => [s.jewels, s.crowned ? 1 : 0];
+export const buttonRow = (b: Button): ButtonRow => [r2(b.x), r2(b.z), b.born];
 export const animalKindIndex = (a: Animal) => ANIMAL_KINDS.indexOf(a.kind);
 
 /**
@@ -181,6 +201,8 @@ const PER_SEAT: ReadonlySet<Extract<GameEvent, { who: number }>['type']> = new S
   'cards', 'bump', 'boop', 'ouch', 'pellet', 'tier', 'helmet', 'pelt', 'kiss', 'magic', 'teatime', 'splash',
   // London's people: the guard's smile and gem, and a tourist's photo (the flash is on that screen only).
   'guard', 'photo',
+  // London's legends: the crown's gem payout, and the pearl buttons' little crunch.
+  'royal', 'button',
 ] as const);
 
 export function eventIsFor(e: GameEvent, seat: number): boolean {

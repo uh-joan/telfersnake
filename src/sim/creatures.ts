@@ -9,7 +9,11 @@ import type { Spot, Stage } from './stage';
  * (see World.castMagic). Deterministic and a no-op on the school (its creature count is 0).
  */
 
-export const CREATURE_KINDS = ['stag', 'unicorn', 'owl', 'frog', 'kitsune', 'pixie', 'squirrel', 'wisp'] as const;
+export const CREATURE_KINDS = [
+  'stag', 'unicorn', 'owl', 'frog', 'kitsune', 'pixie', 'squirrel', 'wisp',
+  // London's legends (A5), appended so the wire indices of the Common's stay put. The unicorn is reused.
+  'dragon', 'lionroyal', 'phoenix', 'mermaid', 'ghost', 'gog', 'fairy', 'pearly',
+] as const;
 export type CreatureKind = (typeof CREATURE_KINDS)[number];
 
 export interface CreatureSpec {
@@ -32,6 +36,15 @@ export const CREATURES: Record<CreatureKind, CreatureSpec> = {
   pixie: { weight: 1.8, flee: 5.0, alert: 12, radius: 0.4, glow: 0x3ff0ff },
   squirrel: { weight: 1.8, flee: 5.5, alert: 11, radius: 0.46, glow: 0xffc21a },
   wisp: { weight: 1.6, flee: 3.5, alert: 9, radius: 0.4, glow: 0x9b4dff },
+  // London: the Silver Dragon of the City is the mythic one (the stag's slot), the fairy merely uncommon.
+  dragon: { weight: 0.4, flee: 6.5, alert: 16, radius: 0.8, glow: 0xc8d4e8 },
+  lionroyal: { weight: 1.0, flee: 6.0, alert: 14, radius: 0.7, glow: 0xffc21a },
+  phoenix: { weight: 1.0, flee: 6.0, alert: 13, radius: 0.6, glow: 0xff5a1f },
+  mermaid: { weight: 1.0, flee: 5.0, alert: 12, radius: 0.6, glow: 0x1fd8c8 },
+  ghost: { weight: 1.0, flee: 4.5, alert: 11, radius: 0.55, glow: 0xd8e4ff },
+  gog: { weight: 1.0, flee: 4.0, alert: 12, radius: 0.75, glow: 0x9b6b3a },
+  fairy: { weight: 1.8, flee: 5.0, alert: 12, radius: 0.4, glow: 0x6bff9b },
+  pearly: { weight: 1.4, flee: 3.5, alert: 9, radius: 0.45, glow: 0xfff4e0 },
 };
 
 export interface Creature {
@@ -49,11 +62,14 @@ export interface Creature {
   wanderIn: number;
 }
 
-/** A spot deep in the woods or the Glade for a creature to haunt, clear of the player's start. */
-export function creatureSpot(stage: Stage, rng: Rng): Spot {
+/**
+ * A spot deep in the woods or the Glade for a creature to haunt, clear of the player's start. A stage
+ * with its own homes per kind (London: the Elfin Oak, the river bank, the Tower…) names them itself.
+ */
+export function creatureSpot(stage: Stage, rng: Rng, kind?: CreatureKind): Spot {
   const spawn = stage.snakeSpawn;
   for (let tries = 0; tries < 150; tries++) {
-    const p = stage.homePoint(rng, rng.next() < 0.5 ? 'glade' : 'woods');
+    const p = stage.creatureHome && kind ? stage.creatureHome(rng, kind) : stage.homePoint(rng, rng.next() < 0.5 ? 'glade' : 'woods');
     if (!isFree(stage, p.x, p.z, 0.9)) continue;
     if (Math.hypot(p.x - spawn.x, p.z - spawn.z) < 14) continue;
     return p;
@@ -79,7 +95,7 @@ export function makeCreatures(stage: Stage, rng: Rng): Creature[] {
       roll -= CREATURES[pool[i]].weight;
     }
     const kind = pool.splice(pick, 1)[0];
-    const p = creatureSpot(stage, rng);
+    const p = creatureSpot(stage, rng, kind);
     out.push({ kind, x: p.x, z: p.z, heading: rng.range(0, Math.PI * 2), speed: 0, respawnIn: 0, wx: p.x, wz: p.z, wanderIn: 0 });
   }
   return out;

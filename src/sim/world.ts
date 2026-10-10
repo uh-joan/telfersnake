@@ -18,6 +18,9 @@ import { type Input, Snake, type SnakeLook, TIERS } from './snake';
 import { type CardId, type PowerId, rollCards, type UpgradeId } from './upgrades';
 import { distanceToLoop, driveVehicle, type Lane, local, makeLane, makeVehicles, type Vehicle, type VehicleKind, VEHICLES, type Walker } from './vehicles';
 import { inWater } from './water';
+import {
+  type Button, BUTTON_LIFE, BUTTON_MASS, BUTTON_MAX, BUTTON_STEP, JEWEL_REACH, JEWEL_RESPAWN, JEWELS_FOR_CROWN, makeTreasures, moveTreasure, type Treasure,
+} from './treasures';
 
 export const STEP = 1 / 60;
 export const PLAYER = 0;
@@ -38,6 +41,24 @@ const OUCH_SHARE = 0.12; // of current mass lost per rock...
 const OUCH_MAX = 15; // ...up to this much
 const CREATURE_RESPAWN = 25; // seconds a gulped creature stays faded before it returns elsewhere
 const PIXIE_MAGNET = 22; // Pixie Dust: a huge food-pull radius
+// London's legends (A5).
+/** How long each London magic lasts, in seconds. */
+const WINGS_FOR = 12;
+const RIVER_FOR = 20;
+const GIANT_FOR = 15;
+const PHOENIX_FOR = 30;
+/** River Rider: in the water you go this much faster than on land (instead of the ×0.5 paddle). */
+const RIVER_ZOOM = 1.6;
+/** Mighty Roar: everything within this many metres is blown back; rivals are pushed this far. */
+export const ROAR_REACH = 10;
+const ROAR_PUSH = 2.5;
+const ROAR_STUN = 0.5;
+/** Rise Again: a little growth when the phoenix undoes a hit, and a moment's grace. */
+const RISE_GROWTH = 6;
+/** A jewel is worth this much score; all five, the crown, this much more and these gems. */
+const JEWEL_SCORE = 200;
+const ROYAL_SCORE = 1000;
+export const ROYAL_GEMS = 5;
 /** London's cuppa: a little warm-up zoom, this much faster for this long. */
 const TEA_ZOOM = 1.25;
 const TEA_ZOOM_FOR = 2;
@@ -180,7 +201,23 @@ export type GameEvent =
   /** London: a gull or a pelican made off with a snack (it reappears elsewhere). */
   | { type: 'steal'; kind: AnimalKind; food: FoodKind; x: number; z: number }
   /** London: sandwich, scone, sponge in a row: TEA TIME! A cake stand of treats around `who`. */
-  | { type: 'teatime'; who: number; x: number; z: number };
+  | { type: 'teatime'; who: number; x: number; z: number }
+  /** London: the phoenix undid a hit on `who`: flame-feathers, and a little growth. RISE! */
+  | { type: 'rise'; who: number; x: number; z: number }
+  /** London: Dragon Wings wore off and `who` came down here (always free, dry ground). */
+  | { type: 'land'; who: number; x: number; z: number }
+  /** London: the Royal Lion's Mighty Roar: a golden ring of radius `r` round `who`. */
+  | { type: 'ring'; who: number; x: number; z: number; r: number }
+  /** London: `who` was blown back by `by`'s roar. */
+  | { type: 'roared'; who: number; by: number; x: number; z: number }
+  /** London: a Crown Jewel (index `i`) picked up by `who`, who now has `n`. */
+  | { type: 'jewel'; who: number; i: number; x: number; z: number; n: number }
+  /** London: all five jewels. ROYAL! A crown for `who` for the rest of the run, and gems. */
+  | { type: 'royal'; who: number; x: number; z: number }
+  /** London: the Pearly Lights laid a trail of buttons from (x, z) to a treasure at (tx, tz). */
+  | { type: 'pearly'; who: number; x: number; z: number; tx: number; tz: number }
+  /** London: a pearl button eaten. */
+  | { type: 'button'; who: number; x: number; z: number; points: number };
 
 /** Terrain with only bounds and solids: water counts as open. */
 const dryTerrain = (t: Terrain): Terrain => ({ bounds: t.bounds, solidBoxes: t.solidBoxes, solidCircles: t.solidCircles });
@@ -222,6 +259,9 @@ export class World {
   readonly projectiles: Projectile[] = [];
   /** The Common's fantastic creatures (empty on the school). */
   readonly creatures: Creature[] = [];
+  /** London's Crown Jewels (empty elsewhere), and the pearly buttons leading to one. */
+  readonly treasures: Treasure[] = [];
+  readonly buttons: Button[] = [];
   readonly pellets: Pellet[] = [];
   /** Things that happened since the caller last drained this. */
   readonly events: GameEvent[] = [];
@@ -322,6 +362,8 @@ export class World {
       for (const r of stage.routes) this.lanes.push(makeLane(r, stage.zebras ?? []));
       for (const v of makeVehicles(stage.traffic, stage.routes, this.lanes)) this.vehicles.push(v);
     }
+    // London's Crown Jewels: last, and no RNG at all on a stage without them.
+    for (const t of makeTreasures(stage, this.rng)) this.treasures.push(t);
   }
 
   static room(seed: number, rules: Rules = rulesFor('normal'), stage: Stage = SCHOOL): World {
@@ -424,6 +466,8 @@ export class World {
     this.updateKids(dt);
     this.updateProjectiles(dt);
     this.updateCreatures(dt);
+    if (this.treasures.length > 0) this.updateTreasures(dt);
+    if (this.buttons.length > 0) this.expireButtons();
     this.chatterSami(dt);
     if (this.stage.chatters) this.chatterLondon(dt);
     if (this.stage.statue) this.statue(dt);
@@ -434,7 +478,9 @@ export class World {
         if (s.respawnIn <= 0) this.respawn(s);
         continue;
       }
+      const flew = s.hasMagic('wings');
       s.tickMagic(dt);
+      if (flew && !s.hasMagic('wings')) this.land(s); // Dragon Wings wore off: down to free, dry ground
       // London's timers run down whether or not the snake is moving.
       if (s.teaFor > 0) s.teaFor -= dt;
       if (s.teaCool > 0) s.teaCool -= dt;
@@ -460,8 +506,10 @@ export class World {
 
       s.slowed = Math.hypot(s.x - c.x, s.z - c.z) < COOPER_AURA;
       let pace = s.slowed ? SLOW_FACTOR : 1;
-      if (this.stage.water && inWater(this.stage, s.x, s.z)) pace *= SWIM_FACTOR;
-      if (this.puddles.length > 0 && this.puddle(s)) pace *= PUDDLE_ZOOM;
+      // Flying (Dragon Wings): no paddle, no puddles. River Rider: the Thames is a fast lane.
+      const flying = s.hasMagic('wings');
+      if (this.stage.water && !flying && inWater(this.stage, s.x, s.z)) pace *= s.hasMagic('river') ? RIVER_ZOOM : SWIM_FACTOR;
+      if (this.puddles.length > 0 && !flying && this.puddle(s)) pace *= PUDDLE_ZOOM;
       if (s.teaFor > 0) pace *= TEA_ZOOM;
       if (this.buskers.length > 0 && this.dancing(s)) pace *= BUSK_ZOOM;
       s.speedFactor += (pace - s.speedFactor) * Math.min(1, dt * 4);
@@ -476,10 +524,14 @@ export class World {
       }
       if (this.stage.guard) this.lapGuard(s, dt);
 
-      this.bumpCooper(s, dt);
-      this.meetAnimals(s, dt);
-      this.meetKids(s, dt);
+      if (!flying) {
+        this.bumpCooper(s, dt);
+        this.meetKids(s, dt);
+      }
+      this.meetAnimals(s, dt, flying);
       this.meetCreatures(s);
+      if (this.treasures.length > 0) this.meetJewels(s);
+      if (this.buttons.length > 0) this.eatButtons(s);
       this.pullFood(s, dt);
       this.eat(s);
       this.bees(s);
@@ -507,7 +559,7 @@ export class World {
 
     // London's traffic: everyone out of the buses and cabs (a frozen or paused snake too; it is
     // blinking then, so it is only nudged, never bonked).
-    if (this.vehicles.length > 0) for (const s of this.snakes) if (s.alive) this.meetVehicles(s, dt);
+    if (this.vehicles.length > 0) for (const s of this.snakes) if (s.alive && !s.hasMagic('wings')) this.meetVehicles(s, dt);
     for (const s of this.snakes) if (s.alive) s.sampleBody();
     this.bonkSnakes();
     this.expirePellets();
@@ -533,11 +585,12 @@ export class World {
 
   /** Rocks, sticks and stones: the snake has already bounced off; now it shrinks. */
   private bonkRock(s: Snake): boolean {
-    if (!s.touchingWall || s.immune > 0) return false;
+    if (!s.touchingWall || s.immune > 0 || s.hasMagic('wings')) return false;
     for (const h of this.hazards) {
       if (!isSolidHazard(h)) continue;
       const reach = s.radius + h.r + 0.02;
       if ((s.x - h.x) ** 2 + (s.z - h.z) ** 2 > reach * reach) continue;
+      if (this.rise(s)) return true;
       s.immune = OUCH_GRACE;
       const full = s.mass < 1 ? 0 : Math.min(OUCH_MAX, Math.max(1, s.mass * OUCH_SHARE));
       const lost = full * (1 - s.rockGuard);
@@ -568,6 +621,7 @@ export class World {
 
   /** Shrink a rival like a rock bonk and puff pellets; `by` is credited (for gems). */
   private scorch(target: Snake, by: Snake, share: number, cap: number): void {
+    if (this.rise(target)) return; // the phoenix takes it: your next hit, whatever it is
     target.immune = OUCH_GRACE;
     const lost = target.mass < 1 ? 0 : Math.min(cap, Math.max(2, target.mass * share));
     if (lost > 0) this.shed(target, lost, PELLET_RETURN, 3);
@@ -583,7 +637,7 @@ export class World {
     let best: Snake | null = null;
     let bestD = Infinity;
     for (const o of this.snakes) {
-      if (o === s || !o.alive || o.immune > 0) continue;
+      if (o === s || !o.alive || o.immune > 0 || o.hasMagic('wings')) continue;
       const d = Math.hypot(o.x - s.x, o.z - s.z);
       if (d > range || d >= bestD) continue;
       if (Math.abs(wrapAngle(Math.atan2(o.z - s.z, o.x - s.x) - s.heading)) > LASER_HALF_ANGLE) continue;
@@ -615,7 +669,7 @@ export class World {
     let fired = scares;
     if (scares) this.events.push({ type: 'power', who: s.id, kind: 'stink', x: bx, z: bz, heading: s.heading, range: radius });
     for (const o of this.snakes) {
-      if (o === s || !o.alive || o.immune > 0 || Math.hypot(o.x - bx, o.z - bz) > radius) continue;
+      if (o === s || !o.alive || o.immune > 0 || o.hasMagic('wings') || Math.hypot(o.x - bx, o.z - bz) > radius) continue;
       if (!fired) {
         fired = true;
         this.events.push({ type: 'power', who: s.id, kind: 'stink', x: bx, z: bz, heading: s.heading, range: radius });
@@ -636,7 +690,7 @@ export class World {
     let fired = scares;
     if (scares) this.events.push({ type: 'power', who: s.id, kind: 'zap', x: s.x, z: s.z, heading: s.heading, range: radius });
     for (const o of this.snakes) {
-      if (o === s || !o.alive || o.immune > 0 || Math.hypot(o.x - s.x, o.z - s.z) > radius) continue;
+      if (o === s || !o.alive || o.immune > 0 || o.hasMagic('wings') || Math.hypot(o.x - s.x, o.z - s.z) > radius) continue;
       if (!fired) {
         fired = true;
         this.events.push({ type: 'power', who: s.id, kind: 'zap', x: s.x, z: s.z, heading: s.heading, range: radius });
@@ -656,7 +710,7 @@ export class World {
     let best: Snake | null = null;
     let bestD = Infinity;
     for (const o of this.snakes) {
-      if (o === s || !o.alive || o.immune > 0 || o.frozenFor > 0) continue;
+      if (o === s || !o.alive || o.immune > 0 || o.frozenFor > 0 || o.hasMagic('wings')) continue;
       const d = Math.hypot(o.x - s.x, o.z - s.z);
       if (d <= radius && d < bestD) {
         bestD = d;
@@ -707,7 +761,7 @@ export class World {
       let target: Snake | null = null;
       let bestD = spec.sight;
       for (const s of this.snakes) {
-        if (!s.alive || s.hasMagic('hidden')) continue;
+        if (!s.alive || this.unseen(s)) continue;
         const d = Math.hypot(s.x - p.x, s.z - p.z);
         if (d < bestD) {
           bestD = d;
@@ -767,11 +821,13 @@ export class World {
       // A bite: shrink whoever is in reach, like a big rock, then wait.
       if (p.biteIn <= 0) {
         for (const s of this.snakes) {
-          if (!s.alive || s.immune > 0 || s.hasMagic('hidden') || Math.hypot(s.x - p.x, s.z - p.z) > spec.biteReach + s.radius) continue;
-          s.immune = OUCH_GRACE;
-          const lost = s.mass < 1 ? 0 : Math.min(spec.biteCap, Math.max(2, s.mass * spec.biteShare * fer));
-          if (lost > 0) this.shed(s, lost, PELLET_RETURN, 4);
-          this.events.push({ type: 'chomp', kind: p.kind, who: s.id, x: s.x, z: s.z });
+          if (!s.alive || s.immune > 0 || this.unseen(s) || Math.hypot(s.x - p.x, s.z - p.z) > spec.biteReach + s.radius) continue;
+          if (!this.rise(s)) {
+            s.immune = OUCH_GRACE;
+            const lost = s.mass < 1 ? 0 : Math.min(spec.biteCap, Math.max(2, s.mass * spec.biteShare * fer));
+            if (lost > 0) this.shed(s, lost, PELLET_RETURN, 4);
+            this.events.push({ type: 'chomp', kind: p.kind, who: s.id, x: s.x, z: s.z });
+          }
           p.biteIn = spec.biteEvery;
           if (p.kind === 'wolf') {
             p.chargeFor = 0;
@@ -869,7 +925,7 @@ export class World {
     let best: Snake | null = null;
     let bestD = range;
     for (const s of this.snakes) {
-      if (!s.alive || s.hasMagic('hidden')) continue;
+      if (!s.alive || this.unseen(s)) continue;
       const d = Math.hypot(s.x - x, s.z - z);
       if (d < bestD) {
         bestD = d;
@@ -884,7 +940,11 @@ export class World {
     const spec = PREDATORS[p.kind];
     if (p.biteIn > 0) return false;
     for (const s of this.snakes) {
-      if (!s.alive || s.immune > 0 || s.hasMagic('hidden') || Math.hypot(s.x - p.x, s.z - p.z) > spec.biteReach + s.radius) continue;
+      if (!s.alive || s.immune > 0 || this.unseen(s) || Math.hypot(s.x - p.x, s.z - p.z) > spec.biteReach + s.radius) continue;
+      if (this.rise(s)) {
+        p.biteIn = spec.biteEvery;
+        return true;
+      }
       s.immune = OUCH_GRACE;
       const lost = s.mass < 1 ? 0 : Math.min(spec.biteCap, Math.max(p.kind === 'raven' ? 1 : 2, s.mass * spec.biteShare * fer));
       if (lost > 0) this.shed(s, lost, PELLET_RETURN, p.kind === 'raven' ? 2 : 4);
@@ -1153,6 +1213,16 @@ export class World {
       const sp = s.baseSpeed * s.speedFactor;
       const closing = (Math.cos(s.heading) * sp - Math.cos(v.heading) * v.speed) * nx + (Math.sin(s.heading) * sp - Math.sin(v.heading) * v.speed) * nz;
       if (closing >= 0) continue;
+      if (s.hasMagic('giant')) {
+        // Gog & Magog: the bus bounces off *you*. It stops dead and honks; no bonk.
+        v.speed = 0;
+        if (s.bumpQuiet <= 0) {
+          s.bumpQuiet = BUMP_QUIET;
+          this.events.push({ type: 'ding', kind: v.kind, honk: true, x: v.x, z: v.z });
+        }
+        continue;
+      }
+      if (this.rise(s)) continue;
       s.immune = OUCH_GRACE;
       const full = s.mass < 1 ? 0 : Math.min(spec.bonkCap, Math.max(1, s.mass * spec.bonkShare));
       const lost = full * (1 - s.rockGuard);
@@ -1426,7 +1496,8 @@ export class World {
 
   private strikeProjectile(pj: Projectile, best: Snake): void {
     if (pj.kind === 'pebble' || pj.kind === 'chip') {
-      if (best.immune > 0) return; // a graze while already blinking: no double dip
+      if (best.immune > 0 || best.hasMagic('wings')) return; // a graze while already blinking (or up in the air): no double dip
+      if (this.rise(best)) return;
       best.immune = OUCH_GRACE * 0.5;
       const lost = best.mass < 1 ? 0 : Math.min(6, Math.max(1, best.mass * 0.05)) * (1 - best.rockGuard);
       if (lost > 0) this.shed(best, lost, PELLET_RETURN, 2);
@@ -1486,7 +1557,7 @@ export class World {
         c.respawnIn -= dt;
         c.speed = 0;
         if (c.respawnIn <= 0) {
-          const p = creatureSpot(this.stage, this.rng); // fade back somewhere new in the woods
+          const p = creatureSpot(this.stage, this.rng, c.kind); // fade back somewhere new in the woods (or its London home)
           c.x = c.wx = p.x;
           c.z = c.wz = p.z;
         }
@@ -1593,8 +1664,239 @@ export class World {
         this.wispCache(s); // Will-o'-the-wisp: it leads you to a golden-food cache
         gems = 2;
         break;
+      // London's legends.
+      case 'dragon':
+        s.giveMagic('wings', WINGS_FOR); // Dragon Wings: up you go, over everything
+        s.score += 300;
+        gems = 2;
+        break;
+      case 'lionroyal':
+        this.roar(s); // Mighty Roar: a golden ring, everything near blown back
+        s.score += 150;
+        gems = 1;
+        break;
+      case 'phoenix':
+        s.giveMagic('phoenix', PHOENIX_FOR); // Rise Again: the next hit is undone
+        s.score += 150;
+        gems = 1;
+        break;
+      case 'mermaid':
+        s.giveMagic('river', RIVER_FOR); // River Rider: the Thames is a fast lane
+        s.score += 120;
+        gems = 1;
+        break;
+      case 'ghost':
+        s.giveMagic('hidden', 15); // Boo!: predators and rivals cannot see you
+        s.score += 120;
+        gems = 1;
+        break;
+      case 'gog':
+        s.giveMagic('giant', GIANT_FOR); // Giant Snake: the next size's gulp, and buses bounce off you
+        s.score += 150;
+        gems = 1;
+        break;
+      case 'fairy':
+        s.giveMagic('magnet', 20); // Fairy Dust: a huge food magnet
+        s.score += 100;
+        gems = 1;
+        break;
+      case 'pearly':
+        this.pearlyTrail(s); // The Pearly Lights: a trail of buttons to a treasure
+        s.score += 100;
+        gems = 1;
+        break;
     }
     this.events.push({ type: 'magic', kind, who: s.id, x: s.x, z: s.z, gems });
+  }
+
+  // ---------------------------------------------------------------- London's legends (A5)
+
+  /** Out of sight of the beasts and the rivals: hidden (Fox Trick, Boo!) or up in the air (Dragon Wings). */
+  private unseen(s: Snake): boolean {
+    return s.hasMagic('hidden') || s.hasMagic('wings');
+  }
+
+  /** Rise Again: if the phoenix is with this snake, it undoes the hit about to land. True if it did. */
+  private rise(s: Snake): boolean {
+    if (!s.hasMagic('phoenix')) return false;
+    s.clearMagic('phoenix');
+    s.immune = Math.max(s.immune, OUCH_GRACE * 1.5);
+    s.gain(RISE_GROWTH);
+    this.events.push({ type: 'rise', who: s.id, x: s.x, z: s.z });
+    return true;
+  }
+
+  /** Could a landing snake of radius `r` come down at (x, z)? Free, dry, and clear of the traffic. */
+  private landable(x: number, z: number, r: number): boolean {
+    if (!isFree(this.stage, x, z, r, this.snakeSolids)) return false;
+    for (const v of this.vehicles) if (Math.hypot(v.x - x, v.z - z) < VEHICLES[v.kind].length / 2 + r + 0.5) return false;
+    return true;
+  }
+
+  /**
+   * Dragon Wings wore off: come down where it is, if that is free, dry ground; otherwise at the
+   * nearest spot that is, searched ring by ring outward (ahead first). Never in a solid or the river.
+   */
+  land(s: Snake): void {
+    const r = s.radius + 0.3;
+    let x = s.x;
+    let z = s.z;
+    search: if (!this.landable(x, z, r)) {
+      for (let ring = 1; ring <= 120; ring++) {
+        const d = ring * 0.6;
+        const n = Math.max(8, Math.ceil(d * 5));
+        for (let k = 0; k < n; k++) {
+          const a = s.heading + (k % 2 === 0 ? 1 : -1) * Math.ceil(k / 2) * ((Math.PI * 2) / n);
+          const cx = s.x + Math.cos(a) * d;
+          const cz = s.z + Math.sin(a) * d;
+          if (!this.landable(cx, cz, r)) continue;
+          x = cx;
+          z = cz;
+          break search;
+        }
+      }
+      x = this.stage.fallbackSpot.x;
+      z = this.stage.fallbackSpot.z;
+    }
+    // Moved to free ground: lay the body out afresh there, so no trail is left strung through a wall.
+    if (x !== s.x || z !== s.z) s.placeAt(x, z, s.heading);
+    s.touchingWall = s.wasTouchingWall = false;
+    s.immune = Math.max(s.immune, 1);
+    this.events.push({ type: 'land', who: s.id, x, z });
+  }
+
+  /** Mighty Roar: beasts nearby run (lions home, ravens to the Tower); rivals are gently blown back. */
+  private roar(s: Snake): void {
+    s.giveMagic('roar', 1.5);
+    this.events.push({ type: 'ring', who: s.id, x: s.x, z: s.z, r: ROAR_REACH });
+    this.scarePredators(s.x, s.z, ROAR_REACH, false);
+    for (const o of this.snakes) {
+      // Not the unseen (hidden or flying), nor anyone choosing a card or standing aside in a menu.
+      if (o === s || !o.alive || this.unseen(o) || o.cards !== null || o.awayFor > 0) continue;
+      const dx = o.x - s.x;
+      const dz = o.z - s.z;
+      const d = Math.hypot(dx, dz);
+      if (d > ROAR_REACH) continue;
+      const nx = d > 1e-5 ? dx / d : Math.cos(s.heading);
+      const nz = d > 1e-5 ? dz / d : Math.sin(s.heading);
+      resolveCircle(this.stage, o.x + nx * ROAR_PUSH, o.z + nz * ROAR_PUSH, o.radius, this.hit, this.snakeSolids);
+      o.x = this.hit.x;
+      o.z = this.hit.z;
+      o.heading = Math.atan2(nz, nx);
+      // A brief daze (frozen and untouchable, like a Freeze Puff): never a free bonk.
+      o.frozenFor = Math.max(o.frozenFor, ROAR_STUN);
+      o.immune = Math.max(o.immune, ROAR_STUN);
+      this.events.push({ type: 'roared', who: o.id, by: s.id, x: o.x, z: o.z });
+    }
+  }
+
+  /** The Pearly Lights: a line of glowing buttons from the snake to the nearest jewel (or a golden cache). */
+  private pearlyTrail(s: Snake): void {
+    let tx = NaN;
+    let tz = NaN;
+    let best = Infinity;
+    for (const t of this.treasures) {
+      if (t.respawnIn > 0) continue;
+      const d = Math.hypot(t.x - s.x, t.z - s.z);
+      if (d < best) {
+        best = d;
+        tx = t.x;
+        tz = t.z;
+      }
+    }
+    if (Number.isNaN(tx)) {
+      // No jewel lying about: a cache of golden food a little way off, and the buttons lead there.
+      for (let tries = 0; tries < 30; tries++) {
+        const a = this.rng.range(0, Math.PI * 2);
+        const d = this.rng.range(14, 24);
+        const x = s.x + Math.cos(a) * d;
+        const z = s.z + Math.sin(a) * d;
+        if (!isFree(this.stage, x, z, 2)) continue;
+        tx = x;
+        tz = z;
+        break;
+      }
+      if (Number.isNaN(tx)) return;
+      this.cacheAt(tx, tz);
+    }
+    // One trail per snake: a fresh one replaces only this snake's own, never anyone else's.
+    for (let i = this.buttons.length - 1; i >= 0; i--) if (this.buttons[i].owner === s.id) this.buttons.splice(i, 1);
+    const d = Math.hypot(tx - s.x, tz - s.z);
+    for (let k = 2, n = 0; k < d - 1 && n < BUTTON_MAX; k += BUTTON_STEP, n++) {
+      const x = s.x + ((tx - s.x) * k) / d;
+      const z = s.z + ((tz - s.z) * k) / d;
+      if (isFree(this.stage, x, z, 0.3, this.hazards)) this.buttons.push({ x, z, born: this.tick, owner: s.id });
+    }
+    this.events.push({ type: 'pearly', who: s.id, x: s.x, z: s.z, tx, tz });
+  }
+
+  /** Gather a handful of food round (x, z) and turn it golden. */
+  private cacheAt(x0: number, z0: number): void {
+    let n = 0;
+    for (const f of this.foods) {
+      if (n >= 6) break;
+      const a = this.rng.range(0, Math.PI * 2);
+      const r = this.rng.range(0.5, 2.5);
+      const x = x0 + Math.cos(a) * r;
+      const z = z0 + Math.sin(a) * r;
+      if (!isFree(this.stage, x, z, 0.5, this.hazards)) continue;
+      f.x = x;
+      f.z = z;
+      f.golden = true;
+      f.born = this.tick;
+      n++;
+    }
+  }
+
+  private eatButtons(s: Snake): void {
+    const reach2 = s.biteReach * s.biteReach;
+    for (let i = this.buttons.length - 1; i >= 0; i--) {
+      const b = this.buttons[i];
+      if ((b.x - s.x) ** 2 + (b.z - s.z) ** 2 > reach2) continue;
+      const points = s.gain(BUTTON_MASS);
+      this.events.push({ type: 'button', who: s.id, x: b.x, z: b.z, points });
+      this.buttons.splice(i, 1);
+    }
+  }
+
+  private expireButtons(): void {
+    for (let i = this.buttons.length - 1; i >= 0; i--) {
+      if ((this.tick - this.buttons[i].born) * STEP > BUTTON_LIFE) this.buttons.splice(i, 1);
+    }
+  }
+
+  /** The Crown Jewels: a touch picks one up (any size); all five is ROYAL. A crowned snake leaves them for others. */
+  private meetJewels(s: Snake): void {
+    if (s.crowned) return;
+    for (let i = 0; i < this.treasures.length; i++) {
+      const t = this.treasures[i];
+      if (t.respawnIn > 0) continue;
+      const reach = s.biteReach + JEWEL_REACH;
+      if ((t.x - s.x) ** 2 + (t.z - s.z) ** 2 > reach * reach) continue;
+      t.respawnIn = JEWEL_RESPAWN;
+      s.jewels++;
+      s.score += JEWEL_SCORE;
+      this.events.push({ type: 'jewel', who: s.id, i, x: t.x, z: t.z, n: s.jewels });
+      if (s.jewels >= JEWELS_FOR_CROWN) {
+        s.crowned = true;
+        s.score += ROYAL_SCORE;
+        this.events.push({ type: 'royal', who: s.id, x: s.x, z: s.z });
+      }
+      return; // one a tick
+    }
+  }
+
+  /** A taken jewel turns up again elsewhere, after a while. */
+  private updateTreasures(dt: number): void {
+    const spots = this.stage.jewelSpots ?? [];
+    for (const t of this.treasures) {
+      if (t.respawnIn <= 0) continue;
+      t.respawnIn -= dt;
+      if (t.respawnIn <= 0) {
+        t.respawnIn = 0;
+        moveTreasure(t, this.treasures, spots, this.rng);
+      }
+    }
   }
 
   private nearestPredatorTo(x: number, z: number): Predator | null {
@@ -1647,12 +1949,14 @@ export class World {
     if (c.bumped(this)) this.events.push({ type: 'bump', who: s.id, what: 'cooper' });
   }
 
-  private meetAnimals(s: Snake, dt: number): void {
+  private meetAnimals(s: Snake, dt: number, flying = false): void {
+    // Gog & Magog: a giant gulps like the next size up.
+    const tier = s.hasMagic('giant') ? s.tier + 1 : s.tier;
     for (const a of this.animals) {
       const spec = ANIMALS[a.kind];
       const d2 = (a.x - s.x) ** 2 + (a.z - s.z) ** 2;
 
-      if (s.tier >= spec.tier) {
+      if (tier >= spec.tier) {
         const reach = s.biteReach * GULP_REACH + spec.radius;
         if (d2 > reach * reach) continue;
         const points = s.gain(spec.value);
@@ -1661,7 +1965,8 @@ export class World {
         continue;
       }
 
-      // Too big to swallow: it stands its ground and the snake goes boing.
+      // Too big to swallow: it stands its ground and the snake goes boing (a flyer just passes over).
+      if (flying) continue;
       const reach = s.radius + spec.radius;
       if (d2 >= reach * reach) continue;
       this.shove(s, a.x, a.z, reach, dt);
@@ -1818,7 +2123,7 @@ export class World {
     // Only puff when there is something in front worth puffing at.
     let worth = false;
     for (const f of this.foods) if (this.inBreath(s, f.x, f.z, range)) { worth = true; break; }
-    if (!worth) for (const o of this.snakes) if (o !== s && o.alive && o.immune <= 0 && this.inBreath(s, o.x, o.z, range)) { worth = true; break; }
+    if (!worth) for (const o of this.snakes) if (o !== s && o.alive && o.immune <= 0 && !o.hasMagic('wings') && this.inBreath(s, o.x, o.z, range)) { worth = true; break; }
     if (!worth) for (const a of this.animals) if (s.tier >= ANIMALS[a.kind].tier && this.inBreath(s, a.x, a.z, range)) { worth = true; break; }
     if (!worth) for (const p of this.predators) if (awake(p) && this.inBreath(s, p.x, p.z, range)) { worth = true; break; }
     if (!worth) {
@@ -1836,7 +2141,8 @@ export class World {
       if (awake(p) && this.inBreath(s, p.x, p.z, range)) this.spook(p, false);
     }
     for (const o of this.snakes) {
-      if (o === s || !o.alive || o.immune > 0 || !this.inBreath(s, o.x, o.z, range)) continue;
+      if (o === s || !o.alive || o.immune > 0 || o.hasMagic('wings') || !this.inBreath(s, o.x, o.z, range)) continue;
+      if (this.rise(o)) continue; // the phoenix takes the scorch
       o.immune = OUCH_GRACE;
       // Scorch it smaller, capped like a rock bonk so it stays fair on the biggest rivals.
       const lost = o.mass < 1 ? 0 : Math.min(OUCH_MAX, Math.max(2, o.mass * BREATH_SHARE));
@@ -1854,9 +2160,9 @@ export class World {
   private bonkSnakes(): void {
     for (const a of this.snakes) {
       // A hidden snake (Fox Trick) is seen by no one: it can neither be bonked nor bonk into others.
-      if (!a.alive || a.immune > 0 || a.hasMagic('hidden') || (this.stage.sanctuary !== null && inBox(this.stage.sanctuary, a.x, a.z))) continue;
+      if (!a.alive || a.immune > 0 || this.unseen(a) || (this.stage.sanctuary !== null && inBox(this.stage.sanctuary, a.x, a.z))) continue;
       for (const b of this.snakes) {
-        if (b === a || !b.alive || b.immune > 0 || b.hasMagic('hidden')) continue;
+        if (b === a || !b.alive || b.immune > 0 || this.unseen(b)) continue;
         const gap = Math.hypot(a.x - b.x, a.z - b.z);
         if (gap > b.length + 3) continue;
 
@@ -1883,16 +2189,21 @@ export class World {
         }
         if (!struck) continue;
 
-        if (a.helmetReady) {
-          // The helmet takes it: bounce straight back the way it came.
-          a.helmetReady = false;
-          a.helmetIn = a.helmetRecharge;
-          a.immune = HELMET_GRACE;
+        const risen = this.rise(a); // the phoenix, first: it is the one that wears off
+        if (risen || a.helmetReady) {
+          // The phoenix or the helmet takes it: bounce straight back the way it came.
+          if (!risen) {
+            a.helmetReady = false;
+            a.helmetIn = a.helmetRecharge;
+            a.immune = HELMET_GRACE;
+          }
           a.heading = Math.atan2(a.z - hitZ, a.x - hitX);
           resolveCircle(this.stage, a.x + Math.cos(a.heading) * 0.6, a.z + Math.sin(a.heading) * 0.6, a.radius, this.hit, this.hazards);
           a.x = this.hit.x;
           a.z = this.hit.z;
-          this.events.push({ type: 'helmet', who: a.id, x: a.x, z: a.z });
+          // London: the bounce must not land the head in a parked bus (it is blinking now: a nudge, never a bonk).
+          if (this.vehicles.length > 0) this.meetVehicles(a, STEP);
+          if (!risen) this.events.push({ type: 'helmet', who: a.id, x: a.x, z: a.z });
         } else {
           this.bonk(a, b);
         }

@@ -12,6 +12,7 @@
  */
 
 import { LONDON_ANIMALS } from './animals';
+import type { CreatureKind } from './creatures';
 import type { WardenConfig } from './cooper';
 import { foodWeights, pickFoodKind } from './food';
 import { TRIP_THROWS } from './kids';
@@ -116,6 +117,31 @@ export const TRIP_PATH: Spot[] = Array.from({ length: 24 }, (_, i) => {
   const a = (-i / 24) * Math.PI * 2; // anticlockwise on the map
   return { x: -26 + Math.cos(a) * 4.6, z: -28.6 + Math.sin(a) * 4.6 };
 });
+// ---------------------------------------------------------------- the legends (A5)
+
+/**
+ * The Elfin Oak: a real carved tree stump full of fairies, in Kensington Gardens (the west end of
+ * our Hyde Park). The legends gather in the glade round it; the stump itself is a small solid.
+ */
+export const ELFIN_OAK: Circle = { x: -76, z: -52, r: 1 };
+/**
+ * Where the Crown Jewels may lie: landmark-adjacent open paper, on land, off the bus lanes. The first
+ * (just west of the Tower's walls) is always used; the other four are drawn per run (treasures.ts).
+ */
+export const JEWEL_SPOTS: Spot[] = [
+  { x: 52, z: -18 }, // the Tower
+  { x: -12, z: -35 }, // Trafalgar Square, south of the column
+  { x: 44, z: 46 }, // the Shard
+  { x: 42, z: -57 }, // the Gherkin
+  { x: 25, z: 20 }, // the Globe
+  { x: -37, z: -53 }, // Piccadilly Circus
+  { x: -66, z: 8 }, // the Natural History Museum
+  { x: 8, z: -46 }, // Covent Garden
+  { x: -30, z: 40 }, // the South Bank
+  { x: -62, z: -34 }, // Hyde Park
+  { x: 33, z: -32 }, // St Paul's, toward the river
+];
+
 /** Grown-ups standing still are solids, a little narrower than they look. */
 const PERSON_R = 0.45;
 
@@ -126,6 +152,7 @@ const SOLID_CIRCLES: Circle[] = [
   LONDON_EYE, VICTORIA_MEMORIAL, NELSON, ...LION_PLINTHS.map((p) => ({ ...p, r: PLINTH_R })),
   ST_PAULS_DOME, GHERKIN, GLOBE, PICCADILLY_FOUNTAIN,
   { ...GUARD, r: GUARD_R }, { ...SAMI, r: PERSON_R }, { ...BEEFEATER, r: 0.5 }, { ...STATUE, r: PERSON_R },
+  ELFIN_OAK,
 ];
 
 /** The sights, by stable id (stamps, the minimap, the renderer's builders). `radius` is how close counts as a visit. */
@@ -371,6 +398,53 @@ function alongRoad(rng: Rng, path: readonly Spot[], spread: number): Spot {
 
 const roadPath = (id: string): readonly Spot[] => ROADS.find((r) => r.id === id)!.path;
 
+/** A point on a ring between `r0` and `r1` metres round (x, z). */
+const around = (rng: Rng, x: number, z: number, r0: number, r1: number): Spot => {
+  const a = rng.range(0, Math.PI * 2);
+  const d = rng.range(r0, r1);
+  return { x: x + Math.cos(a) * d, z: z + Math.sin(a) * d };
+};
+
+/**
+ * Each legend's haunt: the Elfin Oak's glade for the fairy and the unicorn, the river bank (on land)
+ * for the mermaid, the Tower for its ghost, St Paul's for the phoenix, the City for the dragon and
+ * the Guildhall giants, the Palace for the royal lion, Covent Garden's market for the pearly lights.
+ */
+function legendHome(rng: Rng, kind: CreatureKind): Spot {
+  switch (kind) {
+    case 'fairy':
+    case 'unicorn':
+      return around(rng, ELFIN_OAK.x, ELFIN_OAK.z, 2.5, 8);
+    case 'mermaid': {
+      // Just off the water's edge, either bank, somewhere along the river.
+      const path = THAMES.path;
+      const i = rng.int(path.length - 1);
+      const t = rng.next();
+      const x = path[i].x + (path[i + 1].x - path[i].x) * t;
+      const z = path[i].z + (path[i + 1].z - path[i].z) * t;
+      const dx = path[i + 1].x - path[i].x;
+      const dz = path[i + 1].z - path[i].z;
+      const len = Math.hypot(dx, dz) || 1;
+      const side = rng.next() < 0.5 ? -1 : 1;
+      const off = THAMES.width / 2 + rng.range(1.8, 3.5);
+      return { x: x - (dz / len) * off * side, z: z + (dx / len) * off * side };
+    }
+    case 'ghost':
+      return around(rng, TOWER.x, TOWER.z, 9, 14);
+    case 'phoenix':
+      return around(rng, ST_PAULS_DOME.x - 3, ST_PAULS_DOME.z, 7, 12);
+    case 'dragon':
+    case 'gog':
+      return inside(rng, THE_CITY);
+    case 'lionroyal':
+      return inside(rng, PALACE_GARDEN);
+    case 'pearly':
+      return inside(rng, COVENT_GARDEN);
+    default:
+      return anywhere(rng);
+  }
+}
+
 /** Miss Sami as a tour guide, umbrella up. Warm, a little breathless, bubbles only. */
 const SAMI_TOUR = [
   'Keep together, everyone!',
@@ -487,7 +561,11 @@ export const LONDON: Stage = {
     { id: 'sami', at: SAMI, lines: SAMI_TOUR },
     { id: 'beefeater', at: BEEFEATER, lines: BEEFEATER_LINES },
   ],
-  creatureCount: 0,
+  // Five of the nine legends each run, picked by rarity (the Silver Dragon is a lucky day).
+  creatureCount: 5,
+  creatureKinds: ['dragon', 'unicorn', 'lionroyal', 'phoenix', 'mermaid', 'ghost', 'gog', 'fairy', 'pearly'],
+  creatureHome: legendHome,
+  jewelSpots: JEWEL_SPOTS,
   // Big and open, so four more rivals keep it lively (as on the Common).
   extraRivals: 4,
   greeters: null,

@@ -5,6 +5,16 @@ import { model, paint, PAINTED } from './paint';
 
 type Geo = THREE.BufferGeometry;
 const DARK = 0x2a2a2e;
+// London's legends.
+const SILVER = 0xb8c0cc;
+const SILVER_LIGHT = 0xdfe4ec;
+const CITY_RED = 0xc8102e;
+const LION_GOLD = 0xe8b830;
+const MANE = 0xc98a1a;
+const CROWN_GOLD = 0xffd23c;
+const SKIN = 0xf2c7a5;
+const TEAL = 0x1fb8a8;
+const PEARL = 0xfff8ee;
 
 const sphere = (r: number, color: number, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1): Geo =>
   paint(new THREE.SphereGeometry(r, 10, 8), color, (g) => g.scale(sx, sy, sz).translate(x, y, z));
@@ -88,6 +98,125 @@ const MODELS: Record<CreatureKind, () => Geo[]> = {
     sphere(0.2, 0xffffff, 0, 1.0, 0),
     sphere(0.32, 0xe2d2ff, 0, 1.0, 0, 1, 1, 1),
   ],
+
+  // ── London's legends ──────────────────────────────────────────────────
+  // The Silver Dragon of the City: silver, rearing, red-lined wings and a red cross on its shield.
+  dragon: () => [
+    paint(new THREE.CapsuleGeometry(0.24, 0.5, 4, 10), SILVER, (g) => g.rotateX(0.9).translate(0, 0.72, 0)),
+    paint(new THREE.CylinderGeometry(0.09, 0.13, 0.42, 8), SILVER, (g) => g.rotateX(0.3).translate(0, 1.1, 0.22)),
+    sphere(0.15, SILVER_LIGHT, 0, 1.32, 0.32, 0.9, 0.85, 1.3),
+    paint(new THREE.ConeGeometry(0.07, 0.2, 6), SILVER, (g) => g.rotateX(Math.PI / 2).translate(0, 1.3, 0.52)),
+    ...[-1, 1].map((s) => paint(new THREE.ConeGeometry(0.03, 0.18, 5), SILVER_LIGHT, (g) => g.rotateX(-0.6).translate(s * 0.08, 1.48, 0.24))),
+    ...eyes(0.03, 0.08, 1.36, 0.44, 0xd81e1e),
+    // Wings: a silver arm and a red membrane each side, swept up and back.
+    ...[-1, 1].flatMap((s) => [
+      paint(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 5), SILVER, (g) => g.rotateZ(s * -0.9).translate(s * 0.42, 1.12, -0.12)),
+      paint(new THREE.ConeGeometry(0.42, 0.9, 3), CITY_RED, (g) => g.scale(1, 1, 0.12).rotateZ(s * -0.6).translate(s * 0.46, 1.02, -0.16)),
+    ]),
+    // The City's shield: white with a red cross, held to its chest.
+    paint(new THREE.BoxGeometry(0.3, 0.36, 0.05), 0xffffff, (g) => g.translate(0, 0.78, 0.3)),
+    paint(new THREE.BoxGeometry(0.07, 0.34, 0.06), CITY_RED, (g) => g.translate(0, 0.78, 0.31)),
+    paint(new THREE.BoxGeometry(0.28, 0.07, 0.06), CITY_RED, (g) => g.translate(0, 0.82, 0.31)),
+    paint(new THREE.ConeGeometry(0.1, 0.7, 6), SILVER, (g) => g.rotateX(-1.9).translate(0, 0.35, -0.5)),
+    ...[-1, 1].map((s) => leg(0.06, 0.45, SILVER, s * 0.14, 0.08)),
+  ],
+  // The Royal Lion: golden, crowned, a big mane, standing proud.
+  lionroyal: () => [
+    paint(new THREE.CapsuleGeometry(0.24, 0.56, 4, 10), LION_GOLD, (g) => g.rotateX(Math.PI / 2).translate(0, 0.62, 0)),
+    sphere(0.3, MANE, 0, 0.86, 0.34, 1, 1, 0.8),
+    sphere(0.18, LION_GOLD, 0, 0.86, 0.52, 1, 0.95, 0.95),
+    sphere(0.07, 0xb06a1a, 0, 0.82, 0.68),
+    ...eyes(0.03, 0.07, 0.92, 0.66),
+    // The crown: a gold band, five points, a red jewel.
+    paint(new THREE.CylinderGeometry(0.15, 0.13, 0.1, 10), CROWN_GOLD, (g) => g.translate(0, 1.1, 0.46)),
+    ...[0, 1, 2, 3, 4].map((i) => paint(new THREE.ConeGeometry(0.035, 0.12, 4), CROWN_GOLD, (g) => g.translate(Math.cos((i / 5) * Math.PI * 2) * 0.13, 1.2, 0.46 + Math.sin((i / 5) * Math.PI * 2) * 0.13))),
+    sphere(0.035, 0xd81e1e, 0, 1.1, 0.6),
+    paint(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 5), LION_GOLD, (g) => g.rotateX(-1.25).translate(0, 0.72, -0.58)),
+    sphere(0.06, MANE, 0, 0.8, -0.82),
+    ...fourLegs(0.06, 0.42, LION_GOLD, 0.15, 0.3),
+  ],
+  // The Phoenix of St Paul's: a fiery bird with spread wings and a long flame tail, hovering.
+  phoenix: () => [
+    sphere(0.2, 0xff7a1a, 0, 0.95, 0, 1, 1, 1.3),
+    sphere(0.13, 0xffa01a, 0, 1.18, 0.2),
+    paint(new THREE.ConeGeometry(0.04, 0.12, 4), 0xffe066, (g) => g.rotateX(Math.PI / 2).translate(0, 1.16, 0.36)),
+    ...eyes(0.025, 0.06, 1.22, 0.3),
+    ...[0, 1, 2].map((i) => paint(new THREE.ConeGeometry(0.03, 0.16, 4), 0xffd21a, (g) => g.rotateX(-0.5 - i * 0.3).translate(0, 1.3, 0.12 - i * 0.07))),
+    ...[-1, 1].flatMap((s) => [
+      paint(new THREE.ConeGeometry(0.22, 0.7, 3), 0xe8301a, (g) => g.scale(1, 1, 0.15).rotateZ(s * -1.2).translate(s * 0.42, 1.05, 0)),
+      paint(new THREE.ConeGeometry(0.14, 0.45, 3), 0xffc21a, (g) => g.scale(1, 1, 0.15).rotateZ(s * -1.3).translate(s * 0.36, 1.08, 0.04)),
+    ]),
+    ...[[-0.12, 0xe8301a], [0, 0xffd21a], [0.12, 0xff7a1a]].map(([x, c]) =>
+      paint(new THREE.ConeGeometry(0.06, 0.7, 4), c, (g) => g.rotateX(-1.9).translate(x, 0.82, -0.42))),
+  ],
+  // The Thames Mermaid: sitting on the bank, red hair, a teal tail curled round with its fin up.
+  mermaid: () => [
+    paint(new THREE.CapsuleGeometry(0.15, 0.28, 4, 8), SKIN, (g) => g.translate(0, 0.62, 0.05)),
+    sphere(0.14, SKIN, 0, 0.98, 0.07),
+    sphere(0.16, 0xd8452a, 0, 1.02, 0.0, 1.05, 1.05, 1),
+    paint(new THREE.CylinderGeometry(0.1, 0.06, 0.35, 8), 0xd8452a, (g) => g.translate(0, 0.78, -0.08)),
+    ...eyes(0.025, 0.05, 1.0, 0.2),
+    ...[-1, 1].map((s) => sphere(0.06, 0xa070e0, s * 0.07, 0.68, 0.17)),
+    paint(new THREE.CapsuleGeometry(0.15, 0.4, 4, 8), TEAL, (g) => g.rotateX(Math.PI / 2).translate(0, 0.32, -0.12)),
+    paint(new THREE.CapsuleGeometry(0.1, 0.32, 4, 8), TEAL, (g) => g.rotateX(Math.PI / 2 + 0.6).translate(0.1, 0.26, -0.5)),
+    ...[-1, 1].map((s) => paint(new THREE.ConeGeometry(0.12, 0.26, 3), 0x16a0a0, (g) => g.scale(1, 1, 0.2).rotateZ(s * 0.7).translate(0.1 + s * 0.1, 0.52, -0.72))),
+  ],
+  // The Friendly Tower Ghost: a little sheet ghost with a ruffled Tudor collar, floating.
+  ghost: () => [
+    sphere(0.26, 0xf6f8ff, 0, 1.0, 0, 1, 1, 1),
+    paint(new THREE.CylinderGeometry(0.26, 0.34, 0.5, 14, 1, true), 0xf6f8ff, (g) => g.translate(0, 0.74, 0)),
+    ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+      const a = (i / 8) * Math.PI * 2;
+      return paint(new THREE.ConeGeometry(0.07, 0.14, 5), 0xf6f8ff, (g) => g.rotateX(Math.PI).translate(Math.cos(a) * 0.3, 0.45, Math.sin(a) * 0.3));
+    }),
+    // The ruff: a frilly white collar of little puffs round its neck.
+    ...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => {
+      const a = (i / 10) * Math.PI * 2;
+      return sphere(0.08, 0xffffff, Math.cos(a) * 0.27, 0.84, Math.sin(a) * 0.27, 1, 0.6, 1);
+    }),
+    ...eyes(0.05, 0.09, 1.04, 0.22),
+    sphere(0.04, 0x2a2a2e, 0, 0.93, 0.25, 1, 1.3, 0.6),
+  ],
+  // Gog & Magog: two tiny giants walking side by side, beards and tunics, a spear and a club.
+  gog: () => [
+    ...[-1, 1].flatMap((s) => [
+      paint(new THREE.CapsuleGeometry(0.13, 0.22, 4, 8), s < 0 ? 0x6b8a3a : 0x8a3a3a, (g) => g.translate(s * 0.28, 0.44, 0)),
+      sphere(0.12, SKIN, s * 0.28, 0.76, 0.02),
+      sphere(0.1, s < 0 ? 0x6b4a2a : 0xa0a0a0, s * 0.28, 0.68, 0.08, 1, 1.1, 0.8),
+      paint(new THREE.CylinderGeometry(0.13, 0.13, 0.05, 8), s < 0 ? 0xd8b030 : 0x9a9aa8, (g) => g.translate(s * 0.28, 0.88, 0.0)),
+      ...eyes(0.02, 0.04, 0.8, 0.12).map((g) => g.translate(s * 0.28, 0, 0)),
+      ...[-1, 1].map((k) => leg(0.045, 0.24, 0x5a3a24, s * 0.28 + k * 0.06, 0)),
+    ]),
+    // Gog's spear and shield, Magog's club.
+    paint(new THREE.CylinderGeometry(0.018, 0.018, 0.9, 5), 0x8a6a40, (g) => g.translate(-0.48, 0.55, 0.05)),
+    paint(new THREE.ConeGeometry(0.04, 0.12, 4), 0xc8ccd6, (g) => g.translate(-0.48, 1.04, 0.05)),
+    paint(new THREE.CylinderGeometry(0.13, 0.13, 0.03, 10), 0xd8b030, (g) => g.rotateX(Math.PI / 2).translate(-0.3, 0.44, 0.16)),
+    paint(new THREE.CylinderGeometry(0.06, 0.025, 0.4, 6), 0x6b4a2a, (g) => g.rotateZ(0.5).translate(0.5, 0.56, 0.05)),
+  ],
+  // An Elfin Oak fairy: a tiny sprite in a leaf dress, gauzy wings, a starry wand.
+  fairy: () => [
+    paint(new THREE.ConeGeometry(0.12, 0.26, 8), 0x4cbf5c, (g) => g.translate(0, 0.86, 0)),
+    sphere(0.08, SKIN, 0, 1.06, 0.01),
+    sphere(0.085, 0xffd23c, 0, 1.1, -0.02, 1, 0.8, 1),
+    ...eyes(0.015, 0.03, 1.07, 0.07),
+    ...[-1, 1].flatMap((s) => [
+      paint(new THREE.SphereGeometry(0.16, 8, 6), 0xd8fff0, (g) => g.scale(0.25, 1, 0.75).rotateZ(s * 0.5).translate(s * 0.16, 1.02, -0.08)),
+      paint(new THREE.SphereGeometry(0.1, 8, 6), 0xd8fff0, (g) => g.scale(0.25, 1, 0.75).rotateZ(s * 1.1).translate(s * 0.15, 0.86, -0.08)),
+    ]),
+    paint(new THREE.CylinderGeometry(0.008, 0.008, 0.22, 4), 0xffffff, (g) => g.rotateZ(-0.6).translate(0.12, 0.98, 0.06)),
+    sphere(0.035, 0xfff6a0, 0.19, 1.08, 0.06),
+  ],
+  // The Pearly Lights: a ring of glowing pearl buttons floating round a pearly king's cap.
+  pearly: () => [
+    ...[0, 1, 2, 3, 4, 5, 6].map((i) => {
+      const a = (i / 7) * Math.PI * 2;
+      return paint(new THREE.CylinderGeometry(0.09, 0.09, 0.035, 12), PEARL, (g) => g.rotateX(Math.PI / 2).rotateY(a).translate(Math.cos(a) * 0.32, 0.95 + Math.sin(a * 2) * 0.06, Math.sin(a) * 0.32));
+    }),
+    paint(new THREE.CylinderGeometry(0.15, 0.16, 0.1, 12), 0x2a2a3a, (g) => g.translate(0, 0.95, 0)),
+    paint(new THREE.CylinderGeometry(0.2, 0.2, 0.025, 12), 0x2a2a3a, (g) => g.translate(0, 0.9, 0.04)),
+    ...[0, 1, 2, 3, 4, 5].map((i) => sphere(0.025, PEARL, Math.cos((i / 6) * Math.PI * 2) * 0.155, 0.96, Math.sin((i / 6) * Math.PI * 2) * 0.155)),
+    sphere(0.12, 0xffffff, 0, 1.12, 0),
+  ],
 };
 
 /**
@@ -96,10 +225,12 @@ const MODELS: Record<CreatureKind, () => Geo[]> = {
  */
 const SIZE: Record<CreatureKind, number> = {
   stag: 1.7, unicorn: 1.8, owl: 2.3, frog: 2.5, kitsune: 2.3, pixie: 2.6, squirrel: 2.4, wisp: 2.4,
+  dragon: 1.9, lionroyal: 2.1, phoenix: 2.2, mermaid: 2.3, ghost: 2.2, gog: 2.3, fairy: 2.6, pearly: 2.5,
 };
 /** Radius of the glowing ring on the ground under each one. */
 const RING: Record<CreatureKind, number> = {
   stag: 2.0, unicorn: 1.9, owl: 1.6, frog: 1.6, kitsune: 1.6, pixie: 1.5, squirrel: 1.6, wisp: 1.7,
+  dragon: 2.2, lionroyal: 1.9, phoenix: 1.8, mermaid: 1.7, ghost: 1.7, gog: 1.9, fairy: 1.5, pearly: 1.6,
 };
 
 /** A soft disc with a brighter rim — a little magic circle — tinted per creature by its instance colour. */
