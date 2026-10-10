@@ -828,6 +828,13 @@ small {
   box-shadow: 0 3px 0 #4e8b2f;
 }
 
+/* London: pillar-box red when chosen. */
+#stage-pick .stage.london.on {
+  background: #e8423f;
+  color: #fff;
+  box-shadow: 0 3px 0 #a3201d;
+}
+
 #stage-pick .stage .lock {
   display: none;
   margin-top: 2px;
@@ -1593,6 +1600,134 @@ small {
   0% { transform: translate(0, 22vh) rotate(0deg); opacity: 0; }
   25% { opacity: 1; }
   100% { transform: translate(var(--x), -45vh) rotate(0deg); opacity: 0; }
+}
+
+/* ---------- London unlock splash: the Golden Ticket (wordless, one-shot) ---------- */
+/* The sunbeams and flash wait for Big Ben's BONG. */
+.us-rays.ul-late { animation-delay: 1.7s; }
+.us-flash.ul-late { animation-delay: 1.72s; }
+
+/* The ticket gate: two grey cabinets, two red paddles, and a reader light on the left cabinet. */
+.ul-gate {
+  position: absolute;
+  width: 170px;
+  height: 92px;
+  perspective: 400px;
+  animation: ul-gate 2s ease-out forwards;
+}
+.ul-gate::before,
+.ul-gate::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: -16px;
+  width: 20px;
+  height: 84px;
+  border: 3px solid #1d2433;
+  border-radius: 6px;
+  background: linear-gradient(#c9d0dc, #8d96a8);
+}
+.ul-gate::after {
+  left: auto;
+  right: -16px;
+}
+@keyframes ul-gate {
+  0% { transform: scale(0); opacity: 0; }
+  15%, 70% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0; }
+}
+.ul-paddle {
+  position: absolute;
+  top: 26px;
+  left: 6px;
+  width: 76px;
+  height: 58px;
+  border: 3px solid #1d2433;
+  border-radius: 10px 4px 4px 10px;
+  background: linear-gradient(#ff6a5c, #d8343b);
+  transform-origin: left center;
+  animation: ul-open-l 0.3s ease-in 0.72s forwards;
+}
+.ul-paddle.ul-r {
+  left: auto;
+  right: 6px;
+  border-radius: 4px 10px 10px 4px;
+  transform-origin: right center;
+  animation-name: ul-open-r;
+}
+@keyframes ul-open-l { to { transform: rotateY(80deg); } }
+@keyframes ul-open-r { to { transform: rotateY(-80deg); } }
+.ul-light {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: -14px;
+  width: 18px;
+  height: 18px;
+  border: 3px solid #1d2433;
+  border-radius: 50%;
+  background: #ff4d4d;
+  animation: ul-beep 0.2s steps(1) 0.55s forwards;
+}
+@keyframes ul-beep { to { background: #3fe06b; box-shadow: 0 0 14px #3fe06b; } }
+
+/* The Golden Ticket slides in from the left, taps the reader, and is gone. */
+.ul-ticket {
+  position: absolute;
+  z-index: 2;
+  width: 74px;
+  height: 46px;
+  border: 2.5px solid #b9860c;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #fff1a8, #ffcf3e 55%, #e0a613);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  font-size: 24px;
+  line-height: 42px;
+  text-align: center;
+  opacity: 0;
+  animation: ul-ticket 1s ease-out forwards;
+}
+@keyframes ul-ticket {
+  0% { transform: translate(-60vw, -80px) rotate(-12deg); opacity: 1; }
+  50% { transform: translate(-90px, -70px) rotate(0deg); opacity: 1; }
+  65% { transform: translate(-90px, -64px) rotate(0deg); opacity: 1; }
+  100% { transform: translate(-90px, -100px) scale(0.6); opacity: 0; }
+}
+
+/* A little Tube train whooshes through the open gate. */
+.ul-train {
+  position: absolute;
+  font-size: clamp(44px, 12vw, 72px);
+  line-height: 1;
+  opacity: 0;
+  animation: ul-train 0.7s ease-in 1.02s forwards;
+}
+@keyframes ul-train {
+  0% { transform: translate(-70vw, 110px); opacity: 1; }
+  100% { transform: translate(70vw, 110px); opacity: 1; }
+}
+
+/* Big Ben rises with the BONG. */
+.ul-ben {
+  position: absolute;
+  width: 72px;
+  height: 240px;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.35));
+  opacity: 0;
+  animation: ul-ben 1.9s cubic-bezier(0.2, 1.3, 0.4, 1) 1.45s forwards;
+}
+@keyframes ul-ben {
+  0% { transform: translateY(70vh); opacity: 1; }
+  20% { transform: translateY(0); opacity: 1; }
+  27% { transform: translateY(0) rotate(-2deg); }
+  34% { transform: translateY(0) rotate(2deg); }
+  41%, 75% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(0); opacity: 0; }
+}
+
+/* London's show runs a little longer, so its veil does too. */
+.us-veil.ul-veil {
+  animation-duration: 3.4s;
 }
 
 @media (prefers-reduced-motion: reduce) {

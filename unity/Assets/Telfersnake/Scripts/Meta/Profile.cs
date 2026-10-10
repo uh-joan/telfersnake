@@ -149,7 +149,9 @@ namespace Telfer.Meta
             p.commonSeen = Flag(d, "commonSeen");
             // The web game spells these in lower case; Mode and Stage below gate God and the Common.
             p.mode = Json.Str(d, "mode") switch { "easy" => "Easy", "god" => "God", null => "Easy", _ => "Normal" };
-            p.stage = Json.Str(d, "stage") == "common" ? "Common" : "School";
+            // London (classic only, until HD's phase B) is kept as it is, so playing HD never resets a
+            // child's chosen place; the Stage getter below still plays the school for it.
+            p.stage = Json.Str(d, "stage") switch { "common" => "Common", "london" => "London", _ => "School" };
             return p;
         }
 
@@ -223,6 +225,7 @@ namespace Telfer.Meta
 
         public StageId Stage
         {
+            // "London" has no HD stage yet: it plays the school, but the saved choice stays "london".
             get => stage == "Common" && commonUnlocked ? StageId.Common : StageId.School;
             set => stage = value.ToString();
         }

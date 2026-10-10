@@ -10,6 +10,7 @@ import type { Stage } from './stage';
  * A stage with no `hazardArea` (the Common) has none of these: its dangers move.
  */
 
+/** Every hazard kind, for the protocol index: new kinds are appended. Each stage picks from its own `hazardKinds`. */
 export const HAZARD_KINDS = ['rock', 'stones', 'sticks'] as const;
 export type HazardKind = (typeof HAZARD_KINDS)[number];
 
@@ -66,7 +67,7 @@ export function makeHazards(rng: Rng, stage: Stage): Hazard[] {
   const spawn = stage.snakeSpawn;
   const clearOfSpawn = (x: number, z: number) => Math.hypot(x - spawn.x, z - spawn.z) < SPAWN_CLEARANCE;
   for (let i = 0; i < COUNT; i++) {
-    const kind = rng.pick(HAZARD_KINDS);
+    const kind = rng.pick(stage.hazardKinds);
     const h: Hazard = { kind, x: 0, z: 0, r: RADIUS[kind], turn: 0, hits: 0, limit: hitLimit(rng) };
     if (placeHazard(h, rng, stage, hazards, clearOfSpawn)) hazards.push(h);
   }

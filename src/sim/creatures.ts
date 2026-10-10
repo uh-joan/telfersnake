@@ -69,7 +69,7 @@ export function blankCreature(kind: CreatureKind): Creature {
 /** Pick the stage's roster of creatures (weighted, so a stag is a lucky day) and place each one. */
 export function makeCreatures(stage: Stage, rng: Rng): Creature[] {
   const out: Creature[] = [];
-  const pool = [...CREATURE_KINDS];
+  const pool = [...(stage.creatureKinds ?? CREATURE_KINDS)];
   for (let n = 0; n < stage.creatureCount && pool.length > 0; n++) {
     const total = pool.reduce((a, k) => a + CREATURES[k].weight, 0);
     let roll = rng.next() * total;

@@ -300,6 +300,13 @@ export class Sfx {
     [1568, 2093].forEach((f, i) => this.tone(f, 0.3, { type: 'sine', gain: 0.13, delay: 0.05 + i * 0.09 }));
   }
 
+  /** London's Golden Ticket (timed to its splash): the gate beeps, a Tube train whooshes, Big Ben BONGs. */
+  goldenTicket(): void {
+    [0.55, 0.68].forEach((delay) => this.tone(1760, 0.08, { type: 'square', gain: 0.06, delay }));
+    this.hiss(0.7, 400, 3200, 0.22, 1.05, 0.7);
+    for (const [f, g] of [[165, 0.24], [330, 0.08], [494, 0.05], [660, 0.03]]) this.tone(f, 2.6, { type: 'sine', gain: g, delay: 1.75 });
+  }
+
   /** Not enough stars yet: soft, never scolding. */
   nope(): void {
     this.tone(220, 0.14, { type: 'sine', gain: 0.12, slideTo: 180 });

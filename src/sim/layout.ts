@@ -152,6 +152,7 @@ export const SCHOOL: Stage = {
   foodScale: 1,
   // Bike Shed Alley and the yard behind the Old School get more than their share of rocks.
   hazardArea: { rough: { minX: 12, maxX: BOUNDS.maxX, minZ: 8, maxZ: BOUNDS.maxZ }, share: 0.4 },
+  hazardKinds: ['rock', 'stones', 'sticks'], // in this order: it is the RNG's pick list
   predators: [],
   kids: [], // the children are out on the Common, not in the school yard
   creatureCount: 0, // no magic in the school yard

@@ -1,14 +1,17 @@
 import * as THREE from 'three';
+import type { WardenPersona } from '../sim/cooper';
 import type { CooperState } from '../sim/view';
 
 const SKIN = 0xf0c8a8;
 const SHOE = 0x15151a;
 
-/** Mr Cooper the head teacher, or Mr Bramble the park keeper: same build, different clothes. */
-export type Persona = 'cooper' | 'keeper';
+/** Mr Cooper the head teacher, Mr Bramble the park keeper, or Mr Cooper the Bobby: same build, different clothes. */
+export type Persona = WardenPersona;
+const COOPER_LOOK = { coat: 0x1f2a44, shirt: 0xffffff, tie: 0xb3202a, hair: 0xf6f6f6, vest: null, cap: null };
 const LOOKS: Record<Persona, { coat: number; shirt: number; tie: number; hair: number; vest: number | null; cap: number | null }> = {
-  cooper: { coat: 0x1f2a44, shirt: 0xffffff, tie: 0xb3202a, hair: 0xf6f6f6, vest: null, cap: null },
+  cooper: COOPER_LOOK,
   keeper: { coat: 0x3f5a34, shirt: 0xdfe6d8, tie: 0x2c3f24, hair: 0x5a4326, vest: 0xf2c94c, cap: 0x243a20 },
+  bobby: COOPER_LOOK, // his helmet and tunic come with A1; until then he is plain Mr Cooper
 };
 
 /** Drawn a touch larger than life so he reads clearly from the follow camera. */

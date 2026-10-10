@@ -89,7 +89,7 @@ export class Shop {
 
     // Gem (Common-only) items are hidden until the Common is unlocked, and sorted after the star ones.
     const items = [...CATALOGUE[this.kind]]
-      .filter((i) => !i.gem || this.save.commonUnlocked)
+      .filter((i) => !i.place || (i.place === 'common' ? this.save.commonUnlocked : this.save.londonUnlocked))
       .sort((a, b) => (a.gem ? 1 : 0) - (b.gem ? 1 : 0) || a.price - b.price);
     this.grid.replaceChildren(
       ...items.map((item) => {

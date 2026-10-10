@@ -3,7 +3,7 @@ import { Music } from './audio/music';
 import { Sfx } from './audio/sfx';
 import { Controls } from './input/controls';
 import { skinLook, starsFor } from './meta/catalogue';
-import { type AudioMode, loadSave, writeSave } from './meta/save';
+import { type AudioMode, loadSave, refreshSave, type Save, writeSave } from './meta/save';
 import { cleanName, randomName } from './meta/names';
 import { Connection, type Outfit } from './net/client';
 import { AnimalView } from './render/animalView';
@@ -36,7 +36,7 @@ import { STEP, World } from './sim/world';
 import { CardPicker } from './ui/cards';
 import { Hud } from './ui/hud';
 import { Shop } from './ui/shop';
-import { playCommonUnlock } from './ui/unlockSplash';
+import { playCommonUnlock, playLondonUnlock } from './ui/unlockSplash';
 import { track, returningPlayer } from './meta/analytics';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -83,13 +83,15 @@ const upgradeFx = new UpgradeFx();
 // The travelling actors (Cooper, bees, upgrade FX, sparkles) stay in the scene; each stage's
 // ground + fixed scenery is swapped in and out (and cached) as you move between school and Common.
 stage.scene.add(cooperView.group, beeView.mesh, upgradeFx.group, sparkles.mesh, trailView.group);
-/** Swap the warden figure (head teacher vs park keeper) when the stage changes. */
+/** Swap the warden figure (head teacher vs park keeper) when the stage changes; hide it where there is none. */
 function mountWarden(): void {
   const persona = world.stage.cooper?.persona ?? 'cooper';
+  cooperView.group.visible = world.stage.cooper !== null;
   if (cooperView.persona === persona) return;
   stage.scene.remove(cooperView.group);
   disposeTree(cooperView.group);
   cooperView = new CooperView(persona);
+  cooperView.group.visible = world.stage.cooper !== null;
   stage.scene.add(cooperView.group);
 }
 const sceneryCache = new Map<StageId, School>();
@@ -206,15 +208,72 @@ const run = { gulps: 0, rivalBonks: 0, longest: 0, banked: 0, gems: 0, gemsBanke
 /** Easy is the gentle sandbox, not a star farm: it pays half, so Normal is the road to anything dear. */
 const MODE_STARS: Record<Mode, number> = { easy: 0.5, normal: 1, god: 1 };
 
-/** The Common is the premium level: it pays back the 100-gem ticket with richer rewards. */
-const COMMON_BONUS = 1.25;
+// ---------------------------------------------------------------- the places, one row each
+
+/**
+ * Everything about a place that lives outside the sim: its ticket, what it pays, and its hello.
+ * Tickets are stars, not gems: gems are the in-run power-card currency, so a gem price would fight
+ * the core loop; stars are earned in bulk.
+ */
+interface Place {
+  id: StageId;
+  /** Its picker chip's emoji (also the "unlock that first" hint on a chip that needs it). */
+  icon: string;
+  unlocked(save: Save): boolean;
+  unlock(save: Save): void;
+  /** The one-off ticket. 0: always open. */
+  price: number;
+  currency: 'stars';
+  /** Another place that must be unlocked first (London needs the Common). */
+  requires: StageId | null;
+  /** The premium levels pay back their ticket: stars ×`stars`, and a `gem` chance of a bonus gem on each one earned. */
+  bonus: { stars: number; gem: number };
+  /** Said in a bubble as each run starts. */
+  greeting: string;
+  /** A one-time fanfare on the first visit, and the wordless splash when the ticket is bought. */
+  welcome: { seen(save: Save): boolean; mark(save: Save): void; title: string; sub: string } | null;
+  splash: (() => void) | null;
+}
+
+const PLACES: Record<StageId, Place> = {
+  school: {
+    id: 'school', icon: '🏫', unlocked: () => true, unlock: () => {}, price: 0, currency: 'stars', requires: null,
+    bonus: { stars: 1, gem: 0 },
+    greeting: 'Good morning, everyone. Walking feet, please!', // Mr Cooper minds the school yard
+    welcome: null,
+    splash: null,
+  },
+  common: {
+    id: 'common', icon: '🌳', unlocked: (s) => s.commonUnlocked, unlock: (s) => { s.commonUnlocked = true; },
+    price: 300, currency: 'stars', requires: null,
+    bonus: { stars: 1.25, gem: 0.25 }, // a one-in-four chance of a bonus gem
+    greeting: 'Welcome to the Common! Mind the woods, and watch for magic.', // Miss Sami's welcome
+    welcome: { seen: (s) => s.commonSeen, mark: (s) => { s.commonSeen = true; }, title: '🌳 The Common!', sub: '✨ new friends & magic' },
+    splash: () => playCommonUnlock(), // the lock shatters and the park blooms open
+  },
+  london: {
+    id: 'london', icon: '🇬🇧', unlocked: (s) => s.londonUnlocked, unlock: (s) => { s.londonUnlocked = true; },
+    price: 600, currency: 'stars', requires: 'common',
+    bonus: { stars: 1.5, gem: 0.5 }, // a one-in-two chance of a bonus gem
+    greeting: 'Welcome to London! Mind the gap, and mind the river.',
+    welcome: { seen: (s) => s.londonSeen, mark: (s) => { s.londonSeen = true; }, title: '🇬🇧 London!', sub: '🎡 sights & surprises' },
+    splash: () => {
+      playLondonUnlock(); // the Golden Ticket: gate, Tube train, Big Ben…
+      wakeAudio()?.goldenTicket(); // …beep, whoosh, BONG
+    },
+  },
+};
+
+/** Where you are going (or are). */
+const here = (): Place => PLACES[save.stage];
 
 /** A blue gem earned by shrinking or bonking a rival. Banked with the stars. */
 function earnGem(): void {
   save.gems++;
   run.gems++;
-  // The Common pays ×1.25: a one-in-four chance of a bonus gem on top.
-  if (save.stage === 'common' && Math.random() < COMMON_BONUS - 1) {
+  // The premium places pay a chance of a bonus gem on top.
+  const bonus = here().bonus.gem;
+  if (bonus > 0 && Math.random() < bonus) {
     save.gems++;
     run.gems++;
   }
@@ -232,8 +291,7 @@ function updateCanBuy(): void {
 
 function earned(): number {
   const raw = starsFor(world.snake.score, world.snake.highestTier, run.rivalBonks);
-  const stageBonus = save.stage === 'common' ? COMMON_BONUS : 1;
-  return Math.floor(raw * MODE_STARS[save.mode] * stageBonus);
+  return Math.floor(raw * MODE_STARS[save.mode] * here().bonus.stars);
 }
 
 /** Stars go into the save as they are earned, so closing the tab mid-run loses nothing. */
@@ -770,10 +828,7 @@ $('play').addEventListener('click', async () => {
   if (screen !== 'start' || starting) return;
   starting = true;
   wakeAudio()?.bell();
-  // Miss Sami welcomes you to the Common; Mr Cooper minds the school yard.
-  const greeting = save.stage === 'common'
-    ? 'Welcome to the Common! Mind the woods, and watch for magic.'
-    : 'Good morning, everyone. Walking feet, please!';
+  const greeting = here().greeting;
   $('start').classList.add('busy'); // every button on the start screen is dead until we are in
 
   try {
@@ -793,11 +848,12 @@ $('play').addEventListener('click', async () => {
   starting = false;
   music?.start();
   music?.setPlace(save.stage);
-  // A one-time fanfare the very first time you set foot on the Common.
-  if (save.stage === 'common' && !save.commonSeen) {
-    save.commonSeen = true;
+  // A one-time fanfare the very first time you set foot somewhere new.
+  const welcome = here().welcome;
+  if (welcome && !welcome.seen(save)) {
+    welcome.mark(save);
     writeSave(save);
-    hud.announce('🌳 The Common!', '✨ new friends & magic');
+    hud.announce(welcome.title, welcome.sub);
   }
   hud.say(greeting, world.snake.x, world.snake.z);
   runStartedAt = performance.now();
@@ -877,11 +933,8 @@ function setMode(mode: Mode): void {
 for (const b of modeButtons) b.addEventListener('click', () => setMode(asMode(b.dataset.mode)));
 refreshModePicker();
 
-// ---------------------------------------------------------------- where to play: School · The Common
+// ---------------------------------------------------------------- where to play: School · The Common · London
 
-/** The one-off star ticket to the Common (Level 2). Stars, not gems: gems are the in-run
- * power-card currency, so a gem price fights the core loop; stars are earned in bulk. */
-const COMMON_COST = 300;
 const stageButtons = [...document.querySelectorAll<HTMLButtonElement>('#stage-pick .stage')];
 
 /** The wallet on the start screen's Tuck Shop button: stars earned and blue gems banked. */
@@ -889,30 +942,42 @@ function refreshWallet(): void {
   $('start-stars').textContent = `⭐${save.stars} 💎${save.gems}`;
 }
 
-/** Mark the chosen place; show the Common's ⭐300 lock until it is bought. */
+/** Mark the chosen place; a locked one shows its price, or the place to unlock first (🔒🌳). */
 function refreshStagePicker(): void {
-  const commonBtn = stageButtons.find((b) => b.dataset.stage === 'common');
-  if (commonBtn) commonBtn.classList.toggle('locked', !save.commonUnlocked);
-  for (const b of stageButtons) b.classList.toggle('on', b.dataset.stage === save.stage);
+  for (const b of stageButtons) {
+    const p = PLACES[asStage(b.dataset.stage)];
+    b.classList.toggle('locked', !p.unlocked(save));
+    const lock = b.querySelector('.lock');
+    const needs = p.requires !== null && !PLACES[p.requires].unlocked(save) ? PLACES[p.requires] : null;
+    if (lock) lock.textContent = needs ? `🔒${needs.icon}` : `🔒⭐${p.price}`;
+    b.classList.toggle('on', p.id === save.stage);
+  }
 }
 
-/** Tapping the Common pays the 300 stars the first time (if you can), then selects the place. */
+function shakeChip(id: StageId): void {
+  wakeAudio()?.nope();
+  const t = stageButtons.find((b) => b.dataset.stage === id);
+  t?.classList.remove('shake');
+  void t?.offsetWidth;
+  t?.classList.add('shake');
+}
+
+/** Tapping a locked place buys its ticket the first time (if you can), then selects it. */
 function chooseStage(id: StageId): void {
+  refreshSave(save); // another tab may have bought this ticket already: never charge twice
+  const p = PLACES[id];
   let justUnlocked = false;
-  if (id === 'common' && !save.commonUnlocked) {
-    if (save.stars < COMMON_COST) {
-      wakeAudio()?.nope();
-      const t = stageButtons.find((b) => b.dataset.stage === 'common');
-      t?.classList.remove('shake');
-      void t?.offsetWidth;
-      t?.classList.add('shake');
+  if (!p.unlocked(save)) {
+    const needsFirst = p.requires !== null && !PLACES[p.requires].unlocked(save);
+    if (needsFirst || save.stars < p.price) {
+      shakeChip(id);
       return;
     }
-    save.stars -= COMMON_COST;
-    save.commonUnlocked = true;
+    save.stars -= p.price;
+    p.unlock(save);
     refreshWallet(); // the stars just spent
     wakeAudio()?.chaChing();
-    track('unlock');
+    track('unlock', { stage: id });
     justUnlocked = true;
   }
   if (id !== save.stage) {
@@ -924,8 +989,8 @@ function chooseStage(id: StageId): void {
   }
   writeSave(save);
   refreshStagePicker();
-  // First time in: a wordless splash — the lock shatters and the park blooms open behind it.
-  if (justUnlocked) playCommonUnlock();
+  // First time in: a wordless splash.
+  if (justUnlocked) p.splash?.();
 }
 
 for (const b of stageButtons) b.addEventListener('click', () => chooseStage(asStage(b.dataset.stage)));

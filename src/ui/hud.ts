@@ -325,15 +325,17 @@ export class Hud {
       }
     }
 
-    // Mr Cooper: navy dot, white hair
-    c.fillStyle = '#1f2a44';
-    c.beginPath();
-    c.arc(X(world.cooper.x), Z(world.cooper.z), 4, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = '#ffffff';
-    c.beginPath();
-    c.arc(X(world.cooper.x), Z(world.cooper.z), 1.8, 0, Math.PI * 2);
-    c.fill();
+    // Mr Cooper: navy dot, white hair (not on a stage without a warden)
+    if (world.stage.cooper) {
+      c.fillStyle = '#1f2a44';
+      c.beginPath();
+      c.arc(X(world.cooper.x), Z(world.cooper.z), 4, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = '#ffffff';
+      c.beginPath();
+      c.arc(X(world.cooper.x), Z(world.cooper.z), 1.8, 0, Math.PI * 2);
+      c.fill();
+    }
 
     // Rivals first, then the player on top with a white head.
     const p = this.mapPoint;

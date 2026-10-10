@@ -1,3 +1,4 @@
+import type { StageId } from '../sim/stage';
 import type { Sfx } from './sfx';
 
 /**
@@ -42,7 +43,7 @@ export class Music {
   private on = true;
   private ducked = false;
   /** Which place's arrangement to play: the school's bright chiptune, or the Common's gentler pastoral one. */
-  private place: 'school' | 'common' = 'school';
+  private place: StageId = 'school';
 
   constructor(private readonly sfx: Sfx) {
     this.bus = sfx.ctx.createGain();
@@ -55,8 +56,11 @@ export class Music {
     this.level = level;
   }
 
-  /** The Common softens the whole thing to a woodland lilt and adds birdsong; the school stays bright. */
-  setPlace(place: 'school' | 'common'): void {
+  /**
+   * The Common softens the whole thing to a woodland lilt and adds birdsong; the school stays bright.
+   * London borrows the school's arrangement until its own music-hall one arrives (A7).
+   */
+  setPlace(place: StageId): void {
     this.place = place;
   }
 
